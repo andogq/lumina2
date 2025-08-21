@@ -22,7 +22,12 @@ impl Interpreter {
     pub fn run(body: &Body) -> usize {
         let mut interpreter = Self::new();
 
-        let return_local = interpreter.new_local();
+        // Create the locals.
+        for _local in &*body.local_decls {
+            interpreter.new_local();
+        }
+
+        let return_local = Local::zero();
         interpreter.alive_local(return_local);
 
         let mut next_block = BasicBlock::zero();
@@ -93,16 +98,21 @@ impl Interpreter {
 
     /// Read a local from the stack. Will panic if it's not alive.
     fn read_local(&self, local: Local) -> usize {
+        self.stack[self.read_local_offset(local)]
+    }
+
+    /// Read a local's offset in the stack. Will panic if it's not alive.
+    fn read_local_offset(&self, local: Local) -> usize {
         let InterpreterLocal::Alive { offset } = self.locals[local] else {
             panic!("local must be alive to read from it");
         };
 
-        self.stack[offset]
+        offset
     }
 
     /// Resolve a place into an offset in the stack.
     fn resolve_place(&self, place: &Place) -> usize {
-        let mut ptr = self.read_local(place.local);
+        let mut ptr = self.read_local_offset(place.local);
 
         for proj in &place.projection {
             match proj {
@@ -141,9 +151,10 @@ impl Interpreter {
         }
     }
 
+    /// Return the value of the provided operand
     fn resolve_operand(&self, operand: &Operand) -> usize {
         match operand {
-            Operand::Copy(place) => todo!(),
+            Operand::Copy(place) => self.stack[self.resolve_place(place)],
             Operand::Move(place) => todo!(),
             Operand::Constant(value) => *value,
         }

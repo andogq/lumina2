@@ -1,6 +1,6 @@
 use std::{
     marker::PhantomData,
-    ops::{Index, IndexMut},
+    ops::{Deref, Index, IndexMut},
 };
 
 /// Helper macro to create a vec which is indexed by a new-typed value.
@@ -85,6 +85,14 @@ where
 impl<K, V> Default for IndexedVec<K, V> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<K, V> Deref for IndexedVec<K, V> {
+    type Target = [V];
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
     }
 }
 
