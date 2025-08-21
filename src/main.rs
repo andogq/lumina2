@@ -1,3 +1,163 @@
+use crate::{interpreter::Interpreter, util::indexed_vec::Key};
+
+mod interpreter;
+mod util;
+
+/// Representation of a function.
+#[derive(Clone, Debug, Default)]
+struct Body {
+    /// All basic blocks that build this function.
+    basic_blocks: BasicBlocks,
+    /// Local declarations used within this function.
+    local_decls: Locals,
+    /// Number of arguments passed to this function. These will be populated in the first `1..n`
+    /// locals.
+    arg_count: usize,
+}
+
+#[derive(Clone, Debug)]
+struct BasicBlockData {
+    statements: Vec<Statement>,
+    terminator: Terminator,
+}
+indexed_vec!(key BasicBlock);
+indexed_vec!(BasicBlocks<BasicBlock, BasicBlockData>);
+
+#[derive(Clone, Debug)]
+struct LocalDecl {}
+indexed_vec!(key Local);
+indexed_vec!(Locals<Local, LocalDecl>);
+
+#[derive(Clone, Debug)]
+enum Statement {
+    /// Assign a value into a place.
+    Assign {
+        /// Target to store value.
+        place: Place,
+        /// Value to assign.
+        rvalue: RValue,
+    },
+    /// Deallocate a local on the stack.
+    StorageDead(Local),
+    /// Allocate a local on the stack.
+    StorageLive(Local),
+}
+
+#[derive(Clone, Debug)]
+enum Terminator {
+    /// Call a function.
+    Call {
+        /// The pointer to the function to call.
+        func: Operand,
+        /// Arguments to pass to the function.
+        args: Vec<Operand>,
+        /// Destination for the return value.
+        destination: Place,
+        /// Basic block to continue to after call returns.
+        target: BasicBlock,
+    },
+    /// Continue execution from a basic block.
+    Goto(BasicBlock),
+    /// Return from the current function.
+    Return,
+    /// Switch over a collection of integers.
+    SwitchInt {
+        /// Discriminator for the operation.
+        discriminator: Operand,
+        /// Collection of target values, and basic block to jump to if matched.
+        targets: Vec<(usize, BasicBlock)>,
+        otherwise: BasicBlock,
+    },
+}
+
+#[derive(Clone, Debug)]
+enum RValue {
+    Use(Operand),
+    BinaryOp {
+        op: BinOp,
+        lhs: Operand,
+        rhs: Operand,
+    },
+    UnaryOp {
+        op: UnOp,
+        rhs: Operand,
+    },
+}
+
+#[derive(Clone, Debug)]
+enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+#[derive(Clone, Debug)]
+enum UnOp {
+    Not,
+    Neg,
+}
+
+/// Describes how to 'create' a value. Essentially, where does a value come from, and how to get
+/// it.
+#[derive(Clone, Debug)]
+enum Operand {
+    /// Copy the value from a place.
+    Copy(Place),
+    /// Move the value from a place. Moving from this place will cause it to be invalidated.
+    Move(Place),
+    /// Value is a constant.
+    Constant(usize),
+}
+
+/// Represents a location in memory. Locations derive from a [`Local`], with a collection of
+/// [`Projection`]s applied.
+#[derive(Clone, Debug)]
+struct Place {
+    /// Originating local.
+    local: Local,
+    /// Projections applied to the local.
+    projection: Vec<Projection>,
+}
+
+/// Possible operations to perform on a [`Place`], in order to access some underlying data.
+#[derive(Clone, Debug)]
+enum Projection {
+    /// Dereference the parent place.
+    Deref,
+    /// Access a field by taking a parent place, and adding the field offset to the parent's
+    /// address.
+    Field(usize),
+    /// Offset the parent's address plus an offset defined by an index from a local.
+    Index(Local),
+}
+
 fn main() {
-    println!("Hello, world!");
+    let mut local_decls = Locals::new();
+    let loc_ret = local_decls.insert(LocalDecl {});
+
+    let mut basic_blocks = BasicBlocks::new();
+    basic_blocks.insert(BasicBlockData {
+        statements: vec![Statement::Assign {
+            place: Place {
+                local: loc_ret,
+                projection: vec![],
+            },
+            rvalue: RValue::BinaryOp {
+                op: BinOp::Add,
+                lhs: Operand::Constant(1),
+                rhs: Operand::Constant(1),
+            },
+        }],
+        terminator: Terminator::Return,
+    });
+
+    let one_plus_one = Body {
+        basic_blocks,
+        local_decls,
+        arg_count: 0,
+    };
+
+    let output = Interpreter::run(&one_plus_one);
+    dbg!(output);
 }
