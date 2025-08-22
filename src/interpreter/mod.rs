@@ -1,30 +1,34 @@
+mod stack;
+
 use crate::{
     BasicBlock, BinOp, Body, Local, Operand, Place, Projection, RValue, Statement, Terminator,
     UnOp, indexed_vec,
+    interpreter::stack::{Pointer, Stack},
 };
 
 #[derive(Clone, Debug)]
 pub struct Interpreter {
     locals: InterpreterLocals,
-    stack: [usize; 128],
-    sp: usize,
+    stack: Stack,
 }
 
 impl Interpreter {
     fn new() -> Self {
         Self {
             locals: InterpreterLocals::new(),
-            stack: [0; 128],
-            sp: 0,
+            stack: Stack::new(),
         }
     }
 
     pub fn run(body: &Body) -> usize {
         let mut interpreter = Self::new();
 
+        interpreter.stack.push_frame();
+
         // Create the locals.
         for _local in &*body.local_decls {
-            interpreter.new_local();
+            let ptr = interpreter.stack.get_frame().alloca();
+            interpreter.new_local(ptr);
         }
 
         let return_local = Local::zero();
@@ -70,55 +74,54 @@ impl Interpreter {
             }
         }
 
-        let InterpreterLocal::Alive { offset } = interpreter.locals[return_local] else {
-            panic!("return local must be alive");
-        };
+        let offset = interpreter.get_alive_local(return_local).ptr;
+        let output = interpreter.stack[offset];
 
-        interpreter.stack[offset]
+        interpreter.stack.pop_frame();
+
+        output
     }
 
-    fn new_local(&mut self) -> Local {
-        self.locals.insert(InterpreterLocal::Dead)
+    fn new_local(&mut self, ptr: Pointer) -> Local {
+        self.locals.insert(InterpreterLocal {
+            ptr,
+            state: LocalState::Dead,
+        })
     }
 
     fn alive_local(&mut self, local: Local) {
         let local = &mut self.locals[local];
-        *local = InterpreterLocal::Alive { offset: self.sp };
-        self.sp += 1;
+        local.state = LocalState::Alive;
     }
 
     fn kill_local(&mut self, local: Local) {
-        let local @ &mut InterpreterLocal::Alive { offset } = &mut self.locals[local] else {
-            return;
-        };
-        assert_eq!(offset, self.sp - 1, "can only kill local in stack order");
-        *local = InterpreterLocal::Dead;
-        self.sp -= 1;
+        let local = &mut self.locals[local];
+        local.state = LocalState::Dead;
     }
 
     /// Read a local from the stack. Will panic if it's not alive.
     fn read_local(&self, local: Local) -> usize {
-        self.stack[self.read_local_offset(local)]
+        self.stack[&self.get_alive_local(local).ptr]
     }
 
-    /// Read a local's offset in the stack. Will panic if it's not alive.
-    fn read_local_offset(&self, local: Local) -> usize {
-        let InterpreterLocal::Alive { offset } = self.locals[local] else {
-            panic!("local must be alive to read from it");
-        };
-
-        offset
+    fn get_alive_local(&self, local: Local) -> &InterpreterLocal {
+        let local = &self.locals[local];
+        assert!(
+            matches!(local.state, LocalState::Alive),
+            "can only read from alive local"
+        );
+        local
     }
 
     /// Resolve a place into an offset in the stack.
-    fn resolve_place(&self, place: &Place) -> usize {
-        let mut ptr = self.read_local_offset(place.local);
+    fn resolve_place(&self, place: &Place) -> Pointer {
+        let mut ptr = self.get_alive_local(place.local).ptr;
 
         for proj in &place.projection {
             match proj {
                 // Look up `ptr` in the stack, and replace `ptr` with that value.
-                Projection::Deref => ptr = self.stack[ptr],
-                Projection::Field(field_offset) => ptr += field_offset,
+                Projection::Deref => ptr = Pointer::new(self.stack[ptr]),
+                Projection::Field(field_offset) => ptr += *field_offset,
                 Projection::Index(index_local) => ptr += self.read_local(*index_local),
             }
         }
@@ -162,8 +165,16 @@ impl Interpreter {
 }
 
 indexed_vec!(InterpreterLocals<Local, InterpreterLocal>);
+
 #[derive(Clone, Debug)]
-enum InterpreterLocal {
-    Alive { offset: usize },
+struct InterpreterLocal {
+    state: LocalState,
+    ptr: Pointer,
+}
+
+#[derive(Clone, Debug)]
+enum LocalState {
+    Alive,
     Dead,
+    Moved,
 }

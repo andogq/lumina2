@@ -7,7 +7,7 @@ use std::{
 #[macro_export]
 macro_rules! indexed_vec {
     ($vis:vis key $key:ident) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
         $vis struct $key($crate::util::indexed_vec::Key);
 
         impl $key {
@@ -60,6 +60,10 @@ where
     pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
         self.0.get_mut(key.into().0)
     }
+
+    pub fn iter_keys(&self) -> impl Iterator<Item = (K, &V)> {
+        self.0.iter().enumerate().map(|(i, v)| (Key(i).into(), v))
+    }
 }
 
 impl<K, V> Index<K> for IndexedVec<K, V>
@@ -96,7 +100,7 @@ impl<K, V> Deref for IndexedVec<K, V> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Key(usize);
 
 impl Key {
