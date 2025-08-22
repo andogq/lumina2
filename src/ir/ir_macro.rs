@@ -2,7 +2,7 @@
 macro_rules! ir_impl {
     (local($program:ident) $local:ident) => {
         #[allow(unused)]
-        let $local = $program.local_decls.insert(LocalDecl {});
+        let $local = $program.local_decls.insert($crate::ir::LocalDecl {});
     };
 
     (basic_block($program:ident) $bb:ident: { $($body:tt)* }) => {
@@ -11,7 +11,7 @@ macro_rules! ir_impl {
     };
 
     (build_basic_block [$([$($statements:tt)*])*] [$($terminator:tt)*]) => {
-        BasicBlockData {
+        $crate::ir::BasicBlockData {
             statements: ::std::vec![
                 $(ir_impl!(statement [$($statements)*])),*
             ],
@@ -21,7 +21,7 @@ macro_rules! ir_impl {
 
     // StorageLive(_0)
     (statement [$statement:ident($($params:ident),* $(,)?)]) => {
-        Statement::$statement($($params,)*)
+        $crate::ir::Statement::$statement($($params,)*)
     };
 
     // Assume assignment
@@ -30,14 +30,14 @@ macro_rules! ir_impl {
     };
 
     (assign_statement [$($lhs:tt)*] [$($rhs:tt)*]) => {
-        Statement::Assign {
+        $crate::ir::Statement::Assign {
             place: ir_impl!(parse_place [$($lhs)*]),
             rvalue: ir_impl!(parse_rvalue [$($rhs)*]),
         }
     };
 
     (parse_place [$local:ident]) => {
-        Place {
+        $crate::ir::Place {
             local: $local,
             projection: ::std::vec![],
         }
@@ -47,35 +47,35 @@ macro_rules! ir_impl {
         ir_impl!(split_params(rvalue_op_with_params($op)) [] [] [$($params)*])
     };
     (rvalue_op_with_params($op:ident) [$($rhs:tt)*]) => {
-        RValue::UnaryOp {
-            op: UnOp::$op,
+        $crate::ir::RValue::UnaryOp {
+            op: $crate::ir::UnOp::$op,
             rhs: ir_impl!(parse_operand [$($rhs)*]),
         }
     };
     (rvalue_op_with_params($op:ident) [$($lhs:tt)*] [$($rhs:tt)*]) => {
-        RValue::BinaryOp {
-            op: BinOp::$op,
+        $crate::ir::RValue::BinaryOp {
+            op: $crate::ir::BinOp::$op,
             lhs: ir_impl!(parse_operand [$($lhs)*]),
             rhs: ir_impl!(parse_operand [$($rhs)*]),
         }
     };
 
     (parse_rvalue [$($operand:tt)*]) => {
-        RValue::Use(ir_impl!(parse_operand [$($operand)*]))
+        $crate::ir::RValue::Use(ir_impl!(parse_operand [$($operand)*]))
     };
 
     (parse_operand [const $value:literal]) => {
-        Operand::Constant($value)
+        $crate::ir::Operand::Constant($value)
     };
     (parse_operand [copy $($place:tt)*]) => {
-        Operand::Copy(ir_impl!(parse_place [$($place)*]))
+        $crate::ir::Operand::Copy(ir_impl!(parse_place [$($place)*]))
     };
     (parse_operand [move $($place:tt)*]) => {
-        Operand::Move(ir_impl!(parse_place [$($place)*]))
+        $crate::ir::Operand::Move(ir_impl!(parse_place [$($place)*]))
     };
 
     (terminator [return]) => {
-        Terminator::Return
+        $crate::ir::Terminator::Return
     };
 
     (split_params($($callback:tt)*) [$($params:tt)*] [] []) => {
@@ -110,19 +110,67 @@ macro_rules! ir_impl {
         ir_impl!(local($program) $local);
         ir_impl!(munch($program)[$($rest)*]);
     };
-
     (munch($program:ident)[$bb:ident: { $($body:tt)* } $($rest:tt)*]) => {
         ir_impl!(basic_block($program) $bb: { $($body)* });
+        ir_impl!(munch($program)[$($rest)*]);
     };
+    (munch($program:ident)[]) => { };
 }
 
 #[macro_export(local_inner_macros)]
 macro_rules! ir {
     ($($tt:tt)*) => {{
-        let mut program = Body::default();
+        let mut program = $crate::ir::Body::default();
 
         ir_impl!(munch(program) [$($tt)*]);
 
         program
     }};
+}
+
+#[cfg(test)]
+mod test {
+    use insta::assert_debug_snapshot;
+
+    #[test]
+    fn locals() {
+        assert_debug_snapshot!(ir! {
+            let _0;
+            let _1;
+            let _2;
+
+            bb0: {
+                return;
+            }
+        });
+    }
+
+    #[test]
+    fn basic_blocks() {
+        assert_debug_snapshot!(ir! {
+            bb0: {
+                return;
+            }
+
+            bb1: {
+                return;
+            }
+        });
+    }
+
+    #[test]
+    fn mul_numbers() {
+        assert_debug_snapshot!(ir! {
+            let _0;
+            let _1;
+            let _2;
+
+            bb0: {
+                _1 = const 2;
+                _2 = const 3;
+                _0 = Mul(copy _1, copy _2);
+                return;
+            }
+        });
+    }
 }

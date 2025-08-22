@@ -1,0 +1,88 @@
+---
+source: src/ir/ir_macro.rs
+expression: "ir!\n{\n    let _0; let _1; let _2; bb0:\n    { _1 = const 2; _2 = const 3; _0 = Mul(copy _1, copy _2); return; }\n}"
+---
+Body {
+    basic_blocks: IndexedVec(
+        [
+            BasicBlockData {
+                statements: [
+                    Assign {
+                        place: Place {
+                            local: Local(
+                                Key(
+                                    1,
+                                ),
+                            ),
+                            projection: [],
+                        },
+                        rvalue: Use(
+                            Constant(
+                                2,
+                            ),
+                        ),
+                    },
+                    Assign {
+                        place: Place {
+                            local: Local(
+                                Key(
+                                    2,
+                                ),
+                            ),
+                            projection: [],
+                        },
+                        rvalue: Use(
+                            Constant(
+                                3,
+                            ),
+                        ),
+                    },
+                    Assign {
+                        place: Place {
+                            local: Local(
+                                Key(
+                                    0,
+                                ),
+                            ),
+                            projection: [],
+                        },
+                        rvalue: BinaryOp {
+                            op: Mul,
+                            lhs: Copy(
+                                Place {
+                                    local: Local(
+                                        Key(
+                                            1,
+                                        ),
+                                    ),
+                                    projection: [],
+                                },
+                            ),
+                            rhs: Copy(
+                                Place {
+                                    local: Local(
+                                        Key(
+                                            2,
+                                        ),
+                                    ),
+                                    projection: [],
+                                },
+                            ),
+                        },
+                    },
+                ],
+                terminator: Return,
+            },
+        ],
+        PhantomData<fn() -> lumina2::ir::BasicBlock>,
+    ),
+    local_decls: IndexedVec(
+        [
+            LocalDecl,
+            LocalDecl,
+            LocalDecl,
+        ],
+        PhantomData<fn() -> lumina2::ir::Local>,
+    ),
+    arg_count: 0,
+}

@@ -1,0 +1,24 @@
+---
+source: src/ir/ir_macro.rs
+expression: "ir! { let _0; let _1; let _2; bb0: { return; } }"
+---
+Body {
+    basic_blocks: IndexedVec(
+        [
+            BasicBlockData {
+                statements: [],
+                terminator: Return,
+            },
+        ],
+        PhantomData<fn() -> lumina2::ir::BasicBlock>,
+    ),
+    local_decls: IndexedVec(
+        [
+            LocalDecl,
+            LocalDecl,
+            LocalDecl,
+        ],
+        PhantomData<fn() -> lumina2::ir::Local>,
+    ),
+    arg_count: 0,
+}
