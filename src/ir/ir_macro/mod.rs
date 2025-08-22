@@ -1,10 +1,12 @@
 #[macro_export(local_inner_macros)]
 macro_rules! ir_impl {
     (local($program:ident) $local:ident) => {
+        #[allow(unused)]
         let $local = $program.local_decls.insert(LocalDecl {});
     };
 
     (basic_block($program:ident) $bb:ident: { $($body:tt)* }) => {
+        #[allow(unused)]
         let $bb = $program.basic_blocks.insert(ir_impl!(split(build_basic_block) [] [] [$($body)*]));
     };
 
