@@ -1,18 +1,30 @@
 #[macro_export(local_inner_macros)]
 macro_rules! ir_impl {
-    (local($program:ident) $local:ident: $ty:tt) => {
+    (local($program:ident) $local:ident: $($ty:tt)*) => {
         #[allow(unused)]
         let $local = $program.local_decls.insert($crate::ir::LocalDecl {
-            ty: $program.ctx.tys.find_or_insert(ir_impl!(parse_ty $ty)),
+            ty: ir_impl!(parse_ty [$program.ctx.tys] $($ty)*),
         });
     };
 
-    (parse_ty u8) => {
-        $crate::ir::ctx::ty::TyInfo::U8
+    (parse_ty [$tys:expr] & $($ty:tt)*) => {{
+        let ref_ty = ir_impl!(parse_ty [$tys] $($ty)*);
+
+        $tys.find_or_insert(
+            $crate::ir::ctx::ty::TyInfo::Ref(ref_ty)
+        )
+    }};
+    (parse_ty [$tys:expr] u8) => {
+        $tys.find_or_insert(
+            $crate::ir::ctx::ty::TyInfo::U8
+        )
     };
-    (parse_ty i8) => {
-        $crate::ir::ctx::ty::TyInfo::I8
+    (parse_ty [$tys:expr] i8) => {
+        $tys.find_or_insert(
+            $crate::ir::ctx::ty::TyInfo::I8
+        )
     };
+
 
     (basic_block($program:ident) $bb:ident: { $($body:tt)* }) => {
         #[allow(unused)]
@@ -69,6 +81,10 @@ macro_rules! ir_impl {
         }
     };
 
+    (parse_rvalue [&$($place:tt)*]) => {
+        $crate::ir::RValue::Ref(ir_impl!(parse_place [$($place)*]))
+    };
+
     (parse_rvalue [$($operand:tt)*]) => {
         $crate::ir::RValue::Use(ir_impl!(parse_operand [$($operand)*]))
     };
@@ -112,6 +128,11 @@ macro_rules! ir_impl {
         ir_impl!(split($callback) [$($statements)*] [$($current)* $tok] [$($rest)+])
     };
 
+    // HACK: Properly split statements by `;`, instead of repeating rule for `&`
+    (munch($program:ident)[let $local:ident: &$ty:tt; $($rest:tt)*]) => {
+        ir_impl!(local($program) $local: &$ty);
+        ir_impl!(munch($program)[$($rest)*]);
+    };
     (munch($program:ident)[let $local:ident: $ty:tt; $($rest:tt)*]) => {
         ir_impl!(local($program) $local: $ty);
         ir_impl!(munch($program)[$($rest)*]);
@@ -172,9 +193,23 @@ mod test {
             let _2: u8;
 
             bb0: {
-                _1 = const 2;
-                _2 = const 3;
+                _1 = const 2_u8;
+                _2 = const 3_u8;
                 _0 = Mul(_1, _2);
+                return;
+            }
+        });
+    }
+
+    #[test]
+    fn reference() {
+        assert_debug_snapshot!(ir! {
+            let _0: u8;
+            let _1: &u8;
+
+            bb0: {
+                _0 = const 1_u8;
+                _1 = &_0;
                 return;
             }
         });

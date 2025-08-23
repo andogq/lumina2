@@ -80,6 +80,7 @@ pub enum Terminator {
 #[derive(Clone, Debug)]
 pub enum RValue {
     Use(Operand),
+    Ref(Place),
     BinaryOp {
         op: BinOp,
         lhs: Operand,
@@ -120,12 +121,14 @@ pub enum Operand {
 pub enum Value {
     U8(u8),
     I8(i8),
+    Ref(usize),
 }
 
 impl Value {
     pub fn size(&self) -> usize {
         match self {
-            Value::U8(_) | Value::I8(_) => 1,
+            Value::U8(_) | Value::I8(_) => size_of::<u8>(),
+            Value::Ref(_) => size_of::<usize>(),
         }
     }
 
@@ -133,6 +136,7 @@ impl Value {
         match self {
             Value::U8(value) => value.to_ne_bytes().to_vec(),
             Value::I8(value) => value.to_ne_bytes().to_vec(),
+            Value::Ref(value) => value.to_ne_bytes().to_vec(),
         }
     }
 }
@@ -164,6 +168,7 @@ macro_rules! impl_bin_op {
                     match (self, rhs) {
                         (Value::U8(lhs), Value::U8(rhs)) => Value::U8(lhs $op rhs),
                         (Value::I8(lhs), Value::I8(rhs)) => Value::I8(lhs $op rhs),
+                        (Value::Ref(_), _) | (_, Value::Ref(_)) => panic!("cannot binary op on ref"),
                         (lhs, rhs) => panic!("bin op not supported: {lhs:?} {} {rhs:?}", stringify!($op))
                     }
                 }
@@ -189,6 +194,7 @@ macro_rules! impl_un_op {
                     match self {
                         Value::U8(rhs) => Value::U8($op rhs),
                         Value::I8(rhs) => Value::I8($op rhs),
+                        Value::Ref(_) => panic!("cannot unary op on ref"),
                     }
                 }
             }
@@ -207,6 +213,7 @@ impl std::ops::Neg for Value {
         match self {
             Value::U8(rhs) => Value::U8(rhs.wrapping_neg()),
             Value::I8(rhs) => Value::I8(-rhs),
+            Value::Ref(_) => panic!("cannot unary op on ref"),
         }
     }
 }

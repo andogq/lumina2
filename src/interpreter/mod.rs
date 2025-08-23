@@ -182,6 +182,15 @@ impl Interpreter {
     fn resolve_rvalue(&mut self, rvalue: &RValue) -> Value {
         match rvalue {
             RValue::Use(operand) => self.resolve_operand(operand),
+            RValue::Ref(place) => {
+                let (ptr, ty) = self.resolve_place(place);
+                let ty = &self.tys[ty];
+
+                let mut buf = vec![0; ty.size()];
+                self.stack.read(ptr, &mut buf);
+
+                ty.get_value(&buf)
+            }
             RValue::BinaryOp { op, lhs, rhs } => {
                 let lhs = self.resolve_operand(lhs);
                 let rhs = self.resolve_operand(rhs);

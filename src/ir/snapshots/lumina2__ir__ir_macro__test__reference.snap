@@ -1,0 +1,88 @@
+---
+source: src/ir/ir_macro.rs
+expression: "ir! { let _0: u8; let _1: &u8; bb0: { _0 = const 1_u8; _1 = &_0; return; } }"
+---
+Body {
+    ctx: Ctx {
+        tys: IndexedVec(
+            [
+                U8,
+                Ref(
+                    Ty(
+                        Key(
+                            0,
+                        ),
+                    ),
+                ),
+            ],
+            PhantomData<fn() -> lumina2::ir::ctx::ty::Ty>,
+        ),
+    },
+    basic_blocks: IndexedVec(
+        [
+            BasicBlockData {
+                statements: [
+                    Assign {
+                        place: Place {
+                            local: Local(
+                                Key(
+                                    0,
+                                ),
+                            ),
+                            projection: [],
+                        },
+                        rvalue: Use(
+                            Constant(
+                                U8(
+                                    1,
+                                ),
+                            ),
+                        ),
+                    },
+                    Assign {
+                        place: Place {
+                            local: Local(
+                                Key(
+                                    1,
+                                ),
+                            ),
+                            projection: [],
+                        },
+                        rvalue: Ref(
+                            Place {
+                                local: Local(
+                                    Key(
+                                        0,
+                                    ),
+                                ),
+                                projection: [],
+                            },
+                        ),
+                    },
+                ],
+                terminator: Return,
+            },
+        ],
+        PhantomData<fn() -> lumina2::ir::BasicBlock>,
+    ),
+    local_decls: IndexedVec(
+        [
+            LocalDecl {
+                ty: Ty(
+                    Key(
+                        0,
+                    ),
+                ),
+            },
+            LocalDecl {
+                ty: Ty(
+                    Key(
+                        1,
+                    ),
+                ),
+            },
+        ],
+        PhantomData<fn() -> lumina2::ir::Local>,
+    ),
+    arg_count: 0,
+}
