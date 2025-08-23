@@ -116,28 +116,42 @@ pub enum Operand {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum Value {
     U8(u8),
+    I8(i8),
 }
 
 impl Value {
     pub fn size(&self) -> usize {
         match self {
-            Value::U8(_) => 1,
+            Value::U8(_) | Value::I8(_) => 1,
         }
     }
 
     pub fn bytes(&self) -> Vec<u8> {
         match self {
             Value::U8(value) => value.to_ne_bytes().to_vec(),
+            Value::I8(value) => value.to_ne_bytes().to_vec(),
         }
     }
 }
 
-impl From<u8> for Value {
-    fn from(value: u8) -> Self {
-        Self::U8(value)
-    }
+macro_rules! impl_from {
+    ($($variant:ident($ty:ty);)*) => {
+        $(
+            impl From<$ty> for Value {
+                fn from(value: $ty) -> Self {
+                    Self::$variant(value)
+                }
+            }
+        )*
+    };
+}
+
+impl_from! {
+    U8(u8);
+    I8(i8);
 }
 
 macro_rules! impl_bin_op {
@@ -149,6 +163,8 @@ macro_rules! impl_bin_op {
                 fn $method(self, rhs: Self) -> Self::Output {
                     match (self, rhs) {
                         (Value::U8(lhs), Value::U8(rhs)) => Value::U8(lhs $op rhs),
+                        (Value::I8(lhs), Value::I8(rhs)) => Value::I8(lhs $op rhs),
+                        (lhs, rhs) => panic!("bin op not supported: {lhs:?} {} {rhs:?}", stringify!($op))
                     }
                 }
             }
@@ -172,6 +188,7 @@ macro_rules! impl_un_op {
                 fn $method(self) -> Self::Output {
                     match self {
                         Value::U8(rhs) => Value::U8($op rhs),
+                        Value::I8(rhs) => Value::I8($op rhs),
                     }
                 }
             }
@@ -189,6 +206,7 @@ impl std::ops::Neg for Value {
     fn neg(self) -> Self::Output {
         match self {
             Value::U8(rhs) => Value::U8(rhs.wrapping_neg()),
+            Value::I8(rhs) => Value::I8(-rhs),
         }
     }
 }

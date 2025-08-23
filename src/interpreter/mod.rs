@@ -27,7 +27,7 @@ impl Interpreter {
         }
     }
 
-    pub fn run(body: &Body) -> u8 {
+    pub fn run(body: &Body) -> Value {
         let mut interpreter = Self::new(
             // HACK: don't clone
             body.ctx.tys.clone(),
@@ -59,7 +59,10 @@ impl Interpreter {
 
                         let target_ty = &interpreter.tys[target_ty];
 
-                        if !matches!((&value, target_ty), (Value::U8(_), TyInfo::U8)) {
+                        if !matches!(
+                            (&value, target_ty),
+                            (Value::U8(_), TyInfo::U8) | (Value::I8(_), TyInfo::I8)
+                        ) {
                             panic!("mis-matched value and target type");
                         }
 
@@ -94,12 +97,11 @@ impl Interpreter {
             }
         }
 
-        let return_ptr = interpreter.get_alive_local(return_local).ptr;
-        let output = {
-            let mut buf = [0u8];
-            interpreter.stack.read(return_ptr, &mut buf);
-            buf[0]
-        };
+        let local = interpreter.get_alive_local(return_local);
+        let ty = &interpreter.tys[local.ty];
+        let mut buf = vec![0; ty.size()];
+        interpreter.stack.read(local.ptr, &mut buf);
+        let output = ty.get_value(&buf);
 
         interpreter.stack.pop_frame();
 

@@ -12,12 +12,13 @@ pub mod ty {
     #[non_exhaustive]
     pub enum TyInfo {
         U8,
+        I8,
     }
 
     impl TyInfo {
         pub fn size(&self) -> usize {
             match self {
-                TyInfo::U8 => 1,
+                TyInfo::U8 | TyInfo::I8 => 1,
             }
         }
 
@@ -30,6 +31,7 @@ pub mod ty {
 
             match self {
                 TyInfo::U8 => Value::U8(u8::from_ne_bytes([bytes[0]])),
+                TyInfo::I8 => Value::I8(i8::from_ne_bytes([bytes[0]])),
             }
         }
     }
@@ -48,4 +50,3 @@ pub mod ty {
         }
     }
 }
-

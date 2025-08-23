@@ -10,6 +10,9 @@ macro_rules! ir_impl {
     (parse_ty u8) => {
         $crate::ir::ctx::ty::TyInfo::U8
     };
+    (parse_ty i8) => {
+        $crate::ir::ctx::ty::TyInfo::I8
+    };
 
     (basic_block($program:ident) $bb:ident: { $($body:tt)* }) => {
         #[allow(unused)]
