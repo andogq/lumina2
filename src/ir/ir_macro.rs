@@ -1,8 +1,14 @@
 #[macro_export(local_inner_macros)]
 macro_rules! ir_impl {
-    (local($program:ident) $local:ident) => {
+    (local($program:ident) $local:ident: $ty:tt) => {
         #[allow(unused)]
-        let $local = $program.local_decls.insert($crate::ir::LocalDecl {});
+        let $local = $program.local_decls.insert($crate::ir::LocalDecl {
+            ty: $program.ctx.tys.find_or_insert(ir_impl!(parse_ty $ty)),
+        });
+    };
+
+    (parse_ty u8) => {
+        $crate::ir::ctx::ty::TyInfo::U8
     };
 
     (basic_block($program:ident) $bb:ident: { $($body:tt)* }) => {
@@ -65,7 +71,7 @@ macro_rules! ir_impl {
     };
 
     (parse_operand [const $value:literal]) => {
-        $crate::ir::Operand::Constant($value)
+        $crate::ir::Operand::Constant($value.into())
     };
     (parse_operand [$($place:tt)*]) => {
         $crate::ir::Operand::Place(ir_impl!(parse_place [$($place)*]))
@@ -103,8 +109,8 @@ macro_rules! ir_impl {
         ir_impl!(split($callback) [$($statements)*] [$($current)* $tok] [$($rest)+])
     };
 
-    (munch($program:ident)[let $local:ident; $($rest:tt)*]) => {
-        ir_impl!(local($program) $local);
+    (munch($program:ident)[let $local:ident: $ty:tt; $($rest:tt)*]) => {
+        ir_impl!(local($program) $local: $ty);
         ir_impl!(munch($program)[$($rest)*]);
     };
     (munch($program:ident)[$bb:ident: { $($body:tt)* } $($rest:tt)*]) => {
@@ -132,9 +138,9 @@ mod test {
     #[test]
     fn locals() {
         assert_debug_snapshot!(ir! {
-            let _0;
-            let _1;
-            let _2;
+            let _0: u8;
+            let _1: u8;
+            let _2: u8;
 
             bb0: {
                 return;
@@ -158,9 +164,9 @@ mod test {
     #[test]
     fn mul_numbers() {
         assert_debug_snapshot!(ir! {
-            let _0;
-            let _1;
-            let _2;
+            let _0: u8;
+            let _1: u8;
+            let _2: u8;
 
             bb0: {
                 _1 = const 2;

@@ -1,8 +1,16 @@
 ---
 source: src/ir/ir_macro.rs
-expression: "ir!\n{\n    let _0; let _1; let _2; bb0:\n    { _1 = const 2; _2 = const 3; _0 = Mul(_1, _2); return; }\n}"
+expression: "ir!\n{\n    let _0: u8; let _1: u8; let _2: u8; bb0:\n    { _1 = const 2; _2 = const 3; _0 = Mul(_1, _2); return; }\n}"
 ---
 Body {
+    ctx: Ctx {
+        tys: IndexedVec(
+            [
+                U8,
+            ],
+            PhantomData<fn() -> lumina2::ir::ctx::ty::Ty>,
+        ),
+    },
     basic_blocks: IndexedVec(
         [
             BasicBlockData {
@@ -18,7 +26,9 @@ Body {
                         },
                         rvalue: Use(
                             Constant(
-                                2,
+                                U8(
+                                    2,
+                                ),
                             ),
                         ),
                     },
@@ -33,7 +43,9 @@ Body {
                         },
                         rvalue: Use(
                             Constant(
-                                3,
+                                U8(
+                                    3,
+                                ),
                             ),
                         ),
                     },
@@ -78,9 +90,27 @@ Body {
     ),
     local_decls: IndexedVec(
         [
-            LocalDecl,
-            LocalDecl,
-            LocalDecl,
+            LocalDecl {
+                ty: Ty(
+                    Key(
+                        0,
+                    ),
+                ),
+            },
+            LocalDecl {
+                ty: Ty(
+                    Key(
+                        0,
+                    ),
+                ),
+            },
+            LocalDecl {
+                ty: Ty(
+                    Key(
+                        0,
+                    ),
+                ),
+            },
         ],
         PhantomData<fn() -> lumina2::ir::Local>,
     ),

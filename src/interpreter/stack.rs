@@ -1,8 +1,8 @@
-use std::ops::{Add, AddAssign, Index, IndexMut};
+use std::ops::{Add, AddAssign};
 
 #[derive(Clone, Debug)]
 pub struct Stack {
-    buf: [usize; 1024],
+    buf: [u8; 1024],
     frames: Vec<Frame>,
     sp: usize,
 }
@@ -33,33 +33,13 @@ impl Stack {
             sp: &mut self.sp,
         }
     }
-}
 
-impl Index<&Pointer> for Stack {
-    type Output = usize;
-
-    fn index(&self, ptr: &Pointer) -> &Self::Output {
-        &self.buf[ptr.0]
+    pub fn read(&self, ptr: Pointer, buf: &mut [u8]) {
+        buf.copy_from_slice(&self.buf[ptr.0..ptr.0 + buf.len()]);
     }
-}
 
-impl Index<Pointer> for Stack {
-    type Output = usize;
-
-    fn index(&self, ptr: Pointer) -> &Self::Output {
-        &self[&ptr]
-    }
-}
-
-impl IndexMut<&Pointer> for Stack {
-    fn index_mut(&mut self, ptr: &Pointer) -> &mut Self::Output {
-        &mut self.buf[ptr.0]
-    }
-}
-
-impl IndexMut<Pointer> for Stack {
-    fn index_mut(&mut self, ptr: Pointer) -> &mut Self::Output {
-        &mut self[&ptr]
+    pub fn write(&mut self, ptr: Pointer, bytes: &[u8]) {
+        self.buf[ptr.0..ptr.0 + bytes.len()].copy_from_slice(bytes);
     }
 }
 
@@ -70,13 +50,13 @@ pub struct Frame {
 
 pub struct FrameRef<'s> {
     sp: &'s mut usize,
-    buf: &'s mut [usize],
+    buf: &'s mut [u8],
 }
 
 impl<'s> FrameRef<'s> {
-    pub fn alloca(&mut self) -> Pointer {
+    pub fn alloca(&mut self, amount: usize) -> Pointer {
         let ptr = Pointer(*self.sp);
-        *self.sp += 1;
+        *self.sp += amount;
         ptr
     }
 }

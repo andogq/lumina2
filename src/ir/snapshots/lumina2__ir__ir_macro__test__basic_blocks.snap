@@ -3,6 +3,12 @@ source: src/ir/ir_macro.rs
 expression: "ir! { bb0: { return; } bb1: { return; } }"
 ---
 Body {
+    ctx: Ctx {
+        tys: IndexedVec(
+            [],
+            PhantomData<fn() -> lumina2::ir::ctx::ty::Ty>,
+        ),
+    },
     basic_blocks: IndexedVec(
         [
             BasicBlockData {

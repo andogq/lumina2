@@ -6,9 +6,9 @@ use crate::{interpreter::Interpreter, ir::*};
 
 fn main() {
     let program = ir! {
-        let _0;
-        let _1;
-        let _2;
+        let _0: u8;
+        let _1: u8;
+        let _2: u8;
 
         bb0: {
             StorageLive(_1);

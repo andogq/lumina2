@@ -1,8 +1,16 @@
 ---
 source: src/ir/ir_macro.rs
-expression: "ir! { let _0; let _1; let _2; bb0: { return; } }"
+expression: "ir! { let _0: u8; let _1: u8; let _2: u8; bb0: { return; } }"
 ---
 Body {
+    ctx: Ctx {
+        tys: IndexedVec(
+            [
+                U8,
+            ],
+            PhantomData<fn() -> lumina2::ir::ctx::ty::Ty>,
+        ),
+    },
     basic_blocks: IndexedVec(
         [
             BasicBlockData {
@@ -14,9 +22,27 @@ Body {
     ),
     local_decls: IndexedVec(
         [
-            LocalDecl,
-            LocalDecl,
-            LocalDecl,
+            LocalDecl {
+                ty: Ty(
+                    Key(
+                        0,
+                    ),
+                ),
+            },
+            LocalDecl {
+                ty: Ty(
+                    Key(
+                        0,
+                    ),
+                ),
+            },
+            LocalDecl {
+                ty: Ty(
+                    Key(
+                        0,
+                    ),
+                ),
+            },
         ],
         PhantomData<fn() -> lumina2::ir::Local>,
     ),
