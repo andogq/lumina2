@@ -67,11 +67,8 @@ macro_rules! ir_impl {
     (parse_operand [const $value:literal]) => {
         $crate::ir::Operand::Constant($value)
     };
-    (parse_operand [copy $($place:tt)*]) => {
-        $crate::ir::Operand::Copy(ir_impl!(parse_place [$($place)*]))
-    };
-    (parse_operand [move $($place:tt)*]) => {
-        $crate::ir::Operand::Move(ir_impl!(parse_place [$($place)*]))
+    (parse_operand [$($place:tt)*]) => {
+        $crate::ir::Operand::Place(ir_impl!(parse_place [$($place)*]))
     };
 
     (terminator [return]) => {
@@ -168,7 +165,7 @@ mod test {
             bb0: {
                 _1 = const 2;
                 _2 = const 3;
-                _0 = Mul(copy _1, copy _2);
+                _0 = Mul(_1, _2);
                 return;
             }
         });

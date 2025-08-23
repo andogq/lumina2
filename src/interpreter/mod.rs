@@ -157,8 +157,7 @@ impl Interpreter {
     /// Return the value of the provided operand
     fn resolve_operand(&self, operand: &Operand) -> usize {
         match operand {
-            Operand::Copy(place) => self.stack[self.resolve_place(place)],
-            Operand::Move(place) => todo!(),
+            Operand::Place(place) => self.stack[self.resolve_place(place)],
             Operand::Constant(value) => *value,
         }
     }
@@ -176,5 +175,4 @@ struct InterpreterLocal {
 enum LocalState {
     Alive,
     Dead,
-    Moved,
 }

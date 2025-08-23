@@ -1,6 +1,6 @@
 ---
 source: src/ir/ir_macro.rs
-expression: "ir!\n{\n    let _0; let _1; let _2; bb0:\n    { _1 = const 2; _2 = const 3; _0 = Mul(copy _1, copy _2); return; }\n}"
+expression: "ir!\n{\n    let _0; let _1; let _2; bb0:\n    { _1 = const 2; _2 = const 3; _0 = Mul(_1, _2); return; }\n}"
 ---
 Body {
     basic_blocks: IndexedVec(
@@ -48,7 +48,7 @@ Body {
                         },
                         rvalue: BinaryOp {
                             op: Mul,
-                            lhs: Copy(
+                            lhs: Place(
                                 Place {
                                     local: Local(
                                         Key(
@@ -58,7 +58,7 @@ Body {
                                     projection: [],
                                 },
                             ),
-                            rhs: Copy(
+                            rhs: Place(
                                 Place {
                                     local: Local(
                                         Key(

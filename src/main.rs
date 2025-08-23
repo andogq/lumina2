@@ -15,7 +15,7 @@ fn main() {
             StorageLive(_2);
             _1 = const 2;
             _2 = const 3;
-            _0 = Mul(copy _1, copy _2);
+            _0 = Mul(_1, _2);
             StorageDead(_2);
             StorageDead(_1);
             return;

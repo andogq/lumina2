@@ -102,9 +102,7 @@ pub enum UnOp {
 #[derive(Clone, Debug)]
 pub enum Operand {
     /// Copy the value from a place.
-    Copy(Place),
-    /// Move the value from a place. Moving from this place will cause it to be invalidated.
-    Move(Place),
+    Place(Place),
     /// Value is a constant.
     Constant(usize),
 }
