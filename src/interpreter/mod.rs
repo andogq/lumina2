@@ -61,9 +61,12 @@ impl Interpreter {
 
                         if !matches!(
                             (&value, target_ty),
-                            (Value::U8(_), TyInfo::U8) | (Value::I8(_), TyInfo::I8)
+                            (Value::U8(_), TyInfo::U8)
+                                | (Value::I8(_), TyInfo::I8)
+                                // TODO: Check inner type of ref
+                                | (Value::Ref(_), TyInfo::Ref(_))
                         ) {
-                            panic!("mis-matched value and target type");
+                            panic!("mis-matched value and target type: {target_ty:?}, {value:?}");
                         }
 
                         interpreter.stack.write(target_ptr, &value.bytes());
@@ -149,17 +152,28 @@ impl Interpreter {
     /// Resolve a place into an offset in the stack.
     fn resolve_place(&mut self, place: &Place) -> (Pointer, Ty) {
         let local = self.get_alive_local(place.local);
-        let ty = &self.tys[local.ty];
 
+        let mut ty = &self.tys[local.ty];
         let mut ptr = local.ptr;
 
         for proj in &place.projection {
             match proj {
                 // Look up `ptr` in the stack, and replace `ptr` with that value.
                 Projection::Deref => {
-                    unimplemented!();
-                    // TODO: This probably will need a `Pointer` type.
-                    // ptr = Pointer::new(self.stack[ptr])
+                    // Read the reference pointer out of memory.
+                    let mut buf = vec![0; ty.size()];
+                    self.stack.read(ptr, &mut buf);
+                    let Value::Ref(ptr_raw) = ty.get_value(&buf) else {
+                        panic!("expected to read ref pointer from stack");
+                    };
+
+                    ptr = Pointer::new(ptr_raw);
+
+                    // Determine the type of the reference.
+                    let TyInfo::Ref(inner_ty) = ty else {
+                        panic!("cannot deref non-pointer: {ty:?}");
+                    };
+                    ty = &self.tys[*inner_ty];
                 }
                 Projection::Field(field_offset) => {
                     ptr += *field_offset;
@@ -183,13 +197,9 @@ impl Interpreter {
         match rvalue {
             RValue::Use(operand) => self.resolve_operand(operand),
             RValue::Ref(place) => {
-                let (ptr, ty) = self.resolve_place(place);
-                let ty = &self.tys[ty];
+                let (ptr, _ty) = self.resolve_place(place);
 
-                let mut buf = vec![0; ty.size()];
-                self.stack.read(ptr, &mut buf);
-
-                ty.get_value(&buf)
+                Value::Ref(ptr.into_inner())
             }
             RValue::BinaryOp { op, lhs, rhs } => {
                 let lhs = self.resolve_operand(lhs);

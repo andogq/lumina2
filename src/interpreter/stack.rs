@@ -68,6 +68,10 @@ impl Pointer {
     pub fn new(ptr: usize) -> Self {
         Self(ptr)
     }
+
+    pub fn into_inner(self) -> usize {
+        self.0
+    }
 }
 
 impl Add<usize> for Pointer {

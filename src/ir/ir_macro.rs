@@ -64,6 +64,13 @@ macro_rules! ir_impl {
         }
     };
 
+    (parse_place [* $local:ident]) => {
+        $crate::ir::Place {
+            local: $local,
+            projection: ::std::vec![$crate::ir::Projection::Deref],
+        }
+    };
+
     (parse_rvalue [$op:ident($($params:tt)*)]) => {
         ir_impl!(split_params(rvalue_op_with_params($op)) [] [] [$($params)*])
     };
