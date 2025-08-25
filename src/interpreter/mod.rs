@@ -1,13 +1,9 @@
 mod stack;
 
 use crate::{
-    BasicBlock, BinOp, Body, Local, Operand, Place, Projection, RValue, Statement, Terminator,
-    UnOp, indexed_vec,
+    BasicBlock, BinOp, Body, Local, Operand, Place, Projection, RValue, Statement, Terminator, Ty,
+    TyInfo, Tys, UnOp, Value, indexed_vec,
     interpreter::stack::{Pointer, Stack},
-    ir::{
-        Value,
-        ctx::ty::{Ty, TyInfo, Tys},
-    },
 };
 
 #[derive(Clone, Debug)]
@@ -69,7 +65,7 @@ impl Interpreter {
                             panic!("mis-matched value and target type: {target_ty:?}, {value:?}");
                         }
 
-                        interpreter.stack.write(target_ptr, &value.bytes());
+                        interpreter.stack.write(target_ptr, &value.to_bytes());
                     }
                     Statement::StorageDead(local) => interpreter.kill_local(*local),
                     Statement::StorageLive(local) => interpreter.alive_local(*local),

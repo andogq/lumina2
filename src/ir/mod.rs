@@ -1,10 +1,9 @@
 pub mod ctx;
 mod ir_macro;
+mod value;
 
-use crate::{
-    indexed_vec,
-    ir::ctx::{Ctx, ty::Ty},
-};
+pub use self::value::*;
+use crate::{indexed_vec, ir::ctx::Ctx};
 
 /// Representation of a function.
 #[derive(Clone, Debug, Default)]
@@ -114,108 +113,6 @@ pub enum Operand {
     Place(Place),
     /// Value is a constant.
     Constant(Value),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[non_exhaustive]
-pub enum Value {
-    U8(u8),
-    I8(i8),
-    Ref(usize),
-}
-
-impl Value {
-    pub fn size(&self) -> usize {
-        match self {
-            Value::U8(_) | Value::I8(_) => size_of::<u8>(),
-            Value::Ref(_) => size_of::<usize>(),
-        }
-    }
-
-    pub fn bytes(&self) -> Vec<u8> {
-        match self {
-            Value::U8(value) => value.to_ne_bytes().to_vec(),
-            Value::I8(value) => value.to_ne_bytes().to_vec(),
-            Value::Ref(value) => value.to_ne_bytes().to_vec(),
-        }
-    }
-}
-
-macro_rules! impl_from {
-    ($($variant:ident($ty:ty);)*) => {
-        $(
-            impl From<$ty> for Value {
-                fn from(value: $ty) -> Self {
-                    Self::$variant(value)
-                }
-            }
-        )*
-    };
-}
-
-impl_from! {
-    U8(u8);
-    I8(i8);
-}
-
-macro_rules! impl_bin_op {
-    ($($operation:path => $method:ident($op:tt);)*) => {
-        $(
-            impl $operation for Value {
-                type Output = Self;
-
-                fn $method(self, rhs: Self) -> Self::Output {
-                    match (self, rhs) {
-                        (Value::U8(lhs), Value::U8(rhs)) => Value::U8(lhs $op rhs),
-                        (Value::I8(lhs), Value::I8(rhs)) => Value::I8(lhs $op rhs),
-                        (Value::Ref(_), _) | (_, Value::Ref(_)) => panic!("cannot binary op on ref"),
-                        (lhs, rhs) => panic!("bin op not supported: {lhs:?} {} {rhs:?}", stringify!($op))
-                    }
-                }
-            }
-        )*
-    };
-}
-
-impl_bin_op! {
-    std::ops::Add => add(+);
-    std::ops::Sub => sub(-);
-    std::ops::Mul => mul(*);
-    std::ops::Div => div(/);
-}
-
-macro_rules! impl_un_op {
-    ($($operation:path => $method:ident($op:tt);)*) => {
-        $(
-            impl $operation for Value {
-                type Output = Self;
-
-                fn $method(self) -> Self::Output {
-                    match self {
-                        Value::U8(rhs) => Value::U8($op rhs),
-                        Value::I8(rhs) => Value::I8($op rhs),
-                        Value::Ref(_) => panic!("cannot unary op on ref"),
-                    }
-                }
-            }
-        )*
-    };
-}
-
-impl_un_op! {
-    std::ops::Not => not(!);
-}
-
-impl std::ops::Neg for Value {
-    type Output = Self;
-
-    fn neg(self) -> Self::Output {
-        match self {
-            Value::U8(rhs) => Value::U8(rhs.wrapping_neg()),
-            Value::I8(rhs) => Value::I8(-rhs),
-            Value::Ref(_) => panic!("cannot unary op on ref"),
-        }
-    }
 }
 
 /// Represents a location in memory. Locations derive from a [`Local`], with a collection of

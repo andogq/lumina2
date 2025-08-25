@@ -11,12 +11,12 @@ macro_rules! ir_impl {
         let ref_ty = ir_impl!(parse_ty [$tys] $($ty)*);
 
         $tys.find_or_insert(
-            $crate::ir::ctx::ty::TyInfo::Ref(ref_ty)
+            $crate::ir::TyInfo::Ref(ref_ty)
         )
     }};
     (parse_ty [$tys:expr] u8) => {
         $tys.find_or_insert(
-            $crate::ir::ctx::ty::TyInfo::U8
+            $crate::ir::TyInfo::U8
         )
     };
     (parse_ty [$tys:expr] i8) => {
