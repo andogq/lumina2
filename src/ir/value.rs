@@ -1,79 +1,93 @@
 use crate::{indexed_vec, ir::Pointer};
 
-macro_rules! value {
-    ($($name:ident($inner:ty) [$from_fn:ident, $into_fn:ident] $(($ty_inner_ident:ident: $ty_inner:ty))?;)*) => {
-        #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-        #[non_exhaustive]
-        pub enum Value {
-            $($name($inner),)*
-        }
-
-        impl Value {
-            pub fn size(&self) -> usize {
-                match self {
-                    $(Self::$name(_) => ::core::mem::size_of::<$inner>(),)*
-                }
-            }
-
-            pub fn to_bytes(&self) -> Vec<u8> {
-                match self {
-                    $(Self::$name(value) => value.to_ne_bytes().to_vec(),)*
-                }
-            }
-
-            $(
-                pub fn $into_fn(self) -> Option<$inner> {
-                    match self {
-                        Self::$name(value) => Some(value),
-                        _ => None
-                    }
-                }
-
-                pub fn $from_fn(value: $inner) -> Self {
-                    Self::$name(value)
-                }
-            )*
-        }
-
-        $(
-            impl From<$inner> for Value {
-                fn from(value: $inner) -> Self {
-                    Self::$name(value)
-                }
-            }
-        )*
-
-        #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-        #[non_exhaustive]
-        pub enum TyInfo {
-            $($name $(($ty_inner))?,)*
-        }
-
-        impl TyInfo {
-            pub fn size(&self) -> usize {
-                #[allow(unused)]
-                match self {
-                    $(Self::$name $(($ty_inner_ident))? => ::core::mem::size_of::<$inner>(),)*
-                }
-            }
-
-            pub fn get_value(&self, bytes: &[u8]) -> Value {
-                match self {
-                    $(Self::$name $(($ty_inner_ident))? => Value::$name(<$inner>::from_ne_bytes(
-                        bytes
-                            .try_into()
-                            .expect("can only perform conversion with correct byte type"),
-                    )),)*
-                }
-            }
-        }
-    };
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Value {
+    U8(u8),
+    I8(i8),
+    Ref(Pointer),
+    Array(Array),
 }
 
-value! {
-    U8(u8) [from_u8, into_u8];
-    I8(i8) [from_i8, into_i8];
-    Ref(Pointer) [from_ref, into_ref] (inner: Ty);
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
+pub enum TyInfo {
+    U8,
+    I8,
+    Ref(Ty),
+    Array { ty: Ty, length: usize },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Array {
+    start: Pointer,
+    length: usize,
+}
+
+impl Value {
+    pub fn allocated_size(&self) -> usize {
+        match self {
+            Value::U8(_) => size_of::<u8>(),
+            Value::I8(_) => size_of::<i8>(),
+            Value::Ref(_) => size_of::<Pointer>(),
+            Value::Array(array) => unimplemented!(),
+        }
+    }
+
+    pub fn into_u8(self) -> Option<u8> {
+        match self {
+            Self::U8(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn into_i8(self) -> Option<i8> {
+        match self {
+            Self::I8(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn into_ref(self) -> Option<Pointer> {
+        match self {
+            Self::Ref(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn into_array(self) -> Option<Array> {
+        match self {
+            Self::Array(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn from_u8(value: u8) -> Self {
+        Self::U8(value)
+    }
+
+    pub fn from_i8(value: i8) -> Self {
+        Self::I8(value)
+    }
+
+    pub fn from_ref(value: Pointer) -> Self {
+        Self::Ref(value)
+    }
+
+    pub fn from_array(value: Array) -> Self {
+        Self::Array(value)
+    }
+}
+
+impl TyInfo {
+    pub fn allocated_size(&self, tys: &Tys) -> usize {
+        match self {
+            TyInfo::U8 => size_of::<u8>(),
+            TyInfo::I8 => size_of::<i8>(),
+            TyInfo::Ref(_) => size_of::<Pointer>(),
+            TyInfo::Array { ty, length } => tys[*ty].allocated_size(tys) * length,
+        }
+    }
 }
 
 impl std::ops::Add for Value {
@@ -135,7 +149,7 @@ impl std::ops::Not for Value {
         match self {
             Value::U8(rhs) => Value::U8(!rhs),
             Value::I8(rhs) => Value::I8(!rhs),
-            Value::Ref(_) => panic!("cannot perform not on reference"),
+            _ => panic!("cannot perform not on {self:?}"),
         }
     }
 }
@@ -147,8 +161,20 @@ impl std::ops::Neg for Value {
         match self {
             Value::U8(rhs) => Value::U8(rhs.wrapping_neg()),
             Value::I8(rhs) => Value::I8(-rhs),
-            Value::Ref(_) => panic!("cannot unary op on ref"),
+            _ => panic!("cannot unary op on {self:?}"),
         }
+    }
+}
+
+impl From<u8> for Value {
+    fn from(value: u8) -> Self {
+        Self::U8(value)
+    }
+}
+
+impl From<i8> for Value {
+    fn from(value: i8) -> Self {
+        Self::I8(value)
     }
 }
 

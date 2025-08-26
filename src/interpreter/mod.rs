@@ -35,7 +35,7 @@ impl Interpreter {
             let ptr = interpreter
                 .stack
                 .get_frame()
-                .alloca(interpreter.tys[local_decl.ty].size());
+                .alloca(interpreter.tys[local_decl.ty].allocated_size(&interpreter.tys));
             interpreter.new_local(local_decl.ty, ptr);
         }
 
@@ -64,7 +64,7 @@ impl Interpreter {
                             panic!("mis-matched value and target type: {target_ty:?}, {value:?}");
                         }
 
-                        interpreter.stack.write(target_ptr, &value.to_bytes());
+                        interpreter.stack.write_value(target_ptr, value);
                     }
                     Statement::StorageDead(local) => interpreter.kill_local(*local),
                     Statement::StorageLive(local) => interpreter.alive_local(*local),
@@ -96,10 +96,9 @@ impl Interpreter {
         }
 
         let local = interpreter.get_alive_local(return_local);
-        let ty = &interpreter.tys[local.ty];
-        let mut buf = vec![0; ty.size()];
-        interpreter.stack.read(local.ptr, &mut buf);
-        let output = ty.get_value(&buf);
+        let output = interpreter
+            .stack
+            .read_value(local.ptr, local.ty, &interpreter.tys);
 
         interpreter.stack.pop_frame();
 
@@ -127,12 +126,8 @@ impl Interpreter {
     /// Read a local from the stack. Will panic if it's not alive.
     fn read_local(&self, local: Local) -> Value {
         let local = self.get_alive_local(local);
-        let ty = &self.tys[local.ty];
 
-        let mut buf = vec![0; ty.size()];
-        self.stack.read(local.ptr, &mut buf);
-
-        ty.get_value(&buf)
+        self.stack.read_value(local.ptr, local.ty, &self.tys)
     }
 
     fn get_alive_local(&self, local: Local) -> &InterpreterLocal {
@@ -148,7 +143,7 @@ impl Interpreter {
     fn resolve_place(&mut self, place: &Place) -> (Pointer, Ty) {
         let local = self.get_alive_local(place.local);
 
-        let mut ty = &self.tys[local.ty];
+        let mut ty = local.ty;
         let mut ptr = local.ptr;
 
         for proj in &place.projection {
@@ -156,18 +151,17 @@ impl Interpreter {
                 // Look up `ptr` in the stack, and replace `ptr` with that value.
                 Projection::Deref => {
                     // Read the reference pointer out of memory.
-                    let mut buf = vec![0; ty.size()];
-                    self.stack.read(ptr, &mut buf);
-                    ptr = ty
-                        .get_value(&buf)
+                    ptr = self
+                        .stack
+                        .read_value(ptr, ty, &self.tys)
                         .into_ref()
-                        .expect("expected to read ref pointer from stack");
+                        .unwrap();
 
                     // Determine the type of the reference.
-                    let TyInfo::Ref(inner_ty) = ty else {
+                    let TyInfo::Ref(inner_ty) = &self.tys[ty] else {
                         panic!("cannot deref non-pointer: {ty:?}");
                     };
-                    ty = &self.tys[*inner_ty];
+                    ty = *inner_ty;
                 }
                 Projection::Field(field_offset) => {
                     ptr += *field_offset;
@@ -184,7 +178,7 @@ impl Interpreter {
             }
         }
 
-        (ptr, self.tys.find_or_insert(ty.clone()))
+        (ptr, ty)
     }
 
     fn resolve_rvalue(&mut self, rvalue: &RValue) -> Value {
@@ -223,12 +217,7 @@ impl Interpreter {
             Operand::Place(place) => {
                 let (ptr, ty) = self.resolve_place(place);
 
-                let ty = &self.tys[ty];
-
-                let mut buf = vec![0; ty.size()];
-                self.stack.read(ptr, &mut buf);
-
-                ty.get_value(&buf)
+                self.stack.read_value(ptr, ty, &self.tys)
             }
             Operand::Constant(value) => value.clone(),
         }

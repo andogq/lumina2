@@ -1,6 +1,6 @@
 use std::ops::{Add, AddAssign};
 
-use crate::ir::Pointer;
+use crate::ir::{Pointer, Ty, TyInfo, Tys, Value};
 
 #[derive(Clone, Debug)]
 pub struct Stack {
@@ -36,12 +36,33 @@ impl Stack {
         }
     }
 
-    pub fn read(&self, ptr: Pointer, buf: &mut [u8]) {
-        buf.copy_from_slice(&self.buf[*ptr..*ptr + buf.len()]);
+    /// Will serialise the provided value to the location of `ptr`. The stack pointer will not be
+    /// advanced, and no checks will be performed to validate if the write is valid.
+    pub fn write_value(&mut self, ptr: Pointer, value: Value) {
+        let buf = &mut self.buf[*ptr..*ptr + value.allocated_size()];
+
+        match value {
+            Value::U8(value) => buf.copy_from_slice(&value.to_ne_bytes()),
+            Value::I8(value) => buf.copy_from_slice(&value.to_ne_bytes()),
+            Value::Ref(pointer) => buf.copy_from_slice(&pointer.to_ne_bytes()),
+            Value::Array(array) => unimplemented!(),
+        }
     }
 
-    pub fn write(&mut self, ptr: Pointer, bytes: &[u8]) {
-        self.buf[*ptr..*ptr + bytes.len()].copy_from_slice(bytes);
+    pub fn read_value(&self, ptr: Pointer, ty: Ty, tys: &Tys) -> Value {
+        let ty = &tys[ty];
+        let ty_size = ty.allocated_size(tys);
+
+        let buf = &self.buf[*ptr..*ptr + ty_size];
+
+        match ty {
+            TyInfo::U8 => Value::from_u8(u8::from_ne_bytes(buf.try_into().unwrap())),
+            TyInfo::I8 => Value::from_i8(i8::from_ne_bytes(buf.try_into().unwrap())),
+            TyInfo::Ref(_) => {
+                Value::from_ref(Pointer::new(usize::from_ne_bytes(buf.try_into().unwrap())))
+            }
+            TyInfo::Array { ty, length } => unimplemented!(),
+        }
     }
 }
 
