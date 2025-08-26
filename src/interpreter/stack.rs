@@ -1,5 +1,7 @@
 use std::ops::{Add, AddAssign};
 
+use crate::ir::Pointer;
+
 #[derive(Clone, Debug)]
 pub struct Stack {
     buf: [u8; 1024],
@@ -35,11 +37,11 @@ impl Stack {
     }
 
     pub fn read(&self, ptr: Pointer, buf: &mut [u8]) {
-        buf.copy_from_slice(&self.buf[ptr.0..ptr.0 + buf.len()]);
+        buf.copy_from_slice(&self.buf[*ptr..*ptr + buf.len()]);
     }
 
     pub fn write(&mut self, ptr: Pointer, bytes: &[u8]) {
-        self.buf[ptr.0..ptr.0 + bytes.len()].copy_from_slice(bytes);
+        self.buf[*ptr..*ptr + bytes.len()].copy_from_slice(bytes);
     }
 }
 
@@ -55,35 +57,8 @@ pub struct FrameRef<'s> {
 
 impl<'s> FrameRef<'s> {
     pub fn alloca(&mut self, amount: usize) -> Pointer {
-        let ptr = Pointer(*self.sp);
+        let ptr = Pointer::new(*self.sp);
         *self.sp += amount;
         ptr
-    }
-}
-
-/// Pointer into the stack.
-#[derive(Clone, Copy, Debug)]
-pub struct Pointer(usize);
-impl Pointer {
-    pub fn new(ptr: usize) -> Self {
-        Self(ptr)
-    }
-
-    pub fn into_inner(self) -> usize {
-        self.0
-    }
-}
-
-impl Add<usize> for Pointer {
-    type Output = Self;
-
-    fn add(self, rhs: usize) -> Self::Output {
-        Self(self.0 + rhs)
-    }
-}
-
-impl AddAssign<usize> for Pointer {
-    fn add_assign(&mut self, rhs: usize) {
-        self.0 += rhs;
     }
 }

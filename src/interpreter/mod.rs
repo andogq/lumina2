@@ -1,9 +1,8 @@
 mod stack;
 
 use crate::{
-    BasicBlock, BinOp, Body, Local, Operand, Place, Projection, RValue, Statement, Terminator, Ty,
-    TyInfo, Tys, UnOp, Value, indexed_vec,
-    interpreter::stack::{Pointer, Stack},
+    BasicBlock, BinOp, Body, Local, Operand, Place, Pointer, Projection, RValue, Statement,
+    Terminator, Ty, TyInfo, Tys, UnOp, Value, indexed_vec, interpreter::stack::Stack,
 };
 
 #[derive(Clone, Debug)]
@@ -159,11 +158,10 @@ impl Interpreter {
                     // Read the reference pointer out of memory.
                     let mut buf = vec![0; ty.size()];
                     self.stack.read(ptr, &mut buf);
-                    let Value::Ref(ptr_raw) = ty.get_value(&buf) else {
-                        panic!("expected to read ref pointer from stack");
-                    };
-
-                    ptr = Pointer::new(ptr_raw);
+                    ptr = ty
+                        .get_value(&buf)
+                        .into_ref()
+                        .expect("expected to read ref pointer from stack");
 
                     // Determine the type of the reference.
                     let TyInfo::Ref(inner_ty) = ty else {
@@ -195,7 +193,7 @@ impl Interpreter {
             RValue::Ref(place) => {
                 let (ptr, _ty) = self.resolve_place(place);
 
-                Value::Ref(ptr.into_inner())
+                Value::Ref(ptr)
             }
             RValue::BinaryOp { op, lhs, rhs } => {
                 let lhs = self.resolve_operand(lhs);

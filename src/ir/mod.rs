@@ -1,8 +1,9 @@
 pub mod ctx;
 mod ir_macro;
+mod pointer;
 mod value;
 
-pub use self::value::*;
+pub use self::{pointer::Pointer, value::*};
 use crate::{indexed_vec, ir::ctx::Ctx};
 
 /// Representation of a function.

@@ -1,4 +1,4 @@
-use crate::indexed_vec;
+use crate::{indexed_vec, ir::Pointer};
 
 macro_rules! value {
     ($($name:ident($inner:ty) [$from_fn:ident, $into_fn:ident] $(($ty_inner_ident:ident: $ty_inner:ty))?;)*) => {
@@ -73,7 +73,7 @@ macro_rules! value {
 value! {
     U8(u8) [from_u8, into_u8];
     I8(i8) [from_i8, into_i8];
-    Ref(usize) [from_ref, into_ref] (inner: Ty);
+    Ref(Pointer) [from_ref, into_ref] (inner: Ty);
 }
 
 impl std::ops::Add for Value {
