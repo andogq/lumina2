@@ -60,11 +60,18 @@ impl Interpreter {
                                 | (Value::I8(_), TyInfo::I8)
                                 // TODO: Check inner type of ref
                                 | (Value::Ref(_), TyInfo::Ref(_))
+                                // TODO: Check length and inner ty
+                                | (Value::Array(_), TyInfo::Array { .. })
                         ) {
                             panic!("mis-matched value and target type: {target_ty:?}, {value:?}");
                         }
 
-                        interpreter.stack.write_value(target_ptr, value);
+                        interpreter.stack.write_value(
+                            target_ptr,
+                            target_ty,
+                            value,
+                            &interpreter.tys,
+                        );
                     }
                     Statement::StorageDead(local) => interpreter.kill_local(*local),
                     Statement::StorageLive(local) => interpreter.alive_local(*local),
@@ -171,9 +178,31 @@ impl Interpreter {
                     };
                 }
                 Projection::Index(index_local) => {
-                    unimplemented!();
-                    // TODO: This probably will need a `usize` type.
-                    // ptr += self.read_local(*index_local),
+                    let TyInfo::Array {
+                        ty: array_item_ty,
+                        length,
+                    } = &self.tys[ty]
+                    else {
+                        panic!("can only index array, found {ty:?}");
+                    };
+
+                    let index_local = self.get_alive_local(*index_local);
+                    let index = self
+                        .stack
+                        .read_value(index_local.ptr, index_local.ty, &self.tys)
+                        .into_u8()
+                        .expect("index must be u8") as usize;
+
+                    assert!(
+                        index < *length,
+                        "cannot index beyond array bounds: {index} (length is {length})"
+                    );
+
+                    // Perform the indexing on the pointer.
+                    ptr += index * self.tys[*array_item_ty].allocated_size(&self.tys);
+
+                    // Update the type.
+                    ty = *array_item_ty;
                 }
             }
         }

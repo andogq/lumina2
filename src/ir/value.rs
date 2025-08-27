@@ -6,7 +6,7 @@ pub enum Value {
     U8(u8),
     I8(i8),
     Ref(Pointer),
-    Array(Array),
+    Array(Vec<Value>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -16,12 +16,6 @@ pub enum TyInfo {
     I8,
     Ref(Ty),
     Array { ty: Ty, length: usize },
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Array {
-    start: Pointer,
-    length: usize,
 }
 
 impl Value {
@@ -55,12 +49,12 @@ impl Value {
         }
     }
 
-    pub fn into_array(self) -> Option<Array> {
-        match self {
-            Self::Array(value) => Some(value),
-            _ => None,
-        }
-    }
+    // pub fn into_array(self) -> Option<Array> {
+    //     match self {
+    //         Self::Array(value) => Some(value),
+    //         _ => None,
+    //     }
+    // }
 
     pub fn from_u8(value: u8) -> Self {
         Self::U8(value)
@@ -74,9 +68,9 @@ impl Value {
         Self::Ref(value)
     }
 
-    pub fn from_array(value: Array) -> Self {
-        Self::Array(value)
-    }
+    // pub fn from_array(value: Array) -> Self {
+    //     Self::Array(value)
+    // }
 }
 
 impl TyInfo {

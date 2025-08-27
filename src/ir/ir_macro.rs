@@ -24,7 +24,13 @@ macro_rules! ir_impl {
             $crate::ir::ctx::ty::TyInfo::I8
         )
     };
+    (parse_ty [$tys:expr] [$inner:tt; $length:expr]) => {{
+        let inner_ty = ir_impl!(parse_ty [$tys] $inner);
 
+        $tys.find_or_insert(
+            $crate::ir::TyInfo::Array { ty: inner_ty, length: $length }
+        )
+    }};
 
     (basic_block($program:ident) $bb:ident: { $($body:tt)* }) => {
         #[allow(unused)]
@@ -71,6 +77,13 @@ macro_rules! ir_impl {
         }
     };
 
+    (parse_place [$local:ident [$index:ident]]) => {
+        $crate::ir::Place {
+            local: $local,
+            projection: ::std::vec![$crate::ir::Projection::Index($index)],
+        }
+    };
+
     (parse_rvalue [$op:ident($($params:tt)*)]) => {
         ir_impl!(split_params(rvalue_op_with_params($op)) [] [] [$($params)*])
     };
@@ -99,6 +112,10 @@ macro_rules! ir_impl {
     (parse_operand [const $value:literal]) => {
         $crate::ir::Operand::Constant($value.into())
     };
+    // HACK: Only parses constant operands
+    (parse_operand [[$(const $val:tt),* $(,)?]]) => {{
+        $crate::ir::Operand::Constant($crate::ir::Value::Array(::std::vec![$($val.into()),*]))
+    }};
     (parse_operand [$($place:tt)*]) => {
         $crate::ir::Operand::Place(ir_impl!(parse_place [$($place)*]))
     };

@@ -38,14 +38,24 @@ impl Stack {
 
     /// Will serialise the provided value to the location of `ptr`. The stack pointer will not be
     /// advanced, and no checks will be performed to validate if the write is valid.
-    pub fn write_value(&mut self, ptr: Pointer, value: Value) {
-        let buf = &mut self.buf[*ptr..*ptr + value.allocated_size()];
+    pub fn write_value(&mut self, ptr: Pointer, ty: &TyInfo, value: Value, tys: &Tys) {
+        let buf = &mut self.buf[*ptr..*ptr + ty.allocated_size(tys)];
 
         match value {
             Value::U8(value) => buf.copy_from_slice(&value.to_ne_bytes()),
             Value::I8(value) => buf.copy_from_slice(&value.to_ne_bytes()),
             Value::Ref(pointer) => buf.copy_from_slice(&pointer.to_ne_bytes()),
-            Value::Array(array) => unimplemented!(),
+            Value::Array(array) => {
+                array.into_iter().enumerate().for_each(|(i, value)| {
+                    let TyInfo::Array { ty, length } = ty else {
+                        panic!("need array");
+                    };
+                    let ty = &tys[*ty];
+
+                    let ptr = ptr + (i * ty.allocated_size(tys));
+                    self.write_value(ptr, ty, value, tys);
+                });
+            }
         }
     }
 
