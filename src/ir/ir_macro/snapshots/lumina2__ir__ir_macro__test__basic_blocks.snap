@@ -1,12 +1,12 @@
 ---
-source: src/ir/ir_macro.rs
+source: src/ir/ir_macro/mod.rs
 expression: "ir! { bb0: { return; } bb1: { return; } }"
 ---
 Body {
     ctx: Ctx {
         tys: IndexedVec(
             [],
-            PhantomData<fn() -> lumina2::ir::ctx::ty::Ty>,
+            PhantomData<fn() -> lumina2::ir::value::Ty>,
         ),
     },
     basic_blocks: IndexedVec(

@@ -1,6 +1,6 @@
 ---
-source: src/ir/ir_macro.rs
-expression: "ir!\n{\n    let _0: u8; let _1: u8; let _2: u8; bb0:\n    { _1 = const 2; _2 = const 3; _0 = Mul(_1, _2); return; }\n}"
+source: src/ir/ir_macro/mod.rs
+expression: "ir!\n{\n    let _0: u8; let _1: u8; let _2: u8; bb0:\n    { _1 = const 2_u8; _2 = const 3_u8; _0 = Mul(_1, _2); return; }\n}"
 ---
 Body {
     ctx: Ctx {
@@ -8,7 +8,7 @@ Body {
             [
                 U8,
             ],
-            PhantomData<fn() -> lumina2::ir::ctx::ty::Ty>,
+            PhantomData<fn() -> lumina2::ir::value::Ty>,
         ),
     },
     basic_blocks: IndexedVec(

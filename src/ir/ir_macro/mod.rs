@@ -1,3 +1,6 @@
+mod ir_ty;
+mod util;
+
 #[macro_export(local_inner_macros)]
 macro_rules! ir_impl {
     (local($program:ident) $local:ident: $($ty:tt)*) => {

@@ -1,5 +1,5 @@
 ---
-source: src/ir/ir_macro.rs
+source: src/ir/ir_macro/mod.rs
 expression: "ir! { let _0: u8; let _1: &u8; bb0: { _0 = const 1_u8; _1 = &_0; return; } }"
 ---
 Body {
@@ -15,7 +15,7 @@ Body {
                     ),
                 ),
             ],
-            PhantomData<fn() -> lumina2::ir::ctx::ty::Ty>,
+            PhantomData<fn() -> lumina2::ir::value::Ty>,
         ),
     },
     basic_blocks: IndexedVec(
