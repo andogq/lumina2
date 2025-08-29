@@ -14,6 +14,10 @@ macro_rules! indexed_vec {
             $vis fn zero() -> Self {
                 Self($crate::util::indexed_vec::Key::zero())
             }
+
+            $vis fn of(n: usize) -> Self {
+                Self($crate::util::indexed_vec::Key::of(n))
+            }
         }
 
         impl From<$crate::util::indexed_vec::Key> for $key {
@@ -105,6 +109,10 @@ pub struct Key(usize);
 
 impl Key {
     pub fn zero() -> Self {
-        Key(0)
+        Self(0)
+    }
+
+    pub fn of(n: usize) -> Self {
+        Self(n)
     }
 }

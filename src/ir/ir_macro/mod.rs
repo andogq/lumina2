@@ -1,3 +1,4 @@
+mod ir_place;
 mod ir_ty;
 mod util;
 

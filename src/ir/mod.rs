@@ -118,7 +118,7 @@ pub enum Operand {
 
 /// Represents a location in memory. Locations derive from a [`Local`], with a collection of
 /// [`Projection`]s applied.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Place {
     /// Originating local.
     pub local: Local,
@@ -127,7 +127,7 @@ pub struct Place {
 }
 
 /// Possible operations to perform on a [`Place`], in order to access some underlying data.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Projection {
     /// Dereference the parent place.
     Deref,
