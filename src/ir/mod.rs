@@ -108,7 +108,7 @@ pub enum UnOp {
 
 /// Describes how to 'create' a value. Essentially, where does a value come from, and how to get
 /// it.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Operand {
     /// Copy the value from a place.
     Place(Place),
