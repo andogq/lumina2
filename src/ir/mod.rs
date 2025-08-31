@@ -90,6 +90,9 @@ pub enum RValue {
         op: UnOp,
         rhs: Operand,
     },
+    Aggregate {
+        values: Vec<Operand>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

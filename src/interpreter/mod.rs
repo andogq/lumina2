@@ -237,6 +237,12 @@ impl Interpreter {
                     UnOp::Neg => -rhs,
                 }
             }
+            RValue::Aggregate { values } => Value::Array(
+                values
+                    .iter()
+                    .map(|value| self.resolve_operand(value))
+                    .collect(),
+            ),
         }
     }
 

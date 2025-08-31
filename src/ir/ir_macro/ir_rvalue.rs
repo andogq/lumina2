@@ -36,6 +36,17 @@ macro_rules! ir_rvalue {
         $crate::ir::RValue::Ref(ir_place!($($place)*))
     };
 
+    // Array aggregate.
+    ([$($operands:tt)*]) => {
+        $crate::split_token!([,] [ir_rvalue(@cb_aggregate)] $($operands)*)
+    };
+
+    (@cb_aggregate $([$($operand:tt)*])*) => {
+        $crate::ir::RValue::Aggregate {
+            values: ::std::vec![$(ir_operand!($($operand)*),)*],
+        }
+    };
+
     // Assume an operand.
     ($($operand:tt)*) => {
         $crate::ir::RValue::Use(ir_operand!($($operand)*))

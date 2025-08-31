@@ -5,7 +5,7 @@ mod util;
 use crate::{interpreter::Interpreter, ir::*};
 
 fn main() {
-    let program = ir! {
+    let program = ir_function! {
         let _0: u8;
         let _1: u8;
         let _2: u8;
@@ -23,7 +23,7 @@ fn main() {
     };
     dbg!(Interpreter::run(&program));
 
-    let program = ir! {
+    let program = ir_function! {
         let _0: u8;
         let _1: [u8; 3];
         let _2: u8;
