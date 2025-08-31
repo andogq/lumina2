@@ -105,4 +105,9 @@ mod test {
             "[let a = 1] [let b = 2] [let something = { let d = 3; 4 }]"
         );
     }
+
+    #[test]
+    fn empty() {
+        assert_eq!(split_token!([;] [stringify]), "");
+    }
 }

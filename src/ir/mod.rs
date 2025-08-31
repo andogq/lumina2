@@ -20,7 +20,7 @@ pub struct Body {
     pub arg_count: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BasicBlockData {
     pub statements: Vec<Statement>,
     pub terminator: Terminator,
@@ -28,7 +28,7 @@ pub struct BasicBlockData {
 indexed_vec!(pub key BasicBlock);
 indexed_vec!(pub BasicBlocks<BasicBlock, BasicBlockData>);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalDecl {
     pub ty: Ty,
 }
@@ -50,7 +50,7 @@ pub enum Statement {
     StorageLive(Local),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Terminator {
     /// Call a function.
     Call {
