@@ -24,7 +24,7 @@ impl Value {
             Value::U8(_) => size_of::<u8>(),
             Value::I8(_) => size_of::<i8>(),
             Value::Ref(_) => size_of::<Pointer>(),
-            Value::Array(array) => unimplemented!(),
+            Value::Array(_) => unimplemented!(),
         }
     }
 

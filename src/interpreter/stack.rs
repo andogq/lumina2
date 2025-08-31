@@ -1,5 +1,3 @@
-use std::ops::{Add, AddAssign};
-
 use crate::ir::{Pointer, Ty, TyInfo, Tys, Value};
 
 #[derive(Clone, Debug)]
@@ -47,7 +45,7 @@ impl Stack {
             Value::Ref(pointer) => buf.copy_from_slice(&pointer.to_ne_bytes()),
             Value::Array(array) => {
                 array.into_iter().enumerate().for_each(|(i, value)| {
-                    let TyInfo::Array { ty, length } = ty else {
+                    let TyInfo::Array { ty, length: _ } = ty else {
                         panic!("need array");
                     };
                     let ty = &tys[*ty];
@@ -71,7 +69,7 @@ impl Stack {
             TyInfo::Ref(_) => {
                 Value::from_ref(Pointer::new(usize::from_ne_bytes(buf.try_into().unwrap())))
             }
-            TyInfo::Array { ty, length } => unimplemented!(),
+            TyInfo::Array { ty: _, length: _ } => unimplemented!(),
         }
     }
 }

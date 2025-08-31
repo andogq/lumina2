@@ -10,6 +10,7 @@ macro_rules! indexed_vec {
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
         $vis struct $key($crate::util::indexed_vec::Key);
 
+        #[allow(unused)]
         impl $key {
             $vis fn zero() -> Self {
                 Self($crate::util::indexed_vec::Key::zero())

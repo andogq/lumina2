@@ -79,12 +79,7 @@ impl Interpreter {
             }
 
             match &block.terminator {
-                Terminator::Call {
-                    func,
-                    args,
-                    destination,
-                    target,
-                } => todo!(),
+                Terminator::Call { .. } => todo!(),
                 Terminator::Goto(basic_block) => next_block = *basic_block,
                 Terminator::Return => break,
                 Terminator::SwitchInt {
