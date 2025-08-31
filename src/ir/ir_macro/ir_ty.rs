@@ -40,7 +40,7 @@ macro_rules! ir_ty {
     // Detect any type wrapped in `[]`. If found, split the contents at `;` expecting two children,
     // the inner type, and the count.
     ([$tys:expr] [$($toks:tt)*]) => {
-        split_semi_colon!(without_trailing [ir_ty(cb_array_parts [$tys])] $($toks)*)
+        split_token!([;] without_trailing [ir_ty(cb_array_parts [$tys])] $($toks)*)
     };
     // Callback for array parsing, after splitting at semicolon. Expects to be provided two items,
     // a series of tokens for the inner type, and an expression for the length.

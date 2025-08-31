@@ -35,7 +35,7 @@ pub struct LocalDecl {
 indexed_vec!(pub key Local);
 indexed_vec!(pub Locals<Local, LocalDecl>);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Statement {
     /// Assign a value into a place.
     Assign {
@@ -77,7 +77,7 @@ pub enum Terminator {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RValue {
     Use(Operand),
     Ref(Place),
@@ -92,7 +92,7 @@ pub enum RValue {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BinOp {
     Add,
     Sub,
@@ -100,7 +100,7 @@ pub enum BinOp {
     Div,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UnOp {
     Not,
     Neg,
