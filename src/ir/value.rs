@@ -71,6 +71,27 @@ impl Value {
     // pub fn from_array(value: Array) -> Self {
     //     Self::Array(value)
     // }
+
+    /// Get the [`Ty`] of this value, as if it were a constant.
+    pub fn get_const_ty(&self, tys: &mut Tys) -> Ty {
+        match self {
+            Value::U8(_) => tys.find_or_insert(TyInfo::U8),
+            Value::I8(_) => tys.find_or_insert(TyInfo::I8),
+            Value::Ref(_) => panic!("cannoy have constant reference"),
+            Value::Array(values) => {
+                // WARN: Assuming all values are the same type.
+                assert!(
+                    !values.is_empty(),
+                    "cannot determine ty of empty constant array."
+                );
+                let value_ty = values[0].get_const_ty(tys);
+                tys.find_or_insert(TyInfo::Array {
+                    ty: value_ty,
+                    length: values.len(),
+                })
+            }
+        }
+    }
 }
 
 impl TyInfo {

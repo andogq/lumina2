@@ -50,21 +50,12 @@ impl Interpreter {
                 match statement {
                     Statement::Assign { place, rvalue } => {
                         let (target_ptr, target_ty) = interpreter.resolve_place(place);
-                        let value = interpreter.resolve_rvalue(rvalue);
+                        let (value, value_ty) = interpreter.resolve_rvalue(rvalue);
 
                         let target_ty = &interpreter.tys[target_ty];
+                        let value_ty = &interpreter.tys[value_ty];
 
-                        if !matches!(
-                            (&value, target_ty),
-                            (Value::U8(_), TyInfo::U8)
-                                | (Value::I8(_), TyInfo::I8)
-                                // TODO: Check inner type of ref
-                                | (Value::Ref(_), TyInfo::Ref(_))
-                                // TODO: Check length and inner ty
-                                | (Value::Array(_), TyInfo::Array { .. })
-                        ) {
-                            panic!("mis-matched value and target type: {target_ty:?}, {value:?}");
-                        }
+                        assert_eq!(target_ty, value_ty, "cannot assign mismatched tys");
 
                         interpreter.stack.write_value(
                             target_ptr,
@@ -87,7 +78,7 @@ impl Interpreter {
                     targets,
                     otherwise,
                 } => {
-                    let discriminator = interpreter.resolve_operand(discriminator);
+                    let (discriminator, _) = interpreter.resolve_operand(discriminator);
                     next_block = targets
                         .iter()
                         .find(|(value, _)| discriminator == *value)
@@ -205,51 +196,74 @@ impl Interpreter {
         (ptr, ty)
     }
 
-    fn resolve_rvalue(&mut self, rvalue: &RValue) -> Value {
+    fn resolve_rvalue(&mut self, rvalue: &RValue) -> (Value, Ty) {
         match rvalue {
             RValue::Use(operand) => self.resolve_operand(operand),
             RValue::Ref(place) => {
-                let (ptr, _ty) = self.resolve_place(place);
+                let (ptr, ty) = self.resolve_place(place);
 
-                Value::Ref(ptr)
+                (Value::Ref(ptr), ty)
             }
             RValue::BinaryOp { op, lhs, rhs } => {
-                let lhs = self.resolve_operand(lhs);
-                let rhs = self.resolve_operand(rhs);
+                let (lhs, lhs_ty) = self.resolve_operand(lhs);
+                let (rhs, rhs_ty) = self.resolve_operand(rhs);
 
-                match op {
-                    BinOp::Add => lhs + rhs,
-                    BinOp::Sub => lhs - rhs,
-                    BinOp::Mul => lhs * rhs,
-                    BinOp::Div => lhs / rhs,
+                if lhs_ty != rhs_ty {
+                    panic!("lhs ty ({lhs_ty:?}) must equal rhs ty ({rhs_ty:?})");
                 }
+
+                (
+                    match op {
+                        BinOp::Add => lhs + rhs,
+                        BinOp::Sub => lhs - rhs,
+                        BinOp::Mul => lhs * rhs,
+                        BinOp::Div => lhs / rhs,
+                    },
+                    // NOTE: Reuse lhs ty, since it should be the same as rhs ty.
+                    lhs_ty,
+                )
             }
             RValue::UnaryOp { op, rhs } => {
-                let rhs = self.resolve_operand(rhs);
+                let (rhs, ty) = self.resolve_operand(rhs);
 
-                match op {
-                    UnOp::Not => !rhs,
-                    UnOp::Neg => -rhs,
-                }
+                (
+                    match op {
+                        UnOp::Not => !rhs,
+                        UnOp::Neg => -rhs,
+                    },
+                    ty,
+                )
             }
-            RValue::Aggregate { values } => Value::Array(
-                values
+            RValue::Aggregate { values } => {
+                assert!(!values.is_empty(), "cannot aggregate empty array");
+
+                let (values, tys): (Vec<_>, Vec<_>) = values
                     .iter()
                     .map(|value| self.resolve_operand(value))
-                    .collect(),
-            ),
+                    .unzip();
+
+                assert!(tys.iter().all(|ty| *ty == tys[0]));
+
+                (
+                    Value::Array(values),
+                    self.tys.find_or_insert(TyInfo::Array {
+                        ty: tys[0],
+                        length: tys.len(),
+                    }),
+                )
+            }
         }
     }
 
     /// Return the value of the provided operand
-    fn resolve_operand(&mut self, operand: &Operand) -> Value {
+    fn resolve_operand(&mut self, operand: &Operand) -> (Value, Ty) {
         match operand {
             Operand::Place(place) => {
                 let (ptr, ty) = self.resolve_place(place);
 
-                self.stack.read_value(ptr, ty, &self.tys)
+                (self.stack.read_value(ptr, ty, &self.tys), ty)
             }
-            Operand::Constant(value) => value.clone(),
+            Operand::Constant(value) => (value.clone(), value.get_const_ty(&mut self.tys)),
         }
     }
 }
