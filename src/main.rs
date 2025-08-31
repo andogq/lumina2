@@ -2,10 +2,16 @@ mod interpreter;
 mod ir;
 mod util;
 
-use crate::{interpreter::Interpreter, ir::*};
+use crate::{
+    interpreter::Interpreter,
+    ir::{ctx::IrCtx, *},
+};
 
 fn main() {
-    let program = ir_function! {
+    let mut ctx = IrCtx::default();
+
+    let program1 = ir_function! {
+        [&mut ctx]
         let _0: u8;
         let _1: u8;
         let _2: u8;
@@ -21,9 +27,9 @@ fn main() {
             return;
         }
     };
-    dbg!(Interpreter::run(&program));
 
-    let program = ir_function! {
+    let program2 = ir_function! {
+        [&mut ctx]
         let _0: u8;
         let _1: [u8; 3];
         let _2: u8;
@@ -40,5 +46,8 @@ fn main() {
             return;
         }
     };
-    dbg!(Interpreter::run(&program));
+
+    let mut interpreter = Interpreter::new(ctx);
+    dbg!(interpreter.run(program1));
+    dbg!(interpreter.run(program2));
 }

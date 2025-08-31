@@ -16,14 +16,14 @@ macro_rules! ir_function {
     };
 
     // Section option 1: local declaration.
-    (@section($body:ident) let $local:ident: $($ty:tt)*) => {
+    (@section($ctx:ident, $body:ident) let $local:ident: $($ty:tt)*) => {
         let $local = $body.local_decls.insert($crate::ir::LocalDecl {
-            ty: ir_ty!([$body.ctx.tys] $($ty)*),
+            ty: ir_ty!([$ctx.tys] $($ty)*),
         });
     };
 
     // Section option 2: basic block section.
-    (@section($body:ident) $($bb_name:ident: { $($bb:tt)* })*) => {
+    (@section($ctx:ident, $body:ident) $($bb_name:ident: { $($bb:tt)* })*) => {
         $(
             #[allow(unused_variables)]
             let $bb_name = $body.basic_blocks.insert(
@@ -33,23 +33,25 @@ macro_rules! ir_function {
     };
 
     // Unknown section.
-    (@section($body:ident) $($toks:tt)*) => {
+    (@section($ctx:ident, $body:ident) $($toks:tt)*) => {
         ::std::compile_error!(::std::concat!("Unknown section: ", ::std::stringify!($($toks)*)));
     };
 
     // Instantiate the body, and pass each item separated by semicolon to `@section`.
-    (@cb_sections $([$($section:tt)*])*) => {{
+    (@cb_sections($ctx:expr) $([$($section:tt)*])*) => {{
+        let ctx = $ctx;
+
         #[allow(unused_mut)]
         let mut body = $crate::ir::Body::default();
 
-        $(ir_function!(@section(body) $($section)*);)*
+        $(ir_function!(@section(ctx, body) $($section)*);)*
 
-        body
+        ctx.functions.insert(body)
     }};
 
     // Macro entry point. Split input at semicolon, and pass result to `@cb_sections`.
-    ($($toks:tt)*) => {
-        $crate::split_token!([;] [ir_function(@cb_sections)] $($toks)*)
+    ([$ctx:expr] $($toks:tt)*) => {
+        $crate::split_token!([;] [ir_function(@cb_sections($ctx))] $($toks)*)
     };
 }
 
@@ -59,10 +61,10 @@ mod test {
 
     use crate::ir::{
         BasicBlockData, BinOp, Body, Local, LocalDecl, Operand, Place, Projection, RValue,
-        Statement, Terminator, TyInfo, Value,
+        Statement, Terminator, TyInfo, Value, ctx::IrCtx,
     };
 
-    fn assert_body(body: Body, locals: &[LocalDecl], basic_blocks: &[BasicBlockData]) {
+    fn assert_body(body: &Body, locals: &[LocalDecl], basic_blocks: &[BasicBlockData]) {
         assert_eq!(body.local_decls.iter().cloned().collect::<Vec<_>>(), locals);
         assert_eq!(
             body.basic_blocks.iter().cloned().collect::<Vec<_>>(),
@@ -72,21 +74,25 @@ mod test {
 
     #[test]
     fn it_works() {
-        assert_body(ir_function! {}, &[], &[]);
+        let mut ctx = IrCtx::default();
+        let program = ir_function! {[&mut ctx]};
+        assert_body(&ctx.functions[program], &[], &[]);
     }
 
     #[test]
     fn local_decls() {
-        let mut program = ir_function! {
+        let mut ctx = IrCtx::default();
+        let program = ir_function! {
+            [&mut ctx]
             let _0: u8;
             let _1: &u8;
         };
 
-        let u8_ty = program.ctx.tys.find_or_insert(TyInfo::U8);
-        let ref_u8_ty = program.ctx.tys.find_or_insert(TyInfo::Ref(u8_ty));
+        let u8_ty = ctx.tys.find_or_insert(TyInfo::U8);
+        let ref_u8_ty = ctx.tys.find_or_insert(TyInfo::Ref(u8_ty));
 
         assert_body(
-            program,
+            &ctx.functions[program],
             &[LocalDecl { ty: u8_ty }, LocalDecl { ty: ref_u8_ty }],
             &[],
         );
@@ -94,16 +100,20 @@ mod test {
 
     #[test]
     fn basic_blocks() {
-        assert_body(
-            ir_function! {
-                bb0: {
-                    return;
-                }
+        let mut ctx = IrCtx::default();
+        let program = ir_function! {
+            [&mut ctx]
+            bb0: {
+                return;
+            }
 
-                bb1: {
-                    return;
-                }
-            },
+            bb1: {
+                return;
+            }
+        };
+
+        assert_body(
+            &ctx.functions[program],
             &[],
             &[
                 BasicBlockData {
@@ -120,7 +130,10 @@ mod test {
 
     #[test]
     fn everything() {
-        let mut program = ir_function! {
+        let mut ctx = IrCtx::default();
+
+        let program = ir_function! {
+            [&mut ctx]
             let _0: u8;
             let _1: &u8;
 
@@ -138,11 +151,11 @@ mod test {
 
         let _0 = Local::zero();
         let _1 = Local::of(1);
-        let u8_ty = program.ctx.tys.find_or_insert(TyInfo::U8);
-        let ref_u8_ty = program.ctx.tys.find_or_insert(TyInfo::Ref(u8_ty));
+        let u8_ty = ctx.tys.find_or_insert(TyInfo::U8);
+        let ref_u8_ty = ctx.tys.find_or_insert(TyInfo::Ref(u8_ty));
 
         assert_body(
-            program,
+            &ctx.functions[program],
             &[LocalDecl { ty: u8_ty }, LocalDecl { ty: ref_u8_ty }],
             &[
                 BasicBlockData {

@@ -1,46 +1,53 @@
 mod stack;
 
 use crate::{
-    BasicBlock, BinOp, Body, Local, Operand, Place, Pointer, Projection, RValue, Statement,
-    Terminator, Ty, TyInfo, Tys, UnOp, Value, indexed_vec, interpreter::stack::Stack,
+    BasicBlock, BinOp, Local, Operand, Place, Pointer, Projection, RValue, Statement, Terminator,
+    Ty, TyInfo, UnOp, Value, indexed_vec,
+    interpreter::stack::Stack,
+    ir::ctx::{Function, IrCtx},
 };
 
 #[derive(Clone, Debug)]
 pub struct Interpreter {
-    // TODO: This should be in a ctx.
-    tys: Tys,
+    ctx: IrCtx,
     locals: InterpreterLocals,
     stack: Stack,
 }
 
 impl Interpreter {
-    fn new(tys: Tys) -> Self {
+    pub fn new(ctx: IrCtx) -> Self {
         Self {
-            tys,
+            ctx,
             locals: InterpreterLocals::new(),
             stack: Stack::new(),
         }
     }
 
-    pub fn run(body: &Body) -> Value {
-        let mut interpreter = Self::new(
-            // HACK: don't clone
-            body.ctx.tys.clone(),
-        );
+    pub fn run(&mut self, function: Function) -> Value {
+        // HACK: Don't do this
+        self.stack = Stack::new();
+        self.locals = InterpreterLocals::new();
 
-        interpreter.stack.push_frame();
+        self.stack.push_frame();
+
+        // TODO: Don't clone here.
+        let body = &self.ctx.functions[function].clone();
 
         // Create the locals.
         for local_decl in &*body.local_decls {
-            let ptr = interpreter
+            let ptr = self
                 .stack
                 .get_frame()
-                .alloca(interpreter.tys[local_decl.ty].allocated_size(&interpreter.tys));
-            interpreter.new_local(local_decl.ty, ptr);
+                .alloca(self.ctx.tys[local_decl.ty].allocated_size(&self.ctx.tys));
+            self.locals.insert(InterpreterLocal {
+                ty: local_decl.ty,
+                ptr,
+                state: LocalState::Dead,
+            });
         }
 
         let return_local = Local::zero();
-        interpreter.alive_local(return_local);
+        self.alive_local(return_local);
 
         let mut next_block = BasicBlock::zero();
         loop {
@@ -49,23 +56,19 @@ impl Interpreter {
             for statement in &block.statements {
                 match statement {
                     Statement::Assign { place, rvalue } => {
-                        let (target_ptr, target_ty) = interpreter.resolve_place(place);
-                        let (value, value_ty) = interpreter.resolve_rvalue(rvalue);
+                        let (target_ptr, target_ty) = self.resolve_place(place);
+                        let (value, value_ty) = self.resolve_rvalue(rvalue);
 
-                        let target_ty = &interpreter.tys[target_ty];
-                        let value_ty = &interpreter.tys[value_ty];
+                        let target_ty = &self.ctx.tys[target_ty];
+                        let value_ty = &self.ctx.tys[value_ty];
 
                         assert_eq!(target_ty, value_ty, "cannot assign mismatched tys");
 
-                        interpreter.stack.write_value(
-                            target_ptr,
-                            target_ty,
-                            value,
-                            &interpreter.tys,
-                        );
+                        self.stack
+                            .write_value(target_ptr, target_ty, value, &self.ctx.tys);
                     }
-                    Statement::StorageDead(local) => interpreter.kill_local(*local),
-                    Statement::StorageLive(local) => interpreter.alive_local(*local),
+                    Statement::StorageDead(local) => self.kill_local(*local),
+                    Statement::StorageLive(local) => self.alive_local(*local),
                 }
             }
 
@@ -78,7 +81,7 @@ impl Interpreter {
                     targets,
                     otherwise,
                 } => {
-                    let (discriminator, _) = interpreter.resolve_operand(discriminator);
+                    let (discriminator, _) = self.resolve_operand(discriminator);
                     next_block = targets
                         .iter()
                         .find(|(value, _)| discriminator == *value)
@@ -88,22 +91,12 @@ impl Interpreter {
             }
         }
 
-        let local = interpreter.get_alive_local(return_local);
-        let output = interpreter
-            .stack
-            .read_value(local.ptr, local.ty, &interpreter.tys);
+        let local = self.get_alive_local(return_local);
+        let output = self.stack.read_value(local.ptr, local.ty, &self.ctx.tys);
 
-        interpreter.stack.pop_frame();
+        self.stack.pop_frame();
 
         output
-    }
-
-    fn new_local(&mut self, ty: Ty, ptr: Pointer) -> Local {
-        self.locals.insert(InterpreterLocal {
-            ty,
-            ptr,
-            state: LocalState::Dead,
-        })
     }
 
     fn alive_local(&mut self, local: Local) {
@@ -120,7 +113,7 @@ impl Interpreter {
     fn read_local(&self, local: Local) -> Value {
         let local = self.get_alive_local(local);
 
-        self.stack.read_value(local.ptr, local.ty, &self.tys)
+        self.stack.read_value(local.ptr, local.ty, &self.ctx.tys)
     }
 
     fn get_alive_local(&self, local: Local) -> &InterpreterLocal {
@@ -146,12 +139,12 @@ impl Interpreter {
                     // Read the reference pointer out of memory.
                     ptr = self
                         .stack
-                        .read_value(ptr, ty, &self.tys)
+                        .read_value(ptr, ty, &self.ctx.tys)
                         .into_ref()
                         .unwrap();
 
                     // Determine the type of the reference.
-                    let TyInfo::Ref(inner_ty) = &self.tys[ty] else {
+                    let TyInfo::Ref(inner_ty) = &self.ctx.tys[ty] else {
                         panic!("cannot deref non-pointer: {ty:?}");
                     };
                     ty = *inner_ty;
@@ -167,7 +160,7 @@ impl Interpreter {
                     let TyInfo::Array {
                         ty: array_item_ty,
                         length,
-                    } = &self.tys[ty]
+                    } = &self.ctx.tys[ty]
                     else {
                         panic!("can only index array, found {ty:?}");
                     };
@@ -175,7 +168,7 @@ impl Interpreter {
                     let index_local = self.get_alive_local(*index_local);
                     let index = self
                         .stack
-                        .read_value(index_local.ptr, index_local.ty, &self.tys)
+                        .read_value(index_local.ptr, index_local.ty, &self.ctx.tys)
                         .into_u8()
                         .expect("index must be u8") as usize;
 
@@ -185,7 +178,7 @@ impl Interpreter {
                     );
 
                     // Perform the indexing on the pointer.
-                    ptr += index * self.tys[*array_item_ty].allocated_size(&self.tys);
+                    ptr += index * self.ctx.tys[*array_item_ty].allocated_size(&self.ctx.tys);
 
                     // Update the type.
                     ty = *array_item_ty;
@@ -246,7 +239,7 @@ impl Interpreter {
 
                 (
                     Value::Array(values),
-                    self.tys.find_or_insert(TyInfo::Array {
+                    self.ctx.tys.find_or_insert(TyInfo::Array {
                         ty: tys[0],
                         length: tys.len(),
                     }),
@@ -261,9 +254,9 @@ impl Interpreter {
             Operand::Place(place) => {
                 let (ptr, ty) = self.resolve_place(place);
 
-                (self.stack.read_value(ptr, ty, &self.tys), ty)
+                (self.stack.read_value(ptr, ty, &self.ctx.tys), ty)
             }
-            Operand::Constant(value) => (value.clone(), value.get_const_ty(&mut self.tys)),
+            Operand::Constant(value) => (value.clone(), value.get_const_ty(&mut self.ctx.tys)),
         }
     }
 }

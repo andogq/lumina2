@@ -4,13 +4,11 @@ mod pointer;
 mod value;
 
 pub use self::{pointer::Pointer, value::*};
-use crate::{indexed_vec, ir::ctx::Ctx};
+use crate::indexed_vec;
 
 /// Representation of a function.
 #[derive(Clone, Debug, Default)]
 pub struct Body {
-    pub ctx: Ctx,
-
     /// All basic blocks that build this function.
     pub basic_blocks: BasicBlocks,
     /// Local declarations used within this function.
