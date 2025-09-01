@@ -47,7 +47,26 @@ fn main() {
         }
     };
 
+    let program3 = ir_function! {
+        [&mut ctx]
+        let _0: u8;
+
+        bb0: {
+            switchInt(_0) -> [5_u8: bb2, otherwise: bb1];
+        }
+
+        bb1: {
+            _0 = Add(_0, const 1_u8);
+            goto -> bb0;
+        }
+
+        bb2: {
+            return;
+        }
+    };
+
     let mut interpreter = Interpreter::new(ctx);
     dbg!(interpreter.run(program1));
     dbg!(interpreter.run(program2));
+    dbg!(interpreter.run(program3));
 }

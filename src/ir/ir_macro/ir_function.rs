@@ -24,11 +24,17 @@ macro_rules! ir_function {
 
     // Section option 2: basic block section.
     (@section($ctx:ident, $body:ident) $($bb_name:ident: { $($bb:tt)* })*) => {
+        // HACK: Predeclare all basic blocks.
         $(
-            #[allow(unused_variables)]
-            let $bb_name = $body.basic_blocks.insert(
-                $crate::split_token!([;] [ir_function(@basic_block())] $($bb)*)
-            );
+            let $bb_name = $body.basic_blocks.insert($crate::ir::BasicBlockData {
+                statements: ::std::vec![],
+                terminator: $crate::ir::Terminator::Return,
+            });
+        )*
+
+        // Overwrite all basic blocks with their actual definition.
+        $(
+            $body.basic_blocks[$bb_name] = $crate::split_token!([;] [ir_function(@basic_block())] $($bb)*);
         )*
     };
 
