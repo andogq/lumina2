@@ -1,10 +1,12 @@
 mod interpreter;
 mod ir;
+mod llvm;
 mod util;
 
 use crate::{
     interpreter::Interpreter,
     ir::{ctx::IrCtx, *},
+    llvm::Llvm,
 };
 
 fn main() {
@@ -69,4 +71,20 @@ fn main() {
     dbg!(interpreter.run(program1));
     dbg!(interpreter.run(program2));
     dbg!(interpreter.run(program3));
+
+    let mut ctx = IrCtx::default();
+    let add_something = ir_function! {
+        [&mut ctx]
+
+        let _0: u8;
+
+        bb0: {
+            _0 = Add(const 23_u8, const 53_u8);
+            return;
+        }
+    };
+    let llvm = Llvm::new();
+    let module = llvm.new_module("something");
+    module.compile(ctx, add_something, "add_something");
+    dbg!(module.run("add_something"));
 }

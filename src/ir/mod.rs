@@ -3,6 +3,8 @@ mod ir_macro;
 mod pointer;
 mod value;
 
+use std::fmt::Display;
+
 pub use self::{pointer::Pointer, value::*};
 use crate::indexed_vec;
 
@@ -25,6 +27,12 @@ pub struct BasicBlockData {
 }
 indexed_vec!(pub key BasicBlock);
 indexed_vec!(pub BasicBlocks<BasicBlock, BasicBlockData>);
+
+impl Display for BasicBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "bb{}", self.0)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalDecl {

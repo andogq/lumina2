@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     marker::PhantomData,
     ops::{Deref, Index, IndexMut},
 };
@@ -115,5 +116,11 @@ impl Key {
 
     pub fn of(n: usize) -> Self {
         Self(n)
+    }
+}
+
+impl Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0, f)
     }
 }
