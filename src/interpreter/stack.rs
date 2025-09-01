@@ -48,17 +48,17 @@ impl Stack {
                     let TyInfo::Array { ty, length: _ } = ty else {
                         panic!("need array");
                     };
-                    let ty = &tys[*ty];
+                    let ty = tys.get(*ty);
 
                     let ptr = ptr + (i * ty.allocated_size(tys));
-                    self.write_value(ptr, ty, value, tys);
+                    self.write_value(ptr, &ty, value, tys);
                 });
             }
         }
     }
 
     pub fn read_value(&self, ptr: Pointer, ty: Ty, tys: &Tys) -> Value {
-        let ty = &tys[ty];
+        let ty = &tys.get(ty);
         let ty_size = ty.allocated_size(tys);
 
         let buf = &self.buf[*ptr..*ptr + ty_size];

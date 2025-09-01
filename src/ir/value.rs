@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use crate::{indexed_vec, ir::Pointer};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,7 +75,7 @@ impl Value {
     // }
 
     /// Get the [`Ty`] of this value, as if it were a constant.
-    pub fn get_const_ty(&self, tys: &mut Tys) -> Ty {
+    pub fn get_const_ty(&self, tys: &Tys) -> Ty {
         match self {
             Value::U8(_) => tys.find_or_insert(TyInfo::U8),
             Value::I8(_) => tys.find_or_insert(TyInfo::I8),
@@ -100,7 +102,7 @@ impl TyInfo {
             TyInfo::U8 => size_of::<u8>(),
             TyInfo::I8 => size_of::<i8>(),
             TyInfo::Ref(_) => size_of::<Pointer>(),
-            TyInfo::Array { ty, length } => tys[*ty].allocated_size(tys) * length,
+            TyInfo::Array { ty, length } => tys.get(*ty).allocated_size(tys) * length,
         }
     }
 }
@@ -194,15 +196,35 @@ impl From<i8> for Value {
 }
 
 indexed_vec!(pub key Ty);
-indexed_vec!(pub Tys<Ty, TyInfo>);
+indexed_vec!(pub TysInner<Ty, TyInfo>);
+
+#[derive(Clone, Debug, Default)]
+pub struct Tys {
+    inner: RefCell<TysInner>,
+}
 
 impl Tys {
-    pub fn find_or_insert(&mut self, ty: TyInfo) -> Ty {
-        let existing = self.iter_keys().find(|(_, test_ty)| *test_ty == &ty);
+    pub fn new() -> Self {
+        Self {
+            inner: RefCell::new(TysInner::new()),
+        }
+    }
+
+    pub fn get(&self, ty: Ty) -> TyInfo {
+        self.inner.borrow()[ty].clone()
+    }
+
+    pub fn find_or_insert(&self, ty: TyInfo) -> Ty {
+        let existing = self
+            .inner
+            .borrow()
+            .iter_keys()
+            .find(|(_, test_ty)| *test_ty == &ty)
+            .map(|(ty, _)| ty);
 
         match existing {
-            Some((ty, _)) => ty,
-            None => self.insert(ty),
+            Some(ty) => ty,
+            None => self.inner.borrow_mut().insert(ty),
         }
     }
 }

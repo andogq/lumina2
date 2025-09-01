@@ -67,7 +67,7 @@ fn main() {
         }
     };
 
-    let mut interpreter = Interpreter::new(ctx);
+    let mut interpreter = Interpreter::new(&ctx);
     dbg!(interpreter.run(program1));
     dbg!(interpreter.run(program2));
     dbg!(interpreter.run(program3));
@@ -77,14 +77,22 @@ fn main() {
         [&mut ctx]
 
         let _0: u8;
+        let _1: u8;
 
         bb0: {
-            _0 = Add(const 23_u8, const 53_u8);
+            StorageLive(_1);
+            _1 = const 42_u8;
+            _0 = Add(const 23_u8, _1);
+            StorageDead(_1);
             return;
         }
     };
-    let llvm = Llvm::new();
+    let llvm = Llvm::new(&ctx);
     let module = llvm.new_module("something");
-    module.compile(ctx, add_something, "add_something");
-    dbg!(module.run("add_something"));
+    module.compile(add_something, "add_something");
+    let llvm_output = module.run("add_something");
+
+    let interpreter_output = Interpreter::new(&ctx).run(add_something);
+
+    assert_eq!(llvm_output, interpreter_output.into_u8().unwrap());
 }

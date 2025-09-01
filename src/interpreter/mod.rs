@@ -8,14 +8,14 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct Interpreter {
-    ctx: IrCtx,
+pub struct Interpreter<'ctx> {
+    ctx: &'ctx IrCtx,
     locals: InterpreterLocals,
     stack: Stack,
 }
 
-impl Interpreter {
-    pub fn new(ctx: IrCtx) -> Self {
+impl<'ctx> Interpreter<'ctx> {
+    pub fn new(ctx: &'ctx IrCtx) -> Self {
         Self {
             ctx,
             locals: InterpreterLocals::new(),
@@ -35,10 +35,12 @@ impl Interpreter {
 
         // Create the locals.
         for local_decl in &*body.local_decls {
-            let ptr = self
-                .stack
-                .get_frame()
-                .alloca(self.ctx.tys[local_decl.ty].allocated_size(&self.ctx.tys));
+            let ptr = self.stack.get_frame().alloca(
+                self.ctx
+                    .tys
+                    .get(local_decl.ty)
+                    .allocated_size(&self.ctx.tys),
+            );
             self.locals.insert(InterpreterLocal {
                 ty: local_decl.ty,
                 ptr,
@@ -59,8 +61,8 @@ impl Interpreter {
                         let (target_ptr, target_ty) = self.resolve_place(place);
                         let (value, value_ty) = self.resolve_rvalue(rvalue);
 
-                        let target_ty = &self.ctx.tys[target_ty];
-                        let value_ty = &self.ctx.tys[value_ty];
+                        let target_ty = &self.ctx.tys.get(target_ty);
+                        let value_ty = &self.ctx.tys.get(value_ty);
 
                         assert_eq!(target_ty, value_ty, "cannot assign mismatched tys");
 
@@ -144,7 +146,7 @@ impl Interpreter {
                         .unwrap();
 
                     // Determine the type of the reference.
-                    let TyInfo::Ref(inner_ty) = &self.ctx.tys[ty] else {
+                    let TyInfo::Ref(inner_ty) = &self.ctx.tys.get(ty) else {
                         panic!("cannot deref non-pointer: {ty:?}");
                     };
                     ty = *inner_ty;
@@ -160,7 +162,7 @@ impl Interpreter {
                     let TyInfo::Array {
                         ty: array_item_ty,
                         length,
-                    } = &self.ctx.tys[ty]
+                    } = &self.ctx.tys.get(ty)
                     else {
                         panic!("can only index array, found {ty:?}");
                     };
@@ -178,7 +180,12 @@ impl Interpreter {
                     );
 
                     // Perform the indexing on the pointer.
-                    ptr += index * self.ctx.tys[*array_item_ty].allocated_size(&self.ctx.tys);
+                    ptr += index
+                        * self
+                            .ctx
+                            .tys
+                            .get(*array_item_ty)
+                            .allocated_size(&self.ctx.tys);
 
                     // Update the type.
                     ty = *array_item_ty;
@@ -256,7 +263,7 @@ impl Interpreter {
 
                 (self.stack.read_value(ptr, ty, &self.ctx.tys), ty)
             }
-            Operand::Constant(value) => (value.clone(), value.get_const_ty(&mut self.ctx.tys)),
+            Operand::Constant(value) => (value.clone(), value.get_const_ty(&self.ctx.tys)),
         }
     }
 }

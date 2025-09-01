@@ -1,50 +1,52 @@
 use std::collections::HashMap;
 
 use inkwell::{
-    AddressSpace,
-    context::Context as IContext,
-    execution_engine::JitFunction,
-    module::Module as IModule,
-    values::{BasicValueEnum, IntValue},
+    AddressSpace, context::Context as IContext, execution_engine::JitFunction,
+    module::Module as IModule, values::BasicValueEnum,
 };
 
 use crate::ir::{
-    BasicBlock, BinOp, Local, Operand, Projection, RValue, Statement, Terminator, Ty, TyInfo,
-    Value,
+    BasicBlock, BinOp, Local, Operand, Projection, RValue, Statement, Terminator, TyInfo, Value,
     ctx::{Function, IrCtx},
 };
 
-pub struct Llvm(IContext);
-impl Llvm {
-    pub fn new() -> Self {
-        Self(IContext::create())
-    }
-
-    pub fn new_module(&self, name: &str) -> Module {
-        Module::new(&self.0, name)
-    }
+pub struct Llvm<'ir> {
+    ctx: IContext,
+    ir: &'ir IrCtx,
 }
-
-pub struct Module<'ctx> {
-    context: &'ctx IContext,
-    module: IModule<'ctx>,
-}
-impl<'ctx> Module<'ctx> {
-    pub fn new(context: &'ctx IContext, name: &str) -> Self {
+impl<'ir> Llvm<'ir> {
+    pub fn new(ir: &'ir IrCtx) -> Self {
         Self {
-            context,
-            module: context.create_module(name),
+            ctx: IContext::create(),
+            ir,
         }
     }
 
-    pub fn compile(&self, ctx: IrCtx, function: Function, name: &str) {
-        let builder = self.context.create_builder();
+    pub fn new_module(&self, name: &str) -> Module<'ir, '_> {
+        Module::new(self, name)
+    }
+}
+
+pub struct Module<'ir, 'ctx> {
+    llvm: &'ctx Llvm<'ir>,
+    module: IModule<'ctx>,
+}
+impl<'ir, 'ctx> Module<'ir, 'ctx> {
+    pub fn new(llvm: &'ctx Llvm<'ir>, name: &str) -> Self {
+        Self {
+            llvm,
+            module: llvm.ctx.create_module(name),
+        }
+    }
+
+    pub fn compile(&self, function: Function, name: &str) {
+        let builder = self.llvm.ctx.create_builder();
 
         // Capture function body.
-        let body = &ctx.functions[function];
+        let body = &self.llvm.ir.functions[function];
 
-        let i8_type = self.context.i8_type();
-        let ptr_type = self.context.ptr_type(AddressSpace::default());
+        let i8_type = self.llvm.ctx.i8_type();
+        let ptr_type = self.llvm.ctx.ptr_type(AddressSpace::default());
 
         // Set up function signature.
         let function = self
@@ -52,7 +54,7 @@ impl<'ctx> Module<'ctx> {
             .add_function(name, i8_type.fn_type(&[], false), None);
 
         // Entry basic block sets up allocations.
-        let entry_bb = self.context.append_basic_block(function, "entry");
+        let entry_bb = self.llvm.ctx.append_basic_block(function, "entry");
         builder.position_at_end(entry_bb);
         let locals = body
             .local_decls
@@ -60,7 +62,7 @@ impl<'ctx> Module<'ctx> {
             .map(|(local, alloc)| {
                 let alloc = builder
                     .build_alloca(
-                        match &ctx.tys[alloc.ty] {
+                        match &self.llvm.ir.tys.get(alloc.ty) {
                             TyInfo::U8 | TyInfo::I8 => i8_type,
                             _ => unimplemented!(),
                         },
@@ -78,7 +80,8 @@ impl<'ctx> Module<'ctx> {
             .iter_keys()
             .map(|(bb, _)| {
                 let llvm_bb = self
-                    .context
+                    .llvm
+                    .ctx
                     .append_basic_block(function, bb.to_string().as_str());
                 (bb, llvm_bb)
             })
@@ -183,8 +186,8 @@ impl<'ctx> Module<'ctx> {
 
                         builder.build_store(place, rvalue).unwrap();
                     }
-                    Statement::StorageDead(local) => todo!(),
-                    Statement::StorageLive(local) => todo!(),
+                    Statement::StorageDead(local) => {}
+                    Statement::StorageLive(local) => {}
                 }
             }
 
@@ -209,8 +212,6 @@ impl<'ctx> Module<'ctx> {
                 } => todo!(),
             }
         }
-
-        println!("{}", self.module.print_to_string().to_string());
     }
 
     pub fn run(&self, name: &str) -> u8 {
