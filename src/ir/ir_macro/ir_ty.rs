@@ -70,6 +70,7 @@ mod test {
                 ty => [$($ty:tt)*],
                 expected => [$($expected:tt)*] $(,)?
             ) => {
+                #[allow(unused_mut)]
                 let mut tys = Tys::new();
 
                 $($(

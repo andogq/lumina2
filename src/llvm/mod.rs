@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap};
 
 use inkwell::{
+    AddressSpace,
     basic_block::BasicBlock as IBasicBlock,
     builder::Builder,
     context::Context as IContext,
@@ -204,7 +205,13 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
 
                     ptr = self
                         .builder
-                        .build_load(self.module.tys.get(inner_ty), ptr, "deref")
+                        .build_load(
+                            self.module
+                                .tys
+                                .get(self.module.llvm.ir.tys.find_or_insert(ty)),
+                            ptr,
+                            "deref",
+                        )
                         .unwrap()
                         .into_pointer_value();
                     ty = self.module.llvm.ir.tys.get(inner_ty);
@@ -233,7 +240,7 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                                 self.module.tys.get(array_ty),
                                 ptr,
                                 &[index],
-                                "index somethign",
+                                "index something",
                             )
                             .unwrap()
                     };
@@ -248,7 +255,13 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
     fn get_rvalue(&self, rvalue: &RValue) -> (BasicValueEnum<'ctx>, TyInfo) {
         match rvalue {
             RValue::Use(operand) => self.get_operand(operand),
-            RValue::Ref(place) => todo!(),
+            RValue::Ref(place) => {
+                let (ptr, inner_ty) = self.get_place_ptr(place);
+                (
+                    ptr.into(),
+                    TyInfo::Ref(self.module.llvm.ir.tys.find_or_insert(inner_ty)),
+                )
+            }
             RValue::BinaryOp { op, lhs, rhs } => {
                 let (BasicValueEnum::IntValue(lhs), lhs_ty) = self.get_operand(lhs) else {
                     panic!("not good");
@@ -369,7 +382,11 @@ impl<'ir, 'ctx> LlvmTys<'ir, 'ctx> {
         match self.llvm.ir.tys.get(ty) {
             TyInfo::U8 => self.llvm.ctx.i8_type().as_basic_type_enum(),
             TyInfo::I8 => self.llvm.ctx.i8_type().as_basic_type_enum(),
-            TyInfo::Ref(ty) => todo!(),
+            TyInfo::Ref(_) => self
+                .llvm
+                .ctx
+                .ptr_type(AddressSpace::default())
+                .as_basic_type_enum(),
             TyInfo::Array { ty, length } => todo!(),
         }
     }

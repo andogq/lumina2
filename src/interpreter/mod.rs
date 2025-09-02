@@ -202,7 +202,10 @@ impl<'ctx> Interpreter<'ctx> {
             RValue::Ref(place) => {
                 let (ptr, ty) = self.resolve_place(place);
 
-                (Value::Ref(ptr), ty)
+                (
+                    Value::Ref(ptr),
+                    self.ctx.tys.find_or_insert(TyInfo::Ref(ty)),
+                )
             }
             RValue::BinaryOp { op, lhs, rhs } => {
                 let (lhs, lhs_ty) = self.resolve_operand(lhs);

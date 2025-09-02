@@ -149,7 +149,7 @@ mod test {
                 return;
             }
 
-            bb0: {
+            bb1: {
                 _0 = Add(_0, *_1);
                 return;
             }

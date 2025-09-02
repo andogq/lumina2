@@ -96,3 +96,80 @@ fn main() {
 
     assert_eq!(llvm_output, interpreter_output.into_u8().unwrap());
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    macro_rules! run_test {
+        ($name:ident => [$expected:expr] $($program:tt)*) => {
+            #[test]
+            fn $name() {
+                let mut ctx = IrCtx::default();
+                let program = ir_function! {
+                    [&mut ctx]
+                    $($program)*
+                };
+
+                let interpreter_output = Interpreter::new(&ctx).run(program).into_u8().unwrap();
+                let llvm_output = {
+                    let llvm = Llvm::new(&ctx);
+                    let module = llvm.new_module("module");
+                    module.compile(program, stringify!($name));
+                    module.run(stringify!($name))
+                };
+
+                let expected = $expected;
+
+                assert_eq!(expected, interpreter_output);
+                assert_eq!(expected, llvm_output);
+            }
+        };
+    }
+
+    run_test! {
+        add_constant => [123u8]
+
+        let _0: u8;
+        bb0: {
+            _0 = Add(const 100u8, const 23_u8);
+            return;
+        }
+    }
+
+    run_test! {
+        add_locals => [91u8]
+
+        let _0: u8;
+        let _1: u8;
+        let _2: u8;
+        bb0: {
+            StorageLive(_1);
+            StorageLive(_2);
+            _1 = const 40u8;
+            _2 = const 51u8;
+            _0 = Add(_1, _2);
+            StorageLive(_2);
+            StorageLive(_1);
+            return;
+        }
+    }
+
+    run_test! {
+        deref_something => [5u8]
+
+        let _0: u8;
+        let _1: u8;
+        let _2: &u8;
+        bb0: {
+            StorageLive(_1);
+            StorageLive(_2);
+            _1 = const 5u8;
+            _2 = &_1;
+            _0 = *_2;
+            StorageLive(_2);
+            StorageLive(_1);
+            return;
+        }
+    }
+}
