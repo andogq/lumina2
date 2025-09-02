@@ -6,9 +6,10 @@ use inkwell::{
     builder::Builder,
     context::Context as IContext,
     execution_engine::JitFunction,
+    intrinsics::Intrinsic,
     module::Module as IModule,
     types::{BasicType, BasicTypeEnum},
-    values::{AnyValue, BasicValue, BasicValueEnum, IntValue, PointerValue},
+    values::{AnyValue, BasicValueEnum, PointerValue},
 };
 
 use crate::{
@@ -158,8 +159,34 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                     let (place_ptr, place_ty) = self.get_place_ptr(place);
                     self.store_rvalue(rvalue, place_ptr, place_ty);
                 }
-                Statement::StorageDead(local) => {}
-                Statement::StorageLive(local) => {}
+                Statement::StorageDead(local) => {
+                    let ptr = self.locals[*local].0;
+
+                    let intrinsic = Intrinsic::find("llvm.lifetime.end").unwrap();
+                    let intrinsic_fn = intrinsic
+                        .get_declaration(
+                            &self.module.module,
+                            &[BasicTypeEnum::PointerType(ptr.get_type())],
+                        )
+                        .unwrap();
+                    self.builder
+                        .build_call(intrinsic_fn, &[ptr.into()], "lifetime.end")
+                        .unwrap();
+                }
+                Statement::StorageLive(local) => {
+                    let ptr = self.locals[*local].0;
+
+                    let intrinsic = Intrinsic::find("llvm.lifetime.start").unwrap();
+                    let intrinsic_fn = intrinsic
+                        .get_declaration(
+                            &self.module.module,
+                            &[BasicTypeEnum::PointerType(ptr.get_type())],
+                        )
+                        .unwrap();
+                    self.builder
+                        .build_call(intrinsic_fn, &[ptr.into()], "lifetime.start")
+                        .unwrap();
+                }
             }
         }
 
