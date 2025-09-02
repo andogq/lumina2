@@ -8,7 +8,7 @@ use inkwell::{
     execution_engine::JitFunction,
     module::Module as IModule,
     types::{BasicType, BasicTypeEnum},
-    values::{BasicValueEnum, PointerValue},
+    values::{AnyValue, BasicValue, BasicValueEnum, IntValue, PointerValue},
 };
 
 use crate::{
@@ -143,6 +143,8 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
         for (bb, _) in f.basic_blocks.iter_keys() {
             f.compile_basic_block(bb);
         }
+
+        println!("{}", function.print_to_string().to_string());
     }
 
     fn compile_basic_block(&self, basic_block: BasicBlock) {
@@ -154,11 +156,7 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
             match statement {
                 Statement::Assign { place, rvalue } => {
                     let (place_ptr, place_ty) = self.get_place_ptr(place);
-                    let (rvalue, rvalue_ty) = self.get_rvalue(rvalue);
-
-                    assert_eq!(place_ty, rvalue_ty);
-
-                    self.builder.build_store(place_ptr, rvalue).unwrap();
+                    self.store_rvalue(rvalue, place_ptr, place_ty);
                 }
                 Statement::StorageDead(local) => {}
                 Statement::StorageLive(local) => {}
@@ -236,8 +234,8 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
 
                     ptr = unsafe {
                         self.builder
-                            .build_gep(
-                                self.module.tys.get(array_ty),
+                            .build_in_bounds_gep(
+                                self.module.tys.get(inner_ty),
                                 ptr,
                                 &[index],
                                 "index something",
@@ -252,15 +250,18 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
         (ptr, ty)
     }
 
-    fn get_rvalue(&self, rvalue: &RValue) -> (BasicValueEnum<'ctx>, TyInfo) {
+    fn store_rvalue(&self, rvalue: &RValue, place_ptr: PointerValue<'ctx>, place_ty: TyInfo) {
         match rvalue {
-            RValue::Use(operand) => self.get_operand(operand),
+            RValue::Use(operand) => {
+                let (value, ty) = self.get_operand(operand);
+                assert_eq!(place_ty, ty,);
+                self.builder.build_store(place_ptr, value).unwrap();
+            }
             RValue::Ref(place) => {
                 let (ptr, inner_ty) = self.get_place_ptr(place);
-                (
-                    ptr.into(),
-                    TyInfo::Ref(self.module.llvm.ir.tys.find_or_insert(inner_ty)),
-                )
+                let ty = TyInfo::Ref(self.module.llvm.ir.tys.find_or_insert(inner_ty));
+                assert_eq!(place_ty, ty);
+                self.builder.build_store(place_ptr, ptr).unwrap();
             }
             RValue::BinaryOp { op, lhs, rhs } => {
                 let (BasicValueEnum::IntValue(lhs), lhs_ty) = self.get_operand(lhs) else {
@@ -269,45 +270,63 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                 let (BasicValueEnum::IntValue(rhs), rhs_ty) = self.get_operand(rhs) else {
                     panic!("not good");
                 };
-
                 assert_eq!(lhs_ty, rhs_ty);
 
-                (
-                    match op {
-                        BinOp::Add => self
+                assert_eq!(place_ty, lhs_ty);
+
+                let value = match op {
+                    BinOp::Add => self.builder.build_int_add(lhs, rhs, "add shit").unwrap(),
+                    BinOp::Sub => self.builder.build_int_sub(lhs, rhs, "sub shit").unwrap(),
+                    BinOp::Mul => self.builder.build_int_mul(lhs, rhs, "mul shit").unwrap(),
+                    BinOp::Div => match lhs_ty {
+                        TyInfo::U8 => self
                             .builder
-                            .build_int_add(lhs, rhs, "add shit")
-                            .unwrap()
-                            .into(),
-                        BinOp::Sub => self
+                            .build_int_unsigned_div(lhs, rhs, "div shit")
+                            .unwrap(),
+                        TyInfo::I8 => self
                             .builder
-                            .build_int_sub(lhs, rhs, "sub shit")
-                            .unwrap()
-                            .into(),
-                        BinOp::Mul => self
-                            .builder
-                            .build_int_mul(lhs, rhs, "mul shit")
-                            .unwrap()
-                            .into(),
-                        BinOp::Div => match lhs_ty {
-                            TyInfo::U8 => self
-                                .builder
-                                .build_int_unsigned_div(lhs, rhs, "div shit")
-                                .unwrap()
-                                .into(),
-                            TyInfo::I8 => self
-                                .builder
-                                .build_int_signed_div(lhs, rhs, "div shit (but signed)")
-                                .unwrap()
-                                .into(),
-                            _ => panic!("can't div this type"),
-                        },
+                            .build_int_signed_div(lhs, rhs, "div shit (but signed)")
+                            .unwrap(),
+                        _ => panic!("can't div this type"),
                     },
-                    lhs_ty,
-                )
+                };
+                self.builder.build_store(place_ptr, value).unwrap();
             }
             RValue::UnaryOp { op, rhs } => todo!(),
-            RValue::Aggregate { values } => todo!(),
+            RValue::Aggregate { values } => {
+                let values = values
+                    .iter()
+                    .map(|value| self.get_operand(value))
+                    .collect::<Vec<_>>();
+
+                let pointee_ty = self.module.llvm.ir.tys.find_or_insert(values[0].1.clone());
+                let ty = TyInfo::Array {
+                    ty: pointee_ty,
+                    length: values.len(),
+                };
+                assert_eq!(place_ty, ty);
+
+                let pointee_ty = self.module.tys.get(pointee_ty);
+
+                for (i, (value, _)) in values.into_iter().enumerate() {
+                    let ptr = unsafe {
+                        self.builder.build_in_bounds_gep(
+                            pointee_ty,
+                            place_ptr,
+                            &[self
+                                .module
+                                .tys
+                                .get(self.module.llvm.ir.tys.find_or_insert(TyInfo::U8))
+                                .into_int_type()
+                                .const_int(i as u64, false)],
+                            "something",
+                        )
+                    }
+                    .unwrap();
+
+                    self.builder.build_store(ptr, value).unwrap();
+                }
+            }
         }
     }
 
@@ -387,7 +406,10 @@ impl<'ir, 'ctx> LlvmTys<'ir, 'ctx> {
                 .ctx
                 .ptr_type(AddressSpace::default())
                 .as_basic_type_enum(),
-            TyInfo::Array { ty, length } => todo!(),
+            TyInfo::Array { ty, length } => self
+                .of_ty(ty)
+                .array_type(length as u32)
+                .as_basic_type_enum(),
         }
     }
 }

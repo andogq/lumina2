@@ -121,8 +121,8 @@ mod test {
 
                 let expected = $expected;
 
-                assert_eq!(expected, interpreter_output);
-                assert_eq!(expected, llvm_output);
+                assert_eq!(expected, interpreter_output, "interpreter");
+                assert_eq!(expected, llvm_output, "llvm");
             }
         };
     }
@@ -169,6 +169,31 @@ mod test {
             _0 = *_2;
             StorageLive(_2);
             StorageLive(_1);
+            return;
+        }
+    }
+
+    run_test! {
+        arrays => [8u8]
+
+        let _0: u8;
+        let _1: [u8; 3];
+        let _2: u8;
+        bb0: {
+            StorageLive(_1);
+            StorageLive(_2);
+            _1 = [const 2u8, const 1u8, const 5u8];
+
+            _2 = const 0u8;
+            _0 = Add(_0, _1[_2]);
+
+            _2 = const 1u8;
+            _0 = Add(_0, _1[_2]);
+
+            _2 = const 2u8;
+            _0 = Add(_0, _1[_2]);
+            StorageDead(_2);
+            StorageDead(_1);
             return;
         }
     }
