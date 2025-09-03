@@ -69,6 +69,7 @@ impl Stack {
             TyInfo::Ref(_) => {
                 Value::from_ref(Pointer::new(usize::from_ne_bytes(buf.try_into().unwrap())))
             }
+            TyInfo::Slice(_) => unimplemented!(),
             TyInfo::Array { ty: _, length: _ } => unimplemented!(),
         }
     }

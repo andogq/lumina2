@@ -27,17 +27,17 @@ macro_rules! ir_rvalue {
     // This branch will extract the operation name (`Op`), and split the args within the parens at
     // the comma. The `cb_op` branches will be caled with the split parameters, which will
     // determine whether it's a binary or unary operation.
-    ($op:ident($($operands:tt)*)) => {
+    ([$tys:expr] $op:ident($($operands:tt)*)) => {
         $crate::split_token!([,] [ir_rvalue(cb_op($op))] $($operands)*)
     };
 
     // Reference of a place.
-    (& $($place:tt)*) => {
+    ([$tys:expr] & $($place:tt)*) => {
         $crate::ir::RValue::Ref(ir_place!($($place)*))
     };
 
     // Array aggregate.
-    ([$($operands:tt)*]) => {
+    ([$tys:expr] [$($operands:tt)*]) => {
         $crate::split_token!([,] [ir_rvalue(@cb_aggregate)] $($operands)*)
     };
 
@@ -47,9 +47,37 @@ macro_rules! ir_rvalue {
         }
     };
 
-    // Assume an operand.
-    ($($operand:tt)*) => {
+    // Assume something with an operand (operand or cast).
+    (@cb_operand_or_cast[$tys:expr] [$($operand:tt)*]) => {
         $crate::ir::RValue::Use(ir_operand!($($operand)*))
+    };
+    (@cb_operand_or_cast[$tys:expr] [$($operand:tt)*] [$($cast_info:tt)*]) => {{
+        let (kind, ty) = $crate::ir_rvalue!(@extract_cast_info[$tys] ty=[] $($cast_info)*);
+
+        $crate::ir::RValue::Cast {
+            op: $crate::ir_operand!($($operand)*),
+            kind,
+            ty
+        }
+    }};
+    // If the last group of tokens is wrapped in parens, it's the cast kind.
+    (@extract_cast_info[$tys:expr] ty=[$($ty:tt)*] ($cast_kind:ident $(($($args:tt)*))?)) => {
+        (
+            $crate::ir::CastKind::$cast_kind $(({
+                // NOTE: Import all enums used as args.
+                use $crate::ir::PointerCoercion::*;
+
+                $($args)*
+            }))?,
+            $crate::ir_ty!([$tys] $($ty)*),
+        )
+    };
+    // Otherwise it's part of the type.
+    (@extract_cast_info[$tys:expr] ty=[$($ty:tt)*] $tok:tt $($rest:tt)*) => {
+        $crate::ir_rvalue!(@extract_cast_info[$tys] ty=[$($ty)* $tok] $($rest)*)
+    };
+    ([$tys:expr] $($toks:tt)*) => {
+        $crate::split_token!([as] without_trailing [ir_rvalue(@cb_operand_or_cast[$tys])] $($toks)*)
     };
 }
 
@@ -57,12 +85,15 @@ macro_rules! ir_rvalue {
 mod test {
     #![allow(clippy::just_underscores_and_digits)]
 
-    use crate::ir::{BinOp, Local, Operand, Place, Projection, RValue, UnOp, Value};
+    use crate::ir::{
+        BinOp, CastKind, Local, Operand, Place, PointerCoercion, Projection, RValue, TyInfo, Tys,
+        UnOp, Value,
+    };
 
     #[test]
     fn unary_operation() {
         assert_eq!(
-            ir_rvalue!(Neg(const 1_u8)),
+            ir_rvalue!([_] Neg(const 1_u8)),
             RValue::UnaryOp {
                 op: UnOp::Neg,
                 rhs: Operand::Constant(Value::U8(1))
@@ -73,7 +104,7 @@ mod test {
     #[test]
     fn binary_operation() {
         assert_eq!(
-            ir_rvalue!(Add(const 1_u8, const 2_u8)),
+            ir_rvalue!([_] Add(const 1_u8, const 2_u8)),
             RValue::BinaryOp {
                 op: BinOp::Add,
                 lhs: Operand::Constant(Value::U8(1)),
@@ -87,7 +118,7 @@ mod test {
         let _0 = Local::zero();
 
         assert_eq!(
-            ir_rvalue!(&_0),
+            ir_rvalue!([_] & _0),
             RValue::Ref(Place {
                 local: _0,
                 projection: vec![]
@@ -98,7 +129,7 @@ mod test {
     #[test]
     fn use_constant() {
         assert_eq!(
-            ir_rvalue!(const 1_u8),
+            ir_rvalue!([_] const 1_u8),
             RValue::Use(Operand::Constant(Value::U8(1))),
         );
     }
@@ -109,11 +140,33 @@ mod test {
         let _1 = Local::of(1);
 
         assert_eq!(
-            ir_rvalue!(_0[_1]),
+            ir_rvalue!([_] _0[_1]),
             RValue::Use(Operand::Place(Place {
                 local: _0,
                 projection: vec![Projection::Index(_1)]
             })),
+        );
+    }
+
+    #[test]
+    fn cast() {
+        let _0 = Local::zero();
+
+        let mut tys = Tys::new();
+        let u8_ty = tys.find_or_insert(TyInfo::U8);
+        let u8_slice_ty = tys.find_or_insert(TyInfo::Slice(u8_ty));
+        let ty = tys.find_or_insert(TyInfo::Ref(u8_slice_ty));
+
+        assert_eq!(
+            ir_rvalue!([&mut tys] _0 as &[u8] (PointerCoercion(Unsize))),
+            RValue::Cast {
+                kind: CastKind::PointerCoercion(PointerCoercion::Unsize),
+                op: Operand::Place(Place {
+                    local: _0,
+                    projection: vec![]
+                }),
+                ty
+            }
         );
     }
 }

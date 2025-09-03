@@ -486,4 +486,29 @@ mod test {
             return;
         }
     }
+
+    run_test! {
+        array_fat_pointer => [3u8]
+
+        let _0: u8;
+        let _1: [u8; 3];
+        let _2: &[u8; 3];
+        let _3: &[u8];
+
+        bb0: {
+            StorageLive(_1);
+            StorageLive(_2);
+            StorageLive(_3);
+
+            _1 = [const 1u8, const 5u8, const 7u8];
+            _2 = &_1;
+            _3 = _2 as &[u8] (PointerCoercion(Unsize));
+
+            StorageLive(_3);
+            StorageLive(_2);
+            StorageLive(_1);
+
+            return;
+        }
+    }
 }

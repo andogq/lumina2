@@ -255,6 +255,7 @@ impl<'ctx> Interpreter<'ctx> {
                     }),
                 )
             }
+            RValue::Cast { .. } => unimplemented!(),
         }
     }
 

@@ -1,12 +1,12 @@
 #[macro_export(local_inner_macros)]
 macro_rules! ir_function {
     // Basic block statement, with further trailing statements.
-    (@basic_block($($statements:tt)*) [$($statement:tt)*] $($rest:tt)+) => {
-        ir_function!(@basic_block($($statements)* ir_statement!($($statement)*),) $($rest)*)
+    (@basic_block($ctx:ident) [$($statements:tt)*] [$($statement:tt)*] $($rest:tt)+) => {
+        ir_function!(@basic_block($ctx) [$($statements)* ir_statement!([$ctx.tys] $($statement)*),] $($rest)*)
     };
 
     // Terminator, which can only occur as the last statement of a basic block.
-    (@basic_block($($statements:tt)*) [$($terminator:tt)+]) => {
+    (@basic_block($ctx:ident) [$($statements:tt)*] [$($terminator:tt)+]) => {
         BasicBlockData {
             statements: ::std::vec![
                 $($statements)*
@@ -34,7 +34,7 @@ macro_rules! ir_function {
 
         // Overwrite all basic blocks with their actual definition.
         $(
-            $body.basic_blocks[$bb_name] = $crate::split_token!([;] [ir_function(@basic_block())] $($bb)*);
+            $body.basic_blocks[$bb_name] = $crate::split_token!([;] [ir_function(@basic_block ($ctx) [])] $($bb)*);
         )*
     };
 

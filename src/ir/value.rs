@@ -17,6 +17,7 @@ pub enum TyInfo {
     U8,
     I8,
     Ref(Ty),
+    Slice(Ty),
     Array { ty: Ty, length: usize },
 }
 
@@ -102,6 +103,7 @@ impl TyInfo {
             TyInfo::U8 => size_of::<u8>(),
             TyInfo::I8 => size_of::<i8>(),
             TyInfo::Ref(_) => size_of::<Pointer>(),
+            TyInfo::Slice(_) => panic!("slices are unsized"),
             TyInfo::Array { ty, length } => tys.get(*ty).allocated_size(tys) * length,
         }
     }

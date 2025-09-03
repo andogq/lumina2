@@ -99,6 +99,21 @@ pub enum RValue {
     Aggregate {
         values: Vec<Operand>,
     },
+    Cast {
+        kind: CastKind,
+        op: Operand,
+        ty: Ty,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CastKind {
+    PointerCoercion(PointerCoercion),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PointerCoercion {
+    Unsize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

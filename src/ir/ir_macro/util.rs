@@ -29,17 +29,21 @@ macro_rules! split_token {
      * Duplicate one of the following rules with a new token after `step` to support splitting
      * different tokens.
      */
-    // Next token is semicolon. Extend `parts` with contents of `current`, and recurse.
+    // ;
     (step(;) -> $($mode:ident)? [$($callback:tt)+] [$($parts:tt)*] [$($current:tt)*] ; $($rest:tt)*) => {
         split_token!(step(;) -> $($mode)? [$($callback)+] [$($parts)* [$($current)*]] [] $($rest)*)
     };
-    // Next token is equals. Extend `parts` with contents of `current`, and recurse.
+    // =
     (step(=) -> $($mode:ident)? [$($callback:tt)+] [$($parts:tt)*] [$($current:tt)*] = $($rest:tt)*) => {
         split_token!(step(=) -> $($mode)? [$($callback)+] [$($parts)* [$($current)*]] [] $($rest)*)
     };
-    // Next token is comma. Extend `parts` with contents of `current`, and recurse.
+    // ,
     (step(,) -> $($mode:ident)? [$($callback:tt)+] [$($parts:tt)*] [$($current:tt)*] , $($rest:tt)*) => {
         split_token!(step(,) -> $($mode)? [$($callback)+] [$($parts)* [$($current)*]] [] $($rest)*)
+    };
+    // as
+    (step(as) -> $($mode:ident)? [$($callback:tt)+] [$($parts:tt)*] [$($current:tt)*] as $($rest:tt)*) => {
+        split_token!(step(as) -> $($mode)? [$($callback)+] [$($parts)* [$($current)*]] [] $($rest)*)
     };
 
     // Catch all case, token is unknown. Add it to `current`, and recurse.
@@ -71,23 +75,31 @@ macro_rules! split_token {
 #[cfg(test)]
 mod test {
     #[test]
-    fn semicolon() {
+    fn split_semicolon() {
         assert_eq!(split_token!([;] [stringify] a; b; c;), "[a] [b] [c]");
     }
 
     #[test]
-    fn equals() {
+    fn split_equals() {
         assert_eq!(split_token!([=] [stringify] a = b = c =), "[a] [b] [c]");
     }
 
     #[test]
-    fn comma() {
+    fn split_comma() {
         assert_eq!(split_token!([,] [stringify] a, b, c), "[a] [b] [c]");
     }
 
     #[test]
-    fn comma_trailing() {
+    fn split_comma_trailing() {
         assert_eq!(split_token!([,] [stringify] a, b, c,), "[a] [b] [c]");
+    }
+
+    #[test]
+    fn split_as() {
+        assert_eq!(
+            split_token!([as] without_trailing [stringify] a as &[u8]),
+            "[a] [&[u8]]"
+        );
     }
 
     #[test]

@@ -49,6 +49,11 @@ macro_rules! ir_ty {
 
         ir_ty!(insert [$tys] $crate::ir::TyInfo::Array { ty, length: $length })
     }};
+    (cb_array_parts [$tys:expr] [$($ty:tt)+]) => {{
+        let ty = ir_ty!([$tys] $($ty)+);
+
+        ir_ty!(insert [$tys] $crate::ir::TyInfo::Slice(ty))
+    }};
 
 
     /*
@@ -169,6 +174,33 @@ mod test {
                 },
                 ty => [[[u8; 10]; 3]],
                 expected => [TyInfo::Array { ty: inner_array, length: 3 }],
+            }
+        }
+    }
+
+    mod slice {
+        use super::*;
+
+        #[test]
+        fn simple_slice() {
+            assert_ty! {
+                {
+                    let inner = TyInfo::U8;
+                },
+                ty => [[u8]],
+                expected => [TyInfo::Slice(inner)]
+            }
+        }
+
+        #[test]
+        fn slice_ref() {
+            assert_ty! {
+                {
+                    let inner = TyInfo::U8;
+                    let slice = TyInfo::Slice(inner);
+                },
+                ty => [&[u8]],
+                expected => [TyInfo::Ref(slice)]
             }
         }
     }

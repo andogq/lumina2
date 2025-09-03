@@ -381,6 +381,7 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                     self.builder.build_store(ptr, value).unwrap();
                 }
             }
+            RValue::Cast { .. } => unimplemented!(),
         }
     }
 
@@ -460,6 +461,7 @@ impl<'ir, 'ctx> LlvmTys<'ir, 'ctx> {
                 .ctx
                 .ptr_type(AddressSpace::default())
                 .as_basic_type_enum(),
+            TyInfo::Slice(_) => unimplemented!(),
             TyInfo::Array { ty, length } => self
                 .of_ty(ty)
                 .array_type(length as u32)
