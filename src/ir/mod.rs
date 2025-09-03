@@ -128,6 +128,7 @@ pub enum BinOp {
 pub enum UnOp {
     Not,
     Neg,
+    PtrMetadata,
 }
 
 /// Describes how to 'create' a value. Essentially, where does a value come from, and how to get

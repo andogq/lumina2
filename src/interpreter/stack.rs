@@ -54,6 +54,13 @@ impl Stack {
                     self.write_value(ptr, &ty, value, tys);
                 });
             }
+            Value::FatPointer { ptr, data } => {
+                let ptr_buf = &mut buf[0..size_of_val(&ptr)];
+                ptr_buf.copy_from_slice(&ptr.to_ne_bytes());
+
+                let data_buf = &mut buf[size_of_val(&ptr)..];
+                data_buf.copy_from_slice(&data.to_ne_bytes());
+            }
         }
     }
 
@@ -66,9 +73,15 @@ impl Stack {
         match ty {
             TyInfo::U8 => Value::from_u8(u8::from_ne_bytes(buf.try_into().unwrap())),
             TyInfo::I8 => Value::from_i8(i8::from_ne_bytes(buf.try_into().unwrap())),
-            TyInfo::Ref(_) => {
-                Value::from_ref(Pointer::new(usize::from_ne_bytes(buf.try_into().unwrap())))
-            }
+            TyInfo::Ref(inner) => match tys.get(*inner) {
+                TyInfo::Slice(_) => Value::FatPointer {
+                    ptr: Pointer::new(usize::from_ne_bytes(
+                        buf[..size_of::<Pointer>()].try_into().unwrap(),
+                    )),
+                    data: usize::from_ne_bytes(buf[size_of::<Pointer>()..].try_into().unwrap()),
+                },
+                _ => Value::from_ref(Pointer::new(usize::from_ne_bytes(buf.try_into().unwrap()))),
+            },
             TyInfo::Slice(_) => unimplemented!(),
             TyInfo::Array { ty: _, length: _ } => unimplemented!(),
         }

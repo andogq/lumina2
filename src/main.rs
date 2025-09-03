@@ -113,17 +113,17 @@ mod test {
                     $($program)*
                 };
 
+                let expected = $expected;
+
                 let interpreter_output = Interpreter::new(&ctx).run(program).into_u8().unwrap();
+                assert_eq!(expected, interpreter_output, "interpreter");
+
                 let llvm_output = {
                     let llvm = Llvm::new(&ctx);
                     let module = llvm.new_module("module");
                     module.compile(program, stringify!($name));
                     module.run(stringify!($name))
                 };
-
-                let expected = $expected;
-
-                assert_eq!(expected, interpreter_output, "interpreter");
                 assert_eq!(expected, llvm_output, "llvm");
             }
         };
@@ -503,6 +503,8 @@ mod test {
             _1 = [const 1u8, const 5u8, const 7u8];
             _2 = &_1;
             _3 = _2 as &[u8] (PointerCoercion(Unsize));
+
+            _0 = PtrMetadata(_3);
 
             StorageLive(_3);
             StorageLive(_2);

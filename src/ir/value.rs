@@ -9,6 +9,7 @@ pub enum Value {
     I8(i8),
     Ref(Pointer),
     Array(Vec<Value>),
+    FatPointer { ptr: Pointer, data: usize },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -28,6 +29,7 @@ impl Value {
             Value::I8(_) => size_of::<i8>(),
             Value::Ref(_) => size_of::<Pointer>(),
             Value::Array(_) => unimplemented!(),
+            Value::FatPointer { .. } => size_of::<Pointer>() + size_of::<usize>(),
         }
     }
 
@@ -80,7 +82,7 @@ impl Value {
         match self {
             Value::U8(_) => tys.find_or_insert(TyInfo::U8),
             Value::I8(_) => tys.find_or_insert(TyInfo::I8),
-            Value::Ref(_) => panic!("cannoy have constant reference"),
+            Value::Ref(_) => panic!("cannot have constant reference"),
             Value::Array(values) => {
                 // WARN: Assuming all values are the same type.
                 assert!(
@@ -93,6 +95,7 @@ impl Value {
                     length: values.len(),
                 })
             }
+            Value::FatPointer { .. } => unimplemented!(),
         }
     }
 }
@@ -102,7 +105,11 @@ impl TyInfo {
         match self {
             TyInfo::U8 => size_of::<u8>(),
             TyInfo::I8 => size_of::<i8>(),
-            TyInfo::Ref(_) => size_of::<Pointer>(),
+            TyInfo::Ref(inner) => match tys.get(*inner) {
+                // If a ref to a slice, it's a fat pointer.
+                TyInfo::Slice(_) => size_of::<Pointer>() + size_of::<usize>(),
+                _ => size_of::<Pointer>(),
+            },
             TyInfo::Slice(_) => panic!("slices are unsized"),
             TyInfo::Array { ty, length } => tys.get(*ty).allocated_size(tys) * length,
         }

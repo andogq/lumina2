@@ -4,7 +4,10 @@ use crate::{
     BasicBlock, BinOp, Local, Operand, Place, Pointer, Projection, RValue, Statement, Terminator,
     Ty, TyInfo, UnOp, Value, indexed_vec,
     interpreter::stack::Stack,
-    ir::ctx::{Function, IrCtx},
+    ir::{
+        CastKind, PointerCoercion,
+        ctx::{Function, IrCtx},
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -229,13 +232,21 @@ impl<'ctx> Interpreter<'ctx> {
             RValue::UnaryOp { op, rhs } => {
                 let (rhs, ty) = self.resolve_operand(rhs);
 
-                (
-                    match op {
-                        UnOp::Not => !rhs,
-                        UnOp::Neg => -rhs,
-                    },
-                    ty,
-                )
+                match op {
+                    UnOp::Not => (!rhs, ty),
+                    UnOp::Neg => (-rhs, ty),
+                    UnOp::PtrMetadata => {
+                        let Value::FatPointer { ptr: _, data } = rhs else {
+                            panic!("can only access pointer metadata metadata of fat pointer");
+                        };
+
+                        (
+                            // HACK: Don't force data into u8
+                            Value::U8(data as u8),
+                            self.ctx.tys.find_or_insert(TyInfo::U8),
+                        )
+                    }
+                }
             }
             RValue::Aggregate { values } => {
                 assert!(!values.is_empty(), "cannot aggregate empty array");
@@ -255,7 +266,46 @@ impl<'ctx> Interpreter<'ctx> {
                     }),
                 )
             }
-            RValue::Cast { .. } => unimplemented!(),
+            RValue::Cast {
+                kind,
+                op,
+                ty: cast_ty,
+            } => {
+                let (op, op_ty) = self.resolve_operand(op);
+
+                match kind {
+                    CastKind::PointerCoercion(PointerCoercion::Unsize) => {
+                        let TyInfo::Ref(ref_ty) = self.ctx.tys.get(*cast_ty) else {
+                            panic!("can only unsize coerce to reference");
+                        };
+                        let TyInfo::Ref(op_ty) = self.ctx.tys.get(op_ty) else {
+                            panic!("can only unsize coerce if operand is a reference");
+                        };
+
+                        let op_ty = self.ctx.tys.get(op_ty);
+                        let ref_ty = self.ctx.tys.get(ref_ty);
+
+                        match (op_ty, ref_ty) {
+                            (
+                                TyInfo::Array {
+                                    ty: inner_ty,
+                                    length,
+                                },
+                                TyInfo::Slice(slice_ty),
+                            ) if inner_ty == slice_ty => {
+                                let Value::Ref(ptr) = op else {
+                                    panic!("cast operand expected to be pointer");
+                                };
+
+                                (Value::FatPointer { ptr, data: length }, *cast_ty)
+                            }
+                            (op_ty, ref_ty) => panic!(
+                                "cannot coerce pointer to {op_ty:?} into pointer of {ref_ty:?}"
+                            ),
+                        }
+                    }
+                }
+            }
         }
     }
 

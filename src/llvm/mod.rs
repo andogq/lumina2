@@ -423,6 +423,7 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                 ),
                 Value::Ref(pointer) => todo!(),
                 Value::Array(values) => todo!(),
+                Value::FatPointer { .. } => todo!(),
             },
         }
     }
