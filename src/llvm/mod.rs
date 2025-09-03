@@ -197,7 +197,11 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                 destination,
                 target,
             } => todo!(),
-            Terminator::Goto(basic_block) => todo!(),
+            Terminator::Goto(basic_block) => {
+                self.builder
+                    .build_unconditional_branch(self.basic_blocks[*basic_block])
+                    .unwrap();
+            }
             Terminator::Return => {
                 let ret_local = Local::zero();
 

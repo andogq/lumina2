@@ -425,4 +425,25 @@ mod test {
             return;
         }
     }
+
+    run_test! {
+        goto_terminator => [3u8]
+
+        let _0: u8;
+
+        bb0: {
+            _0 = const 1u8;
+            goto -> bb1;
+        }
+
+        bb1: {
+            _0 = const 2u8;
+            goto -> bb2;
+        }
+
+        bb2: {
+            _0 = const 3u8;
+            return;
+        }
+    }
 }
