@@ -136,17 +136,24 @@ impl<'ctx> Interpreter<'ctx> {
 
         let mut ty = local.ty;
         let mut ptr = local.ptr;
+        let mut ptr_data = None;
 
         for proj in &place.projection {
+            let mut next_ptr_data = None;
+
             match proj {
                 // Look up `ptr` in the stack, and replace `ptr` with that value.
                 Projection::Deref => {
                     // Read the reference pointer out of memory.
-                    ptr = self
-                        .stack
-                        .read_value(ptr, ty, &self.ctx.tys)
-                        .into_ref()
-                        .unwrap();
+                    ptr = match self.stack.read_value(ptr, ty, &self.ctx.tys) {
+                        Value::Ref(ptr) => ptr,
+                        Value::FatPointer { ptr, data } => {
+                            next_ptr_data = Some(data);
+
+                            ptr
+                        }
+                        _ => panic!("cannot dereference non-pointer"),
+                    };
 
                     // Determine the type of the reference.
                     let TyInfo::Ref(inner_ty) = &self.ctx.tys.get(ty) else {
@@ -162,12 +169,12 @@ impl<'ctx> Interpreter<'ctx> {
                     };
                 }
                 Projection::Index(index_local) => {
-                    let TyInfo::Array {
-                        ty: array_item_ty,
-                        length,
-                    } = &self.ctx.tys.get(ty)
-                    else {
-                        panic!("can only index array, found {ty:?}");
+                    let (array_item_ty, length) = match self.ctx.tys.get(ty) {
+                        TyInfo::Array { ty, length } => (ty, length),
+                        TyInfo::Slice(ty) => (ty, ptr_data.expect("pointer data from fat deref")),
+                        _ => {
+                            panic!("can only index array, found {:?}", self.ctx.tys.get(ty));
+                        }
                     };
 
                     let index_local = self.get_alive_local(*index_local);
@@ -178,7 +185,7 @@ impl<'ctx> Interpreter<'ctx> {
                         .expect("index must be u8") as usize;
 
                     assert!(
-                        index < *length,
+                        index < length,
                         "cannot index beyond array bounds: {index} (length is {length})"
                     );
 
@@ -187,13 +194,15 @@ impl<'ctx> Interpreter<'ctx> {
                         * self
                             .ctx
                             .tys
-                            .get(*array_item_ty)
+                            .get(array_item_ty)
                             .allocated_size(&self.ctx.tys);
 
                     // Update the type.
-                    ty = *array_item_ty;
+                    ty = array_item_ty;
                 }
             }
+
+            ptr_data = next_ptr_data;
         }
 
         (ptr, ty)

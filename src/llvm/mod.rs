@@ -14,8 +14,8 @@ use inkwell::{
 
 use crate::{
     ir::{
-        BasicBlock, BinOp, Body, Local, Operand, Place, Projection, RValue, Statement, Terminator,
-        Ty, TyInfo, Value,
+        BasicBlock, BinOp, Body, CastKind, Local, Operand, Place, PointerCoercion, Projection,
+        RValue, Statement, Terminator, Ty, TyInfo, UnOp, Value,
         ctx::{Function, IrCtx},
     },
     util::indexed_vec::IndexedVec,
@@ -256,27 +256,46 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                         panic!("can only deref a reference");
                     };
 
-                    ptr = self
-                        .builder
-                        .build_load(
-                            self.module
-                                .tys
-                                .get(self.module.llvm.ir.tys.find_or_insert(ty)),
-                            ptr,
-                            "deref",
-                        )
-                        .unwrap()
-                        .into_pointer_value();
+                    match self.module.llvm.ir.tys.get(inner_ty) {
+                        TyInfo::Slice(_) => {
+                            // Load pointer component of fat pointer
+                            ptr = self
+                                .builder
+                                .build_load(
+                                    // HACK: Directly pulling out the pointer type, assuming that
+                                    // the fat pointer ptr is at the start.
+                                    self.module.llvm.ctx.ptr_type(AddressSpace::default()),
+                                    ptr,
+                                    "deref",
+                                )
+                                .unwrap()
+                                .into_pointer_value();
+                        }
+                        _ => {
+                            ptr = self
+                                .builder
+                                .build_load(
+                                    self.module
+                                        .tys
+                                        .get(self.module.llvm.ir.tys.find_or_insert(ty)),
+                                    ptr,
+                                    "deref",
+                                )
+                                .unwrap()
+                                .into_pointer_value();
+                        }
+                    }
+
                     ty = self.module.llvm.ir.tys.get(inner_ty);
                 }
                 Projection::Field(_) => todo!(),
                 Projection::Index(local) => {
-                    let TyInfo::Array {
-                        ty: inner_ty,
-                        length: _,
-                    } = ty
-                    else {
-                        panic!("can only index an array");
+                    let inner_ty = match ty {
+                        TyInfo::Array { ty, .. } => ty,
+                        TyInfo::Slice(ty) => ty,
+                        _ => {
+                            panic!("can only index an array or slice");
+                        }
                     };
 
                     let (local_ptr, local_ty) = self.locals[*local];
@@ -346,7 +365,33 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                 };
                 self.builder.build_store(place_ptr, value).unwrap();
             }
-            RValue::UnaryOp { op, rhs } => todo!(),
+            RValue::UnaryOp { op, rhs } => {
+                let (rhs, rhs_ty) = self.get_operand(rhs);
+
+                match op {
+                    UnOp::Not => {
+                        todo!()
+                    }
+                    UnOp::Neg => {
+                        todo!()
+                    }
+                    UnOp::PtrMetadata => {
+                        let TyInfo::Ref(inner_ty) = rhs_ty else {
+                            panic!("can only get ptr metadata of reference")
+                        };
+                        let TyInfo::Slice(_) = self.module.llvm.ir.tys.get(inner_ty) else {
+                            panic!("can only get ptr metadata of slice reference");
+                        };
+
+                        // HACK: Assuming rhs is an array value
+                        let data = self
+                            .builder
+                            .build_extract_value(rhs.into_array_value(), 1, "extract data")
+                            .unwrap();
+                        self.builder.build_store(place_ptr, data).unwrap();
+                    }
+                }
+            }
             RValue::Aggregate { values } => {
                 let values = values
                     .iter()
@@ -381,7 +426,80 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                     self.builder.build_store(ptr, value).unwrap();
                 }
             }
-            RValue::Cast { .. } => unimplemented!(),
+            RValue::Cast {
+                kind,
+                op,
+                ty: cast_ty,
+            } => {
+                let (op, op_ty) = self.get_operand(op);
+
+                match kind {
+                    CastKind::PointerCoercion(PointerCoercion::Unsize) => {
+                        let TyInfo::Ref(_place_inner) = place_ty else {
+                            panic!("can only store coercion in reference");
+                        };
+
+                        let TyInfo::Ref(ref_ty) = self.module.llvm.ir.tys.get(*cast_ty) else {
+                            panic!("can only unsize coerce to reference");
+                        };
+                        let TyInfo::Ref(op_ty) = op_ty else {
+                            panic!("can only unsize coerce if operand is a reference");
+                        };
+
+                        let op_ty = self.module.llvm.ir.tys.get(op_ty);
+                        let ref_ty = self.module.llvm.ir.tys.get(ref_ty);
+
+                        match (op_ty, ref_ty) {
+                            (
+                                TyInfo::Array {
+                                    ty: inner_ty,
+                                    length,
+                                },
+                                TyInfo::Slice(slice_ty),
+                            ) if inner_ty == slice_ty => {
+                                let ptr = op.into_pointer_value();
+
+                                let data_ptr = {
+                                    // HACK: Assumes that fat pointers are allocated as an array of
+                                    // two pointers. This will access the second item (the data).
+                                    let pointee_ty =
+                                        self.module.llvm.ctx.ptr_type(AddressSpace::default());
+                                    let ordered_indexes =
+                                        &[self.module.llvm.ctx.i8_type().const_int(1, false)];
+                                    unsafe {
+                                        self.builder.build_in_bounds_gep(
+                                            pointee_ty,
+                                            place_ptr,
+                                            ordered_indexes,
+                                            "fat pointer data index",
+                                        )
+                                    }
+                                    .unwrap()
+                                };
+
+                                // Write the pointer to the start.
+                                self.builder.build_store(place_ptr, ptr).unwrap();
+
+                                // Write the data to the end.
+                                self.builder
+                                    .build_store(
+                                        data_ptr,
+                                        // HACK: Directly creating int for the length.
+                                        self.module
+                                            .llvm
+                                            .ctx
+                                            .i64_type()
+                                            .const_int(length as u64, false),
+                                    )
+                                    .unwrap();
+                            }
+                            (op_ty, ref_ty) => panic!(
+                                "cannot coerce pointer to {op_ty:?} into pointer of {ref_ty:?}"
+                            ),
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -457,11 +575,20 @@ impl<'ir, 'ctx> LlvmTys<'ir, 'ctx> {
         match self.llvm.ir.tys.get(ty) {
             TyInfo::U8 => self.llvm.ctx.i8_type().as_basic_type_enum(),
             TyInfo::I8 => self.llvm.ctx.i8_type().as_basic_type_enum(),
-            TyInfo::Ref(_) => self
-                .llvm
-                .ctx
-                .ptr_type(AddressSpace::default())
-                .as_basic_type_enum(),
+            TyInfo::Ref(inner) => match self.llvm.ir.tys.get(inner) {
+                // References to slices are fat pointers, so are 2 pointers wide.
+                TyInfo::Slice(_) => self
+                    .llvm
+                    .ctx
+                    .ptr_type(AddressSpace::default())
+                    .array_type(2)
+                    .as_basic_type_enum(),
+                _ => self
+                    .llvm
+                    .ctx
+                    .ptr_type(AddressSpace::default())
+                    .as_basic_type_enum(),
+            },
             TyInfo::Slice(_) => unimplemented!(),
             TyInfo::Array { ty, length } => self
                 .of_ty(ty)
