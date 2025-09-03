@@ -446,4 +446,44 @@ mod test {
             return;
         }
     }
+
+    run_test! {
+        switch_int_terminator_target => [10u8]
+
+        let _0: u8;
+
+        bb0: {
+            _0 = const 3u8;
+            switchInt(_0) -> [0u8: bb1, 1u8: bb1, 3u8: bb2, otherwise: bb1];
+        }
+
+        bb1: {
+            return;
+        }
+
+        bb2: {
+            _0 = const 10u8;
+            return;
+        }
+    }
+
+    run_test! {
+        switch_int_terminator_otherwise => [10u8]
+
+        let _0: u8;
+
+        bb0: {
+            _0 = const 3u8;
+            switchInt(_0) -> [0u8: bb1, 1u8: bb1, otherwise: bb2];
+        }
+
+        bb1: {
+            return;
+        }
+
+        bb2: {
+            _0 = const 10u8;
+            return;
+        }
+    }
 }

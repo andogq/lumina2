@@ -217,7 +217,31 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                 discriminator,
                 targets,
                 otherwise,
-            } => todo!(),
+            } => {
+                self.builder
+                    .build_switch(
+                        self.get_operand(discriminator).0.into_int_value(),
+                        self.basic_blocks[*otherwise],
+                        &targets
+                            .iter()
+                            .map(|(value, bb)| {
+                                (
+                                    self.module
+                                        .tys
+                                        .get(value.get_const_ty(&self.module.llvm.ir.tys))
+                                        .into_int_type()
+                                        .const_int(
+                                            // HACK: Only supports u8
+                                            value.clone().into_u8().unwrap() as u64,
+                                            false,
+                                        ),
+                                    self.basic_blocks[*bb],
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                    .unwrap();
+            }
         }
     }
 
@@ -247,7 +271,6 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                 }
                 Projection::Field(_) => todo!(),
                 Projection::Index(local) => {
-                    let array_ty = self.module.llvm.ir.tys.find_or_insert(ty.clone());
                     let TyInfo::Array {
                         ty: inner_ty,
                         length: _,
