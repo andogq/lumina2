@@ -160,11 +160,11 @@ fn resolve_operand<B: BasicBlock>(
             // TODO: Use something other than `Value` which doesn't have non-constant variants.
             match value {
                 Value::U8(value) => (
-                    block.c::<U8<B::Value>>(*value).into_integer_value(),
+                    block.c(*value).into_integer_value(),
                     tys.find_or_insert(TyInfo::U8),
                 ),
                 Value::I8(value) => (
-                    block.c::<I8<B::Value>>(*value).into_integer_value(),
+                    block.c(*value).into_integer_value(),
                     tys.find_or_insert(TyInfo::I8),
                 ),
                 _ => panic!("invalid constant value"),
@@ -200,7 +200,7 @@ pub trait BasicBlock {
 
     fn p_deref(&mut self, ptr: Self::Pointer) -> Self::Pointer;
 
-    fn c<C: Constant<<Self::Value as ValueBackend>::Ctx>>(&mut self, value: C::Value) -> C;
+    fn c<C: Constant<Self::Value>>(&mut self, value: C) -> C::Value;
 
     fn l_u8(&mut self, ptr: Self::Pointer) -> U8<Self::Value>;
     fn l_i8(&mut self, ptr: Self::Pointer) -> I8<Self::Value>;

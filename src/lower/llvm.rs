@@ -12,7 +12,7 @@ use inkwell::{
 use crate::{
     ir::{
         Ty, TyInfo, Tys,
-        integer::{Constant, FromConstant, I8, Integer, IntegerValue, U8, ValueBackend},
+        integer::{Constant, I8, Integer, IntegerValue, U8, ValueBackend},
     },
     lower,
 };
@@ -154,8 +154,8 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
             .into_pointer_value()
     }
 
-    fn c<C: Constant<<Self::Value as ValueBackend>::Ctx>>(&mut self, value: C::Value) -> C {
-        C::new(self.ctx, value)
+    fn c<C: Constant<Self::Value>>(&mut self, value: C) -> C::Value {
+        C::create(self.ctx, value)
     }
 
     fn l_u8(&mut self, ptr: Self::Pointer) -> U8<Self::Value> {
@@ -187,14 +187,12 @@ impl<'ctx> lower::ValueBackend for Value<'ctx> {
 
     type I8 = IntValue<'ctx>;
     type U8 = IntValue<'ctx>;
-}
-impl<'ctx> FromConstant<&'ctx Context, i8> for IntValue<'ctx> {
-    fn from_constant(ctx: &'ctx Context, value: i8) -> Self {
+
+    fn create_i8(ctx: Self::Ctx, value: i8) -> <Value<'ctx> as ValueBackend>::I8 {
         ctx.i8_type().const_int(value as u64, true)
     }
-}
-impl<'ctx> FromConstant<&'ctx Context, u8> for IntValue<'ctx> {
-    fn from_constant(ctx: &'ctx Context, value: u8) -> Self {
+
+    fn create_u8(ctx: Self::Ctx, value: u8) -> <Value<'ctx> as ValueBackend>::U8 {
         ctx.i8_type().const_int(value as u64, false)
     }
 }

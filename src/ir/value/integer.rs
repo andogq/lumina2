@@ -3,22 +3,15 @@ use std::fmt::Debug;
 pub trait ValueBackend {
     type Ctx;
 
-    type I8: FromConstant<Self::Ctx, i8> + Clone + Debug;
-    type U8: FromConstant<Self::Ctx, u8> + Clone + Debug;
+    type I8: Clone + Debug;
+    type U8: Clone + Debug;
+
+    fn create_i8(ctx: Self::Ctx, value: i8) -> Self::I8;
+    fn create_u8(ctx: Self::Ctx, value: u8) -> Self::U8;
 }
 
 pub trait Integer<B: ValueBackend> {
     fn into_integer_value(self) -> IntegerValue<B>;
-}
-
-pub trait Constant<Ctx> {
-    type Value;
-
-    fn new(ctx: Ctx, value: Self::Value) -> Self;
-}
-
-pub trait FromConstant<Ctx, Value> {
-    fn from_constant(ctx: Ctx, value: Value) -> Self;
 }
 
 #[derive(Clone, Debug)]
@@ -28,26 +21,12 @@ impl<B: ValueBackend> Integer<B> for I8<B> {
         self.into()
     }
 }
-impl<B: ValueBackend> Constant<B::Ctx> for I8<B> {
-    type Value = i8;
-
-    fn new(ctx: B::Ctx, value: Self::Value) -> Self {
-        Self(B::I8::from_constant(ctx, value))
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct U8<B: ValueBackend>(pub B::U8);
 impl<B: ValueBackend> Integer<B> for U8<B> {
     fn into_integer_value(self) -> IntegerValue<B> {
         self.into()
-    }
-}
-impl<B: ValueBackend> Constant<B::Ctx> for U8<B> {
-    type Value = u8;
-
-    fn new(ctx: B::Ctx, value: Self::Value) -> Self {
-        Self(B::U8::from_constant(ctx, value))
     }
 }
 
@@ -79,5 +58,27 @@ impl<B: ValueBackend> From<I8<B>> for IntegerValue<B> {
 impl<B: ValueBackend> From<U8<B>> for IntegerValue<B> {
     fn from(value: U8<B>) -> Self {
         Self::U8(value)
+    }
+}
+
+pub trait Constant<B: ValueBackend> {
+    type Value;
+
+    fn create(ctx: B::Ctx, value: Self) -> Self::Value;
+}
+
+impl<B: ValueBackend> Constant<B> for u8 {
+    type Value = U8<B>;
+
+    fn create(ctx: B::Ctx, value: Self) -> Self::Value {
+        U8(B::create_u8(ctx, value))
+    }
+}
+
+impl<B: ValueBackend> Constant<B> for i8 {
+    type Value = I8<B>;
+
+    fn create(ctx: B::Ctx, value: Self) -> Self::Value {
+        I8(B::create_i8(ctx, value))
     }
 }
