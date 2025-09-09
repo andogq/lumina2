@@ -1,3 +1,5 @@
+pub mod integer;
+
 use std::cell::RefCell;
 
 use crate::{indexed_vec, ir::Pointer};

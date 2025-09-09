@@ -3,6 +3,7 @@
 mod interpreter;
 mod ir;
 mod llvm;
+mod lower;
 mod util;
 
 use crate::{

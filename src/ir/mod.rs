@@ -41,6 +41,12 @@ pub struct LocalDecl {
 indexed_vec!(pub key Local);
 indexed_vec!(pub Locals<Local, LocalDecl>);
 
+impl Display for Local {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "_{}", self.0)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Statement {
     /// Assign a value into a place.
