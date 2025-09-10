@@ -155,7 +155,7 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
     }
 
     fn c<C: Constant<Self::Value>>(&mut self, value: C) -> C::Value {
-        C::create(self.ctx, value)
+        C::create(self, value)
     }
 
     fn l_u8(&mut self, ptr: Self::Pointer) -> U8<Self::Value> {
@@ -179,21 +179,25 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
     fn s_i8(&mut self, ptr: Self::Pointer, value: I8<Self::Value>) {
         self.builder.build_store(ptr, value.0).unwrap();
     }
+
+    fn l<T: Integer<Self::Value>>(&mut self, ptr: Self::Pointer) -> T {
+        todo!()
+    }
 }
 
 pub struct Value<'ctx>(PhantomData<&'ctx ()>);
 impl<'ctx> lower::ValueBackend for Value<'ctx> {
-    type Ctx = &'ctx Context;
+    type Ctx = BasicBlock<'ctx>;
 
     type I8 = IntValue<'ctx>;
     type U8 = IntValue<'ctx>;
 
-    fn create_i8(ctx: Self::Ctx, value: i8) -> <Value<'ctx> as ValueBackend>::I8 {
-        ctx.i8_type().const_int(value as u64, true)
+    fn create_i8(bb: &Self::Ctx, value: i8) -> <Value<'ctx> as ValueBackend>::I8 {
+        bb.ctx.i8_type().const_int(value as u64, true)
     }
 
-    fn create_u8(ctx: Self::Ctx, value: u8) -> <Value<'ctx> as ValueBackend>::U8 {
-        ctx.i8_type().const_int(value as u64, false)
+    fn create_u8(bb: &Self::Ctx, value: u8) -> <Value<'ctx> as ValueBackend>::U8 {
+        bb.ctx.i8_type().const_int(value as u64, false)
     }
 }
 

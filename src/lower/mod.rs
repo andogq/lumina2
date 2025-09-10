@@ -202,6 +202,8 @@ pub trait BasicBlock {
 
     fn c<C: Constant<Self::Value>>(&mut self, value: C) -> C::Value;
 
+    fn l<T: Integer<Self::Value>>(&mut self, ptr: Self::Pointer) -> T;
+
     fn l_u8(&mut self, ptr: Self::Pointer) -> U8<Self::Value>;
     fn l_i8(&mut self, ptr: Self::Pointer) -> I8<Self::Value>;
 

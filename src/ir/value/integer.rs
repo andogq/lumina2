@@ -6,8 +6,8 @@ pub trait ValueBackend {
     type I8: Clone + Debug;
     type U8: Clone + Debug;
 
-    fn create_i8(ctx: Self::Ctx, value: i8) -> Self::I8;
-    fn create_u8(ctx: Self::Ctx, value: u8) -> Self::U8;
+    fn create_i8(ctx: &Self::Ctx, value: i8) -> Self::I8;
+    fn create_u8(ctx: &Self::Ctx, value: u8) -> Self::U8;
 }
 
 pub trait Integer<B: ValueBackend> {
@@ -64,13 +64,13 @@ impl<B: ValueBackend> From<U8<B>> for IntegerValue<B> {
 pub trait Constant<B: ValueBackend> {
     type Value;
 
-    fn create(ctx: B::Ctx, value: Self) -> Self::Value;
+    fn create(ctx: &B::Ctx, value: Self) -> Self::Value;
 }
 
 impl<B: ValueBackend> Constant<B> for u8 {
     type Value = U8<B>;
 
-    fn create(ctx: B::Ctx, value: Self) -> Self::Value {
+    fn create(ctx: &B::Ctx, value: Self) -> Self::Value {
         U8(B::create_u8(ctx, value))
     }
 }
@@ -78,7 +78,7 @@ impl<B: ValueBackend> Constant<B> for u8 {
 impl<B: ValueBackend> Constant<B> for i8 {
     type Value = I8<B>;
 
-    fn create(ctx: B::Ctx, value: Self) -> Self::Value {
+    fn create(ctx: &B::Ctx, value: Self) -> Self::Value {
         I8(B::create_i8(ctx, value))
     }
 }
