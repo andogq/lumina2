@@ -74,8 +74,14 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
 
                         assert_eq!(place_ty, value_ty);
                     }
-                    Statement::StorageDead(local) => todo!(),
-                    Statement::StorageLive(local) => todo!(),
+                    Statement::StorageDead(local) => {
+                        let (ptr, _) = &locals[local];
+                        block.storage_dead(ptr.clone());
+                    }
+                    Statement::StorageLive(local) => {
+                        let (ptr, _) = &locals[local];
+                        block.storage_live(ptr.clone());
+                    }
                 }
             }
 
@@ -174,9 +180,11 @@ fn resolve_operand<B: BasicBlock>(
 }
 
 pub trait Backend<'ctx>: Sized {
-    type Function: Function<'ctx>;
+    type Function<'backend>: Function<'ctx>
+    where
+        Self: 'backend;
 
-    fn add_function(&self, name: &str, ret_ty: Ty) -> Self::Function;
+    fn add_function<'backend>(&'backend self, name: &str, ret_ty: Ty) -> Self::Function<'backend>;
 }
 
 pub trait Function<'ctx> {
@@ -195,6 +203,9 @@ pub trait BasicBlock {
     fn integer_add<I: Integer<Self::Value>>(&mut self, lhs: I, rhs: I);
 
     fn term_return(&mut self, value: IntegerValue<Self::Value>);
+
+    fn storage_live(&mut self, ptr: Self::Pointer);
+    fn storage_dead(&mut self, ptr: Self::Pointer);
 
     fn p_deref(&mut self, ptr: Self::Pointer) -> Self::Pointer;
 

@@ -5,6 +5,7 @@ use inkwell::{
     builder::Builder,
     context::Context,
     execution_engine::JitFunction,
+    intrinsics::Intrinsic,
     module::Module,
     types::{BasicType, BasicTypeEnum},
     values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue},
@@ -44,24 +45,28 @@ impl<'ctx, 'ir> Llvm<'ctx, 'ir> {
     }
 }
 impl<'ctx, 'ir> lower::Backend<'ctx> for Llvm<'ctx, 'ir> {
-    type Function = Function<'ctx, 'ir>;
+    type Function<'backend>
+        = Function<'ctx, 'ir, 'backend>
+    where
+        Self: 'backend;
 
-    fn add_function(&self, name: &str, ret_ty: Ty) -> Self::Function {
+    fn add_function<'backend>(&'backend self, name: &str, ret_ty: Ty) -> Self::Function<'backend> {
         Function::new(self.ctx, &self.module, self.tys, name, ret_ty)
     }
 }
 
-pub struct Function<'ctx, 'ir> {
+pub struct Function<'ctx, 'ir, 'backend> {
     ctx: &'ctx Context,
+    module: &'backend Module<'ctx>,
     tys: &'ir Tys,
     builder: Builder<'ctx>,
     function: FunctionValue<'ctx>,
     entry_bb: inkwell::basic_block::BasicBlock<'ctx>,
 }
-impl<'ctx, 'ir> Function<'ctx, 'ir> {
+impl<'ctx, 'ir, 'backend> Function<'ctx, 'ir, 'backend> {
     pub fn new(
         ctx: &'ctx Context,
-        module: &Module<'ctx>,
+        module: &'backend Module<'ctx>,
         tys: &'ir Tys,
         name: &str,
         ret_ty: Ty,
@@ -82,12 +87,13 @@ impl<'ctx, 'ir> Function<'ctx, 'ir> {
             entry_bb: ctx.append_basic_block(function, "entry"),
 
             ctx,
+            module,
             tys,
         }
     }
 }
-impl<'ctx, 'ir> lower::Function<'ctx> for Function<'ctx, 'ir> {
-    type BasicBlock = BasicBlock<'ctx>;
+impl<'ctx, 'ir, 'backend> lower::Function<'ctx> for Function<'ctx, 'ir, 'backend> {
+    type BasicBlock = BasicBlock<'ctx, 'backend>;
     type Pointer = PointerValue<'ctx>;
 
     fn declare_local(&mut self, ty: Ty, name: &str) -> Self::Pointer {
@@ -131,6 +137,7 @@ impl<'ctx, 'ir> lower::Function<'ctx> for Function<'ctx, 'ir> {
 
         BasicBlock {
             ctx: self.ctx,
+            module: self.module,
             builder: {
                 let builder = self.ctx.create_builder();
                 builder.position_at_end(bb);
@@ -141,12 +148,13 @@ impl<'ctx, 'ir> lower::Function<'ctx> for Function<'ctx, 'ir> {
     }
 }
 
-pub struct BasicBlock<'ctx> {
+pub struct BasicBlock<'ctx, 'backend> {
     ctx: &'ctx Context,
+    module: &'backend Module<'ctx>,
     builder: Builder<'ctx>,
     bb: inkwell::basic_block::BasicBlock<'ctx>,
 }
-impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
+impl<'ctx, 'backend> lower::BasicBlock for BasicBlock<'ctx, 'backend> {
     type Pointer = PointerValue<'ctx>;
     type Value = Value<'ctx>;
 
@@ -157,6 +165,26 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
     fn term_return(&mut self, value: IntegerValue<Self::Value>) {
         self.builder
             .build_return(Some(&value.as_basic_value_enum()))
+            .unwrap();
+    }
+
+    fn storage_live(&mut self, ptr: Self::Pointer) {
+        let intrinsic = Intrinsic::find("llvm.lifetime.start").unwrap();
+        let intrinsic_fn = intrinsic
+            .get_declaration(&self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
+            .unwrap();
+        self.builder
+            .build_call(intrinsic_fn, &[ptr.into()], "lifetime.start")
+            .unwrap();
+    }
+
+    fn storage_dead(&mut self, ptr: Self::Pointer) {
+        let intrinsic = Intrinsic::find("llvm.lifetime.end").unwrap();
+        let intrinsic_fn = intrinsic
+            .get_declaration(&self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
+            .unwrap();
+        self.builder
+            .build_call(intrinsic_fn, &[ptr.into()], "lifetime.end")
             .unwrap();
     }
 
