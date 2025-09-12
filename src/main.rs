@@ -6,10 +6,13 @@ mod llvm;
 mod lower;
 mod util;
 
+use inkwell::context::Context;
+
 use crate::{
     interpreter::Interpreter,
     ir::{ctx::IrCtx, *},
     llvm::Llvm,
+    lower::{llvm::Llvm as LowerLlvm, lower},
 };
 
 fn main() {
@@ -98,6 +101,11 @@ fn main() {
     let interpreter_output = Interpreter::new(&ctx).run(add_something);
 
     assert_eq!(llvm_output, interpreter_output.into_u8().unwrap());
+
+    let llvm_ctx = Context::create();
+    let mut backend = LowerLlvm::new(&llvm_ctx, &ctx.tys);
+    lower(&ctx, &mut backend);
+    dbg!(backend.run("function_name"));
 }
 
 #[cfg(test)]

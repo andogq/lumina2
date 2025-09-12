@@ -1,13 +1,8 @@
 use std::fmt::Debug;
 
 pub trait ValueBackend {
-    type Ctx;
-
     type I8: Clone + Debug;
     type U8: Clone + Debug;
-
-    fn create_i8(ctx: &Self::Ctx, value: i8) -> Self::I8;
-    fn create_u8(ctx: &Self::Ctx, value: u8) -> Self::U8;
 }
 
 pub trait Integer<B: ValueBackend> {
@@ -58,27 +53,5 @@ impl<B: ValueBackend> From<I8<B>> for IntegerValue<B> {
 impl<B: ValueBackend> From<U8<B>> for IntegerValue<B> {
     fn from(value: U8<B>) -> Self {
         Self::U8(value)
-    }
-}
-
-pub trait Constant<B: ValueBackend> {
-    type Value;
-
-    fn create(ctx: &B::Ctx, value: Self) -> Self::Value;
-}
-
-impl<B: ValueBackend> Constant<B> for u8 {
-    type Value = U8<B>;
-
-    fn create(ctx: &B::Ctx, value: Self) -> Self::Value {
-        U8(B::create_u8(ctx, value))
-    }
-}
-
-impl<B: ValueBackend> Constant<B> for i8 {
-    type Value = I8<B>;
-
-    fn create(ctx: &B::Ctx, value: Self) -> Self::Value {
-        I8(B::create_i8(ctx, value))
     }
 }

@@ -4,6 +4,7 @@ use inkwell::{
     AddressSpace,
     builder::Builder,
     context::Context,
+    execution_engine::JitFunction,
     module::Module,
     types::{BasicType, BasicTypeEnum},
     values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue},
@@ -12,46 +13,59 @@ use inkwell::{
 use crate::{
     ir::{
         Ty, TyInfo, Tys,
-        integer::{Constant, I8, Integer, IntegerValue, U8, ValueBackend},
+        integer::{I8, Integer, IntegerValue, U8},
     },
     lower,
 };
 
-pub struct Llvm<'ir> {
-    ctx: Context,
+pub struct Llvm<'ctx, 'ir> {
+    ctx: &'ctx Context,
+    module: Module<'ctx>,
     tys: &'ir Tys,
 }
-impl<'ir> Llvm<'ir> {
-    pub fn new(tys: &'ir Tys) -> Self {
+impl<'ctx, 'ir> Llvm<'ctx, 'ir> {
+    pub fn new(ctx: &'ctx Context, tys: &'ir Tys) -> Self {
         Self {
-            ctx: Context::create(),
+            ctx,
+            module: ctx.create_module("some_module"),
             tys,
         }
     }
-}
-impl<'ir> lower::Backend for Llvm<'ir> {
-    type Function<'ctx>
-        = Function<'ctx>
-    where
-        'ir: 'ctx;
 
-    fn add_function<'ctx>(&'ctx self, name: &str, ret_ty: Ty) -> Self::Function<'ctx> {
-        Function::new(&self.ctx, &self.tys, name, ret_ty)
+    pub fn run(&self, name: &str) -> u8 {
+        let engine = self
+            .module
+            .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+            .unwrap();
+        let f: JitFunction<'ctx, unsafe extern "C" fn() -> u8> =
+            unsafe { engine.get_function(name).unwrap() };
+
+        unsafe { f.call() }
+    }
+}
+impl<'ctx, 'ir> lower::Backend<'ctx> for Llvm<'ctx, 'ir> {
+    type Function = Function<'ctx, 'ir>;
+
+    fn add_function(&self, name: &str, ret_ty: Ty) -> Self::Function {
+        Function::new(self.ctx, &self.module, self.tys, name, ret_ty)
     }
 }
 
-pub struct Function<'ctx> {
+pub struct Function<'ctx, 'ir> {
     ctx: &'ctx Context,
-    tys: &'ctx Tys,
-    module: Module<'ctx>,
+    tys: &'ir Tys,
     builder: Builder<'ctx>,
     function: FunctionValue<'ctx>,
     entry_bb: inkwell::basic_block::BasicBlock<'ctx>,
 }
-impl<'ctx> Function<'ctx> {
-    pub fn new(ctx: &'ctx Context, tys: &'ctx Tys, name: &str, ret_ty: Ty) -> Self {
-        // TODO: Module name
-        let module = ctx.create_module("some_module");
+impl<'ctx, 'ir> Function<'ctx, 'ir> {
+    pub fn new(
+        ctx: &'ctx Context,
+        module: &Module<'ctx>,
+        tys: &'ir Tys,
+        name: &str,
+        ret_ty: Ty,
+    ) -> Self {
         let function = module.add_function(
             name,
             to_llvm_ty(ret_ty, tys, ctx).fn_type(
@@ -69,11 +83,10 @@ impl<'ctx> Function<'ctx> {
 
             ctx,
             tys,
-            module,
         }
     }
 }
-impl<'ctx> lower::Function<'ctx> for Function<'ctx> {
+impl<'ctx, 'ir> lower::Function<'ctx> for Function<'ctx, 'ir> {
     type BasicBlock = BasicBlock<'ctx>;
     type Pointer = PointerValue<'ctx>;
 
@@ -154,8 +167,11 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
             .into_pointer_value()
     }
 
-    fn c<C: Constant<Self::Value>>(&mut self, value: C) -> C::Value {
-        C::create(self, value)
+    fn c_i8(&mut self, value: i8) -> I8<Self::Value> {
+        I8(self.ctx.i8_type().const_int(value as u64, true))
+    }
+    fn c_u8(&mut self, value: u8) -> U8<Self::Value> {
+        U8(self.ctx.i8_type().const_int(value as u64, false))
     }
 
     fn l_u8(&mut self, ptr: Self::Pointer) -> U8<Self::Value> {
@@ -179,26 +195,12 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
     fn s_i8(&mut self, ptr: Self::Pointer, value: I8<Self::Value>) {
         self.builder.build_store(ptr, value.0).unwrap();
     }
-
-    fn l<T: Integer<Self::Value>>(&mut self, ptr: Self::Pointer) -> T {
-        todo!()
-    }
 }
 
 pub struct Value<'ctx>(PhantomData<&'ctx ()>);
 impl<'ctx> lower::ValueBackend for Value<'ctx> {
-    type Ctx = BasicBlock<'ctx>;
-
     type I8 = IntValue<'ctx>;
     type U8 = IntValue<'ctx>;
-
-    fn create_i8(bb: &Self::Ctx, value: i8) -> <Value<'ctx> as ValueBackend>::I8 {
-        bb.ctx.i8_type().const_int(value as u64, true)
-    }
-
-    fn create_u8(bb: &Self::Ctx, value: u8) -> <Value<'ctx> as ValueBackend>::U8 {
-        bb.ctx.i8_type().const_int(value as u64, false)
-    }
 }
 
 trait IntegerValueExt<'ctx> {

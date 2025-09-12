@@ -1,15 +1,15 @@
 mod interpreter;
-mod llvm;
+pub mod llvm;
 
 use std::collections::HashMap;
 
 use crate::ir::{
     Local, Operand, Place, Projection, RValue, Statement, Terminator, Ty, TyInfo, Tys, Value,
     ctx::IrCtx,
-    integer::{Constant, I8, Integer, IntegerValue, U8, ValueBackend},
+    integer::{I8, Integer, IntegerValue, U8, ValueBackend},
 };
 
-pub fn lower<B: Backend>(ir: &IrCtx, backend: B) {
+pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
     // Forward declare all the functions.
     let mut functions = ir
         .functions
@@ -173,12 +173,10 @@ fn resolve_operand<B: BasicBlock>(
     }
 }
 
-pub trait Backend: Sized {
-    type Function<'ctx>: Function<'ctx>
-    where
-        Self: 'ctx;
+pub trait Backend<'ctx>: Sized {
+    type Function: Function<'ctx>;
 
-    fn add_function<'ctx>(&'ctx self, name: &str, ret_ty: Ty) -> Self::Function<'ctx>;
+    fn add_function(&self, name: &str, ret_ty: Ty) -> Self::Function;
 }
 
 pub trait Function<'ctx> {
@@ -200,13 +198,68 @@ pub trait BasicBlock {
 
     fn p_deref(&mut self, ptr: Self::Pointer) -> Self::Pointer;
 
-    fn c<C: Constant<Self::Value>>(&mut self, value: C) -> C::Value;
+    fn c<C: Constant<Self>>(&mut self, value: C) -> C::Value {
+        C::create(self, value)
+    }
+    fn c_u8(&mut self, value: u8) -> U8<Self::Value>;
+    fn c_i8(&mut self, value: i8) -> I8<Self::Value>;
 
-    fn l<T: Integer<Self::Value>>(&mut self, ptr: Self::Pointer) -> T;
-
+    fn l<T: BbPrim<Self>>(&mut self, ptr: Self::Pointer) -> T {
+        T::load(self, ptr)
+    }
     fn l_u8(&mut self, ptr: Self::Pointer) -> U8<Self::Value>;
     fn l_i8(&mut self, ptr: Self::Pointer) -> I8<Self::Value>;
 
+    fn s<T: BbPrim<Self>>(&mut self, ptr: Self::Pointer, value: T) {
+        T::store(self, ptr, value);
+    }
     fn s_u8(&mut self, ptr: Self::Pointer, value: U8<Self::Value>);
     fn s_i8(&mut self, ptr: Self::Pointer, value: I8<Self::Value>);
+}
+
+pub trait BbPrim<B: BasicBlock + ?Sized> {
+    fn load(bb: &mut B, ptr: B::Pointer) -> Self;
+    fn store(bb: &mut B, ptr: B::Pointer, value: Self);
+}
+
+impl<B: BasicBlock> BbPrim<B> for U8<B::Value> {
+    fn load(bb: &mut B, ptr: <B as BasicBlock>::Pointer) -> Self {
+        bb.l_u8(ptr)
+    }
+
+    fn store(bb: &mut B, ptr: <B as BasicBlock>::Pointer, value: Self) {
+        bb.s_u8(ptr, value);
+    }
+}
+
+impl<B: BasicBlock> BbPrim<B> for I8<B::Value> {
+    fn load(bb: &mut B, ptr: <B as BasicBlock>::Pointer) -> Self {
+        bb.l_i8(ptr)
+    }
+
+    fn store(bb: &mut B, ptr: <B as BasicBlock>::Pointer, value: Self) {
+        bb.s_i8(ptr, value);
+    }
+}
+
+pub trait Constant<B: BasicBlock + ?Sized> {
+    type Value;
+
+    fn create(bb: &mut B, value: Self) -> Self::Value;
+}
+
+impl<B: BasicBlock> Constant<B> for u8 {
+    type Value = U8<B::Value>;
+
+    fn create(bb: &mut B, value: Self) -> Self::Value {
+        bb.c_u8(value)
+    }
+}
+
+impl<B: BasicBlock> Constant<B> for i8 {
+    type Value = I8<B::Value>;
+
+    fn create(bb: &mut B, value: Self) -> Self::Value {
+        bb.c_i8(value)
+    }
 }
