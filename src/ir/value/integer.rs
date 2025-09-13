@@ -6,22 +6,35 @@ pub trait ValueBackend {
 }
 
 pub trait Integer<B: ValueBackend> {
+    type Inner;
+
     fn into_integer_value(self) -> IntegerValue<B>;
+    fn into_inner(self) -> Self::Inner;
 }
 
 #[derive(Clone, Debug)]
 pub struct I8<B: ValueBackend>(pub B::I8);
 impl<B: ValueBackend> Integer<B> for I8<B> {
+    type Inner = B::I8;
+
     fn into_integer_value(self) -> IntegerValue<B> {
         self.into()
+    }
+    fn into_inner(self) -> Self::Inner {
+        self.0
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct U8<B: ValueBackend>(pub B::U8);
 impl<B: ValueBackend> Integer<B> for U8<B> {
+    type Inner = B::U8;
+
     fn into_integer_value(self) -> IntegerValue<B> {
         self.into()
+    }
+    fn into_inner(self) -> Self::Inner {
+        self.0
     }
 }
 

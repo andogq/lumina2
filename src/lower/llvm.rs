@@ -158,7 +158,7 @@ impl<'ctx, 'backend> lower::BasicBlock for BasicBlock<'ctx, 'backend> {
     type Pointer = PointerValue<'ctx>;
     type Value = Value<'ctx>;
 
-    fn integer_add<I: Integer<Self::Value>>(&mut self, lhs: I, rhs: I) {
+    fn integer_add<I: Integer<Self::Value>>(&mut self, lhs: I, rhs: I) -> I {
         todo!()
     }
 
@@ -171,7 +171,7 @@ impl<'ctx, 'backend> lower::BasicBlock for BasicBlock<'ctx, 'backend> {
     fn storage_live(&mut self, ptr: Self::Pointer) {
         let intrinsic = Intrinsic::find("llvm.lifetime.start").unwrap();
         let intrinsic_fn = intrinsic
-            .get_declaration(&self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
+            .get_declaration(self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
             .unwrap();
         self.builder
             .build_call(intrinsic_fn, &[ptr.into()], "lifetime.start")
@@ -181,7 +181,7 @@ impl<'ctx, 'backend> lower::BasicBlock for BasicBlock<'ctx, 'backend> {
     fn storage_dead(&mut self, ptr: Self::Pointer) {
         let intrinsic = Intrinsic::find("llvm.lifetime.end").unwrap();
         let intrinsic_fn = intrinsic
-            .get_declaration(&self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
+            .get_declaration(self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
             .unwrap();
         self.builder
             .build_call(intrinsic_fn, &[ptr.into()], "lifetime.end")
@@ -232,10 +232,10 @@ impl<'ctx> lower::ValueBackend for Value<'ctx> {
 }
 
 trait IntegerValueExt<'ctx> {
-    fn as_basic_value_enum(self) -> BasicValueEnum<'ctx>;
+    fn as_basic_value_enum(&self) -> BasicValueEnum<'ctx>;
 }
 impl<'ctx> IntegerValueExt<'ctx> for IntegerValue<Value<'ctx>> {
-    fn as_basic_value_enum(self) -> BasicValueEnum<'ctx> {
+    fn as_basic_value_enum(&self) -> BasicValueEnum<'ctx> {
         match self {
             IntegerValue::I8(i8) => i8.0.as_basic_value_enum(),
             IntegerValue::U8(u8) => u8.0.as_basic_value_enum(),

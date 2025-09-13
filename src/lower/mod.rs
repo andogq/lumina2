@@ -4,7 +4,8 @@ pub mod llvm;
 use std::collections::HashMap;
 
 use crate::ir::{
-    Local, Operand, Place, Projection, RValue, Statement, Terminator, Ty, TyInfo, Tys, Value,
+    BinOp, Local, Operand, Place, Projection, RValue, Statement, Terminator, Ty, TyInfo, Tys,
+    Value,
     ctx::IrCtx,
     integer::{I8, Integer, IntegerValue, U8, ValueBackend},
 };
@@ -66,7 +67,35 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                                 resolve_operand(operand, block, &locals, &ir.tys)
                             }
                             RValue::Ref(place) => todo!(),
-                            RValue::BinaryOp { op, lhs, rhs } => todo!(),
+                            RValue::BinaryOp { op, lhs, rhs } => match op {
+                                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
+                                    let (lhs, lhs_ty) =
+                                        resolve_operand(lhs, block, &locals, &ir.tys);
+                                    let (rhs, rhs_ty) =
+                                        resolve_operand(rhs, block, &locals, &ir.tys);
+
+                                    assert_eq!(
+                                        lhs_ty, rhs_ty,
+                                        "lhs and rhs operands must match for {op:?}"
+                                    );
+
+                                    // TODO: Find reusable way to convert between `Value` enum, and
+                                    // the underlying types.
+                                    let result = match (lhs, rhs) {
+                                        (IntegerValue::I8(lhs), IntegerValue::I8(rhs)) => {
+                                            block.integer_add(lhs, rhs).into_integer_value()
+                                        }
+                                        (IntegerValue::U8(lhs), IntegerValue::U8(rhs)) => {
+                                            block.integer_add(lhs, rhs).into_integer_value()
+                                        }
+                                        _ => panic!("lhs and rhs are mis-matched"),
+                                    };
+
+                                    // lhs ty can be reused, since the result will be the same.
+                                    (result, lhs_ty)
+                                }
+                                _ => unimplemented!(),
+                            },
                             RValue::UnaryOp { op, rhs } => todo!(),
                             RValue::Aggregate { values } => todo!(),
                             RValue::Cast { kind, op, ty } => todo!(),
@@ -200,7 +229,7 @@ pub trait BasicBlock {
     type Pointer: Clone;
     type Value: ValueBackend;
 
-    fn integer_add<I: Integer<Self::Value>>(&mut self, lhs: I, rhs: I);
+    fn integer_add<I: Integer<Self::Value>>(&mut self, lhs: I, rhs: I) -> I;
 
     fn term_return(&mut self, value: IntegerValue<Self::Value>);
 
