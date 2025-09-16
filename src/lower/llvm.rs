@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, rc::Rc};
 
 use inkwell::{
     AddressSpace,
@@ -8,32 +8,41 @@ use inkwell::{
     intrinsics::Intrinsic,
     module::Module,
     types::{BasicType, BasicTypeEnum},
-    values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue},
+    values::{AnyValue, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue},
 };
 
 use crate::{
     ir::{
         Ty, TyInfo, Tys,
-        integer::{I8, Integer, IntegerValue, U8},
+        integer::{Constant, Integer, IntegerValue, ValueBackend},
     },
     lower,
 };
 
 pub struct Llvm<'ctx, 'ir> {
     ctx: &'ctx Context,
-    module: Module<'ctx>,
+    module: Rc<Module<'ctx>>,
     tys: &'ir Tys,
 }
 impl<'ctx, 'ir> Llvm<'ctx, 'ir> {
     pub fn new(ctx: &'ctx Context, tys: &'ir Tys) -> Self {
         Self {
             ctx,
-            module: ctx.create_module("some_module"),
+            module: Rc::new(ctx.create_module("some_module")),
             tys,
         }
     }
 
     pub fn run(&self, name: &str) -> u8 {
+        println!(
+            "{}",
+            self.module
+                .get_first_function()
+                .unwrap()
+                .print_to_string()
+                .to_string()
+        );
+
         let engine = self
             .module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
@@ -45,28 +54,32 @@ impl<'ctx, 'ir> Llvm<'ctx, 'ir> {
     }
 }
 impl<'ctx, 'ir> lower::Backend<'ctx> for Llvm<'ctx, 'ir> {
-    type Function<'backend>
-        = Function<'ctx, 'ir, 'backend>
+    type Value
+        = Value<'ctx>
     where
-        Self: 'backend;
+        Self:;
+    type Function
+        = Function<'ctx, 'ir>
+    where
+        Self:;
 
-    fn add_function<'backend>(&'backend self, name: &str, ret_ty: Ty) -> Self::Function<'backend> {
-        Function::new(self.ctx, &self.module, self.tys, name, ret_ty)
+    fn add_function(&self, name: &str, ret_ty: Ty) -> Self::Function {
+        Function::new(self.ctx, Rc::clone(&self.module), self.tys, name, ret_ty)
     }
 }
 
-pub struct Function<'ctx, 'ir, 'backend> {
+pub struct Function<'ctx, 'ir> {
     ctx: &'ctx Context,
-    module: &'backend Module<'ctx>,
+    module: Rc<Module<'ctx>>,
     tys: &'ir Tys,
     builder: Builder<'ctx>,
     function: FunctionValue<'ctx>,
     entry_bb: inkwell::basic_block::BasicBlock<'ctx>,
 }
-impl<'ctx, 'ir, 'backend> Function<'ctx, 'ir, 'backend> {
+impl<'ctx, 'ir> Function<'ctx, 'ir> {
     pub fn new(
         ctx: &'ctx Context,
-        module: &'backend Module<'ctx>,
+        module: Rc<Module<'ctx>>,
         tys: &'ir Tys,
         name: &str,
         ret_ty: Ty,
@@ -92,11 +105,10 @@ impl<'ctx, 'ir, 'backend> Function<'ctx, 'ir, 'backend> {
         }
     }
 }
-impl<'ctx, 'ir, 'backend> lower::Function<'ctx> for Function<'ctx, 'ir, 'backend> {
-    type BasicBlock = BasicBlock<'ctx, 'backend>;
-    type Pointer = PointerValue<'ctx>;
+impl<'ctx, 'ir> lower::Function<'ctx> for Function<'ctx, 'ir> {
+    type Value = Value<'ctx>;
 
-    fn declare_local(&mut self, ty: Ty, name: &str) -> Self::Pointer {
+    fn declare_local(&mut self, ty: Ty, name: &str) -> <Value<'ctx> as ValueBackend>::Pointer {
         // Find the last non-terminator instruction.
         let mut last_non_terminator = self.entry_bb.get_last_instruction();
         while let Some(instr) = last_non_terminator
@@ -117,7 +129,7 @@ impl<'ctx, 'ir, 'backend> lower::Function<'ctx> for Function<'ctx, 'ir, 'backend
             .unwrap()
     }
 
-    fn add_basic_block(&mut self, name: &str) -> Self::BasicBlock {
+    fn add_basic_block(&mut self, name: &str) -> <Value<'ctx> as ValueBackend>::BasicBlock {
         let bb = self.ctx.append_basic_block(self.function, name);
 
         // If this is the first basic block added after the entry, ensure the entry jumps to it.
@@ -137,7 +149,7 @@ impl<'ctx, 'ir, 'backend> lower::Function<'ctx> for Function<'ctx, 'ir, 'backend
 
         BasicBlock {
             ctx: self.ctx,
-            module: self.module,
+            module: Rc::clone(&self.module),
             builder: {
                 let builder = self.ctx.create_builder();
                 builder.position_at_end(bb);
@@ -148,19 +160,14 @@ impl<'ctx, 'ir, 'backend> lower::Function<'ctx> for Function<'ctx, 'ir, 'backend
     }
 }
 
-pub struct BasicBlock<'ctx, 'backend> {
+pub struct BasicBlock<'ctx> {
     ctx: &'ctx Context,
-    module: &'backend Module<'ctx>,
+    module: Rc<Module<'ctx>>,
     builder: Builder<'ctx>,
     bb: inkwell::basic_block::BasicBlock<'ctx>,
 }
-impl<'ctx, 'backend> lower::BasicBlock for BasicBlock<'ctx, 'backend> {
-    type Pointer = PointerValue<'ctx>;
+impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
     type Value = Value<'ctx>;
-
-    fn integer_add<I: Integer<Self::Value>>(&mut self, lhs: I, rhs: I) -> I {
-        todo!()
-    }
 
     fn term_return(&mut self, value: IntegerValue<Self::Value>) {
         self.builder
@@ -168,67 +175,109 @@ impl<'ctx, 'backend> lower::BasicBlock for BasicBlock<'ctx, 'backend> {
             .unwrap();
     }
 
-    fn storage_live(&mut self, ptr: Self::Pointer) {
+    fn storage_live(&mut self, ptr: <Value<'ctx> as ValueBackend>::Pointer) {
         let intrinsic = Intrinsic::find("llvm.lifetime.start").unwrap();
         let intrinsic_fn = intrinsic
-            .get_declaration(self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
+            .get_declaration(&self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
             .unwrap();
         self.builder
             .build_call(intrinsic_fn, &[ptr.into()], "lifetime.start")
             .unwrap();
     }
 
-    fn storage_dead(&mut self, ptr: Self::Pointer) {
+    fn storage_dead(&mut self, ptr: <Value<'ctx> as ValueBackend>::Pointer) {
         let intrinsic = Intrinsic::find("llvm.lifetime.end").unwrap();
         let intrinsic_fn = intrinsic
-            .get_declaration(self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
+            .get_declaration(&self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
             .unwrap();
         self.builder
             .build_call(intrinsic_fn, &[ptr.into()], "lifetime.end")
             .unwrap();
     }
 
-    fn p_deref(&mut self, ptr: Self::Pointer) -> Self::Pointer {
+    fn p_deref(
+        &mut self,
+        ptr: <Value<'ctx> as ValueBackend>::Pointer,
+    ) -> <Value<'ctx> as ValueBackend>::Pointer {
         self.builder
             .build_load(self.ctx.ptr_type(AddressSpace::default()), ptr, "deref")
             .unwrap()
             .into_pointer_value()
     }
-
-    fn c_i8(&mut self, value: i8) -> I8<Self::Value> {
-        I8(self.ctx.i8_type().const_int(value as u64, true))
-    }
-    fn c_u8(&mut self, value: u8) -> U8<Self::Value> {
-        U8(self.ctx.i8_type().const_int(value as u64, false))
-    }
-
-    fn l_u8(&mut self, ptr: Self::Pointer) -> U8<Self::Value> {
-        U8(self
-            .builder
-            .build_load(self.ctx.i8_type(), ptr, "l_u8")
-            .unwrap()
-            .into_int_value())
-    }
-    fn l_i8(&mut self, ptr: Self::Pointer) -> I8<Self::Value> {
-        I8(self
-            .builder
-            .build_load(self.ctx.i8_type(), ptr, "l_i8")
-            .unwrap()
-            .into_int_value())
-    }
-
-    fn s_u8(&mut self, ptr: Self::Pointer, value: U8<Self::Value>) {
-        self.builder.build_store(ptr, value.0).unwrap();
-    }
-    fn s_i8(&mut self, ptr: Self::Pointer, value: I8<Self::Value>) {
-        self.builder.build_store(ptr, value.0).unwrap();
-    }
 }
 
 pub struct Value<'ctx>(PhantomData<&'ctx ()>);
 impl<'ctx> lower::ValueBackend for Value<'ctx> {
-    type I8 = IntValue<'ctx>;
-    type U8 = IntValue<'ctx>;
+    type BasicBlock = BasicBlock<'ctx>;
+
+    type Pointer = PointerValue<'ctx>;
+
+    type I8 = I8<'ctx>;
+    type U8 = U8<'ctx>;
+}
+
+#[derive(Clone, Debug)]
+pub struct I8<'ctx>(IntValue<'ctx>);
+impl<'ctx> Integer<Value<'ctx>> for I8<'ctx> {
+    fn into_integer_value(self) -> IntegerValue<Value<'ctx>> {
+        IntegerValue::I8(self)
+    }
+
+    fn add(bb: &mut BasicBlock<'ctx>, lhs: Self, rhs: Self) -> Self {
+        Self(bb.builder.build_int_add(lhs.0, rhs.0, "add_i8").unwrap())
+    }
+
+    fn load(bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) -> Self {
+        Self(
+            bb.builder
+                .build_load(bb.ctx.i8_type(), ptr, "load_i8")
+                .unwrap()
+                .into_int_value(),
+        )
+    }
+
+    fn store(self, bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) {
+        bb.builder.build_store(ptr, self.0).unwrap();
+    }
+}
+impl<'ctx> Constant<Value<'ctx>> for I8<'ctx> {
+    type Value = i8;
+
+    fn create(bb: &mut <Value<'ctx> as ValueBackend>::BasicBlock, value: Self::Value) -> Self {
+        Self(bb.ctx.i8_type().const_int(value as u64, false))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct U8<'ctx>(IntValue<'ctx>);
+impl<'ctx> Integer<Value<'ctx>> for U8<'ctx> {
+    fn into_integer_value(self) -> IntegerValue<Value<'ctx>> {
+        IntegerValue::U8(self)
+    }
+
+    fn add(bb: &mut BasicBlock<'ctx>, lhs: Self, rhs: Self) -> Self {
+        Self(bb.builder.build_int_add(lhs.0, rhs.0, "add_u8").unwrap())
+    }
+
+    fn load(bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) -> Self {
+        Self(
+            bb.builder
+                .build_load(bb.ctx.i8_type(), ptr, "load_u8")
+                .unwrap()
+                .into_int_value(),
+        )
+    }
+
+    fn store(self, bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) {
+        bb.builder.build_store(ptr, self.0).unwrap();
+    }
+}
+impl<'ctx> Constant<Value<'ctx>> for U8<'ctx> {
+    type Value = u8;
+
+    fn create(bb: &mut <Value<'ctx> as ValueBackend>::BasicBlock, value: Self::Value) -> Self {
+        Self(bb.ctx.i8_type().const_int(value as u64, false))
+    }
 }
 
 trait IntegerValueExt<'ctx> {

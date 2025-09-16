@@ -4,10 +4,10 @@ pub mod llvm;
 use std::collections::HashMap;
 
 use crate::ir::{
-    BinOp, Local, Operand, Place, Projection, RValue, Statement, Terminator, Ty, TyInfo, Tys,
+    self, BinOp, Local, Operand, Place, Projection, RValue, Statement, Terminator, Ty, TyInfo, Tys,
     Value,
     ctx::IrCtx,
-    integer::{I8, Integer, IntegerValue, U8, ValueBackend},
+    integer::{Constant, Integer, IntegerValue, ValueBackend},
 };
 
 pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
@@ -48,10 +48,10 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
         let bbs = &ir.functions[f_id].basic_blocks;
 
         // Forward declare all the basic blocks.
-        let mut basic_blocks = bbs
+        let mut basic_blocks: HashMap<ir::BasicBlock, <B::Value as ValueBackend>::BasicBlock> = bbs
             .iter_keys()
             .map(|(bb_id, _bb)| (bb_id, f.add_basic_block(bb_id.to_string().as_str())))
-            .collect::<HashMap<_, _>>();
+            .collect();
 
         // Lower each basic block
         for (bb_id, bb) in bbs.iter_keys() {
@@ -83,10 +83,12 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                                     // the underlying types.
                                     let result = match (lhs, rhs) {
                                         (IntegerValue::I8(lhs), IntegerValue::I8(rhs)) => {
-                                            block.integer_add(lhs, rhs).into_integer_value()
+                                            <B::Value as ValueBackend>::I8::add(block, lhs, rhs)
+                                                .into_integer_value()
                                         }
                                         (IntegerValue::U8(lhs), IntegerValue::U8(rhs)) => {
-                                            block.integer_add(lhs, rhs).into_integer_value()
+                                            <B::Value as ValueBackend>::U8::add(block, lhs, rhs)
+                                                .into_integer_value()
                                         }
                                         _ => panic!("lhs and rhs are mis-matched"),
                                     };
@@ -102,6 +104,8 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                         };
 
                         assert_eq!(place_ty, value_ty);
+
+                        value.store(block, ptr);
                     }
                     Statement::StorageDead(local) => {
                         let (ptr, _) = &locals[local];
@@ -127,8 +131,14 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
 
                     // TODO: Add type overloads for `block.l` to load specific values.
                     let value = match ir.tys.get(*value_ty) {
-                        TyInfo::U8 => block.l_u8(value_ptr.clone()).into_integer_value(),
-                        TyInfo::I8 => block.l_i8(value_ptr.clone()).into_integer_value(),
+                        TyInfo::U8 => {
+                            <B::Value as ValueBackend>::U8::load(block, value_ptr.clone())
+                                .into_integer_value()
+                        }
+                        TyInfo::I8 => {
+                            <B::Value as ValueBackend>::I8::load(block, value_ptr.clone())
+                                .into_integer_value()
+                        }
                         _ => unimplemented!(),
                     };
 
@@ -147,9 +157,9 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
 fn resolve_place<B: BasicBlock>(
     place: &Place,
     block: &mut B,
-    locals: &HashMap<Local, (B::Pointer, Ty)>,
+    locals: &HashMap<Local, (<B::Value as ValueBackend>::Pointer, Ty)>,
     tys: &Tys,
-) -> (B::Pointer, Ty) {
+) -> (<B::Value as ValueBackend>::Pointer, Ty) {
     let (mut ptr, mut ty) = locals[&place.local].clone();
 
     for proj in &place.projection {
@@ -173,7 +183,7 @@ fn resolve_place<B: BasicBlock>(
 fn resolve_operand<B: BasicBlock>(
     operand: &Operand,
     block: &mut B,
-    locals: &HashMap<Local, (B::Pointer, Ty)>,
+    locals: &HashMap<Local, (<B::Value as ValueBackend>::Pointer, Ty)>,
     tys: &Tys,
 ) -> (IntegerValue<B::Value>, Ty) {
     match operand {
@@ -182,8 +192,12 @@ fn resolve_operand<B: BasicBlock>(
 
             (
                 match tys.get(ty) {
-                    TyInfo::U8 => block.l_u8(ptr).into_integer_value(),
-                    TyInfo::I8 => block.l_i8(ptr).into_integer_value(),
+                    TyInfo::U8 => {
+                        <B::Value as ValueBackend>::U8::load(block, ptr).into_integer_value()
+                    }
+                    TyInfo::I8 => {
+                        <B::Value as ValueBackend>::I8::load(block, ptr).into_integer_value()
+                    }
                     TyInfo::Ref(ty) => todo!(),
                     TyInfo::Slice(ty) => todo!(),
                     TyInfo::Array { ty, length } => todo!(),
@@ -195,11 +209,11 @@ fn resolve_operand<B: BasicBlock>(
             // TODO: Use something other than `Value` which doesn't have non-constant variants.
             match value {
                 Value::U8(value) => (
-                    block.c(*value).into_integer_value(),
+                    <B::Value as ValueBackend>::U8::create(block, *value).into_integer_value(),
                     tys.find_or_insert(TyInfo::U8),
                 ),
                 Value::I8(value) => (
-                    block.c(*value).into_integer_value(),
+                    <B::Value as ValueBackend>::I8::create(block, *value).into_integer_value(),
                     tys.find_or_insert(TyInfo::I8),
                 ),
                 _ => panic!("invalid constant value"),
@@ -209,97 +223,30 @@ fn resolve_operand<B: BasicBlock>(
 }
 
 pub trait Backend<'ctx>: Sized {
-    type Function<'backend>: Function<'ctx>
-    where
-        Self: 'backend;
+    type Value: ValueBackend;
+    type Function: Function<'ctx, Value = Self::Value>;
 
-    fn add_function<'backend>(&'backend self, name: &str, ret_ty: Ty) -> Self::Function<'backend>;
+    fn add_function(&self, name: &str, ret_ty: Ty) -> Self::Function;
 }
 
 pub trait Function<'ctx> {
-    type Pointer: Clone;
-    type BasicBlock: BasicBlock<Pointer = Self::Pointer>;
+    type Value: ValueBackend;
 
-    fn declare_local(&mut self, ty: Ty, name: &str) -> Self::Pointer;
+    fn declare_local(&mut self, ty: Ty, name: &str) -> <Self::Value as ValueBackend>::Pointer;
 
-    fn add_basic_block(&mut self, name: &str) -> Self::BasicBlock;
+    fn add_basic_block(&mut self, name: &str) -> <Self::Value as ValueBackend>::BasicBlock;
 }
 
 pub trait BasicBlock {
-    type Pointer: Clone;
-    type Value: ValueBackend;
-
-    fn integer_add<I: Integer<Self::Value>>(&mut self, lhs: I, rhs: I) -> I;
+    type Value: ValueBackend<BasicBlock = Self>;
 
     fn term_return(&mut self, value: IntegerValue<Self::Value>);
 
-    fn storage_live(&mut self, ptr: Self::Pointer);
-    fn storage_dead(&mut self, ptr: Self::Pointer);
+    fn storage_live(&mut self, ptr: <Self::Value as ValueBackend>::Pointer);
+    fn storage_dead(&mut self, ptr: <Self::Value as ValueBackend>::Pointer);
 
-    fn p_deref(&mut self, ptr: Self::Pointer) -> Self::Pointer;
-
-    fn c<C: Constant<Self>>(&mut self, value: C) -> C::Value {
-        C::create(self, value)
-    }
-    fn c_u8(&mut self, value: u8) -> U8<Self::Value>;
-    fn c_i8(&mut self, value: i8) -> I8<Self::Value>;
-
-    fn l<T: BbPrim<Self>>(&mut self, ptr: Self::Pointer) -> T {
-        T::load(self, ptr)
-    }
-    fn l_u8(&mut self, ptr: Self::Pointer) -> U8<Self::Value>;
-    fn l_i8(&mut self, ptr: Self::Pointer) -> I8<Self::Value>;
-
-    fn s<T: BbPrim<Self>>(&mut self, ptr: Self::Pointer, value: T) {
-        T::store(self, ptr, value);
-    }
-    fn s_u8(&mut self, ptr: Self::Pointer, value: U8<Self::Value>);
-    fn s_i8(&mut self, ptr: Self::Pointer, value: I8<Self::Value>);
-}
-
-pub trait BbPrim<B: BasicBlock + ?Sized> {
-    fn load(bb: &mut B, ptr: B::Pointer) -> Self;
-    fn store(bb: &mut B, ptr: B::Pointer, value: Self);
-}
-
-impl<B: BasicBlock> BbPrim<B> for U8<B::Value> {
-    fn load(bb: &mut B, ptr: <B as BasicBlock>::Pointer) -> Self {
-        bb.l_u8(ptr)
-    }
-
-    fn store(bb: &mut B, ptr: <B as BasicBlock>::Pointer, value: Self) {
-        bb.s_u8(ptr, value);
-    }
-}
-
-impl<B: BasicBlock> BbPrim<B> for I8<B::Value> {
-    fn load(bb: &mut B, ptr: <B as BasicBlock>::Pointer) -> Self {
-        bb.l_i8(ptr)
-    }
-
-    fn store(bb: &mut B, ptr: <B as BasicBlock>::Pointer, value: Self) {
-        bb.s_i8(ptr, value);
-    }
-}
-
-pub trait Constant<B: BasicBlock + ?Sized> {
-    type Value;
-
-    fn create(bb: &mut B, value: Self) -> Self::Value;
-}
-
-impl<B: BasicBlock> Constant<B> for u8 {
-    type Value = U8<B::Value>;
-
-    fn create(bb: &mut B, value: Self) -> Self::Value {
-        bb.c_u8(value)
-    }
-}
-
-impl<B: BasicBlock> Constant<B> for i8 {
-    type Value = I8<B::Value>;
-
-    fn create(bb: &mut B, value: Self) -> Self::Value {
-        bb.c_i8(value)
-    }
+    fn p_deref(
+        &mut self,
+        ptr: <Self::Value as ValueBackend>::Pointer,
+    ) -> <Self::Value as ValueBackend>::Pointer;
 }
