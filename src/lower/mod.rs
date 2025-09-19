@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use crate::ir::{
     self, BinOp, Local, Operand, Place, Projection, RValue, Statement, Terminator, Ty, TyInfo, Tys,
     Value,
+    any_value::{Any, AnyValue},
     ctx::IrCtx,
     integer::{Constant, Integer, IntegerValue, ValueBackend},
 };
@@ -66,7 +67,11 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                             RValue::Use(operand) => {
                                 resolve_operand(operand, block, &locals, &ir.tys)
                             }
-                            RValue::Ref(place) => todo!(),
+                            RValue::Ref(place) => {
+                                let (ptr, ty) = resolve_place(place, block, &locals, &ir.tys);
+
+                                (ptr.into_any_value(), ir.tys.find_or_insert(TyInfo::Ref(ty)))
+                            }
                             RValue::BinaryOp { op, lhs, rhs } => match op {
                                 BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
                                     let (lhs, lhs_ty) =
@@ -82,19 +87,21 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                                     // TODO: Find reusable way to convert between `Value` enum, and
                                     // the underlying types.
                                     let result = match (lhs, rhs) {
-                                        (IntegerValue::I8(lhs), IntegerValue::I8(rhs)) => {
-                                            <B::Value as ValueBackend>::I8::add(block, lhs, rhs)
-                                                .into_integer_value()
-                                        }
-                                        (IntegerValue::U8(lhs), IntegerValue::U8(rhs)) => {
-                                            <B::Value as ValueBackend>::U8::add(block, lhs, rhs)
-                                                .into_integer_value()
-                                        }
+                                        (
+                                            AnyValue::Integer(IntegerValue::I8(lhs)),
+                                            AnyValue::Integer(IntegerValue::I8(rhs)),
+                                        ) => <B::Value as ValueBackend>::I8::add(block, lhs, rhs)
+                                            .into_integer_value(),
+                                        (
+                                            AnyValue::Integer(IntegerValue::U8(lhs)),
+                                            AnyValue::Integer(IntegerValue::U8(rhs)),
+                                        ) => <B::Value as ValueBackend>::U8::add(block, lhs, rhs)
+                                            .into_integer_value(),
                                         _ => panic!("lhs and rhs are mis-matched"),
                                     };
 
                                     // lhs ty can be reused, since the result will be the same.
-                                    (result, lhs_ty)
+                                    (result.into_any_value(), lhs_ty)
                                 }
                                 _ => unimplemented!(),
                             },
@@ -185,19 +192,19 @@ fn resolve_operand<B: BasicBlock>(
     block: &mut B,
     locals: &HashMap<Local, (<B::Value as ValueBackend>::Pointer, Ty)>,
     tys: &Tys,
-) -> (IntegerValue<B::Value>, Ty) {
+) -> (AnyValue<B::Value>, Ty) {
     match operand {
         Operand::Place(place) => {
             let (ptr, ty) = resolve_place(place, block, locals, tys);
 
             (
                 match tys.get(ty) {
-                    TyInfo::U8 => {
-                        <B::Value as ValueBackend>::U8::load(block, ptr).into_integer_value()
-                    }
-                    TyInfo::I8 => {
-                        <B::Value as ValueBackend>::I8::load(block, ptr).into_integer_value()
-                    }
+                    TyInfo::U8 => <B::Value as ValueBackend>::U8::load(block, ptr)
+                        .into_integer_value()
+                        .into_any_value(),
+                    TyInfo::I8 => <B::Value as ValueBackend>::I8::load(block, ptr)
+                        .into_integer_value()
+                        .into_any_value(),
                     TyInfo::Ref(ty) => todo!(),
                     TyInfo::Slice(ty) => todo!(),
                     TyInfo::Array { ty, length } => todo!(),
@@ -209,11 +216,15 @@ fn resolve_operand<B: BasicBlock>(
             // TODO: Use something other than `Value` which doesn't have non-constant variants.
             match value {
                 Value::U8(value) => (
-                    <B::Value as ValueBackend>::U8::create(block, *value).into_integer_value(),
+                    <B::Value as ValueBackend>::U8::create(block, *value)
+                        .into_integer_value()
+                        .into_any_value(),
                     tys.find_or_insert(TyInfo::U8),
                 ),
                 Value::I8(value) => (
-                    <B::Value as ValueBackend>::I8::create(block, *value).into_integer_value(),
+                    <B::Value as ValueBackend>::I8::create(block, *value)
+                        .into_integer_value()
+                        .into_any_value(),
                     tys.find_or_insert(TyInfo::I8),
                 ),
                 _ => panic!("invalid constant value"),

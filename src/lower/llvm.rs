@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, rc::Rc};
+use std::{marker::PhantomData, ops::Deref, rc::Rc};
 
 use inkwell::{
     AddressSpace,
@@ -8,12 +8,13 @@ use inkwell::{
     intrinsics::Intrinsic,
     module::Module,
     types::{BasicType, BasicTypeEnum},
-    values::{AnyValue, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue},
+    values::{AnyValue as _, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue},
 };
 
 use crate::{
     ir::{
         Ty, TyInfo, Tys,
+        any_value::{Any, AnyValue},
         integer::{Constant, Integer, IntegerValue, ValueBackend},
     },
     lower,
@@ -124,9 +125,11 @@ impl<'ctx, 'ir> lower::Function<'ctx> for Function<'ctx, 'ir> {
             None => self.builder.position_at_end(self.entry_bb),
         }
 
-        self.builder
-            .build_alloca(to_llvm_ty(ty, self.tys, self.ctx), name)
-            .unwrap()
+        Pointer(
+            self.builder
+                .build_alloca(to_llvm_ty(ty, self.tys, self.ctx), name)
+                .unwrap(),
+        )
     }
 
     fn add_basic_block(&mut self, name: &str) -> <Value<'ctx> as ValueBackend>::BasicBlock {
@@ -181,7 +184,7 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
             .get_declaration(&self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
             .unwrap();
         self.builder
-            .build_call(intrinsic_fn, &[ptr.into()], "lifetime.start")
+            .build_call(intrinsic_fn, &[(*ptr).into()], "lifetime.start")
             .unwrap();
     }
 
@@ -191,7 +194,7 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
             .get_declaration(&self.module, &[BasicTypeEnum::PointerType(ptr.get_type())])
             .unwrap();
         self.builder
-            .build_call(intrinsic_fn, &[ptr.into()], "lifetime.end")
+            .build_call(intrinsic_fn, &[(*ptr).into()], "lifetime.end")
             .unwrap();
     }
 
@@ -199,10 +202,12 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
         &mut self,
         ptr: <Value<'ctx> as ValueBackend>::Pointer,
     ) -> <Value<'ctx> as ValueBackend>::Pointer {
-        self.builder
-            .build_load(self.ctx.ptr_type(AddressSpace::default()), ptr, "deref")
-            .unwrap()
-            .into_pointer_value()
+        Pointer(
+            self.builder
+                .build_load(self.ctx.ptr_type(AddressSpace::default()), *ptr, "deref")
+                .unwrap()
+                .into_pointer_value(),
+        )
     }
 }
 
@@ -210,14 +215,67 @@ pub struct Value<'ctx>(PhantomData<&'ctx ()>);
 impl<'ctx> lower::ValueBackend for Value<'ctx> {
     type BasicBlock = BasicBlock<'ctx>;
 
-    type Pointer = PointerValue<'ctx>;
+    type Pointer = Pointer<'ctx>;
 
     type I8 = I8<'ctx>;
     type U8 = U8<'ctx>;
 }
 
 #[derive(Clone, Debug)]
+pub struct Pointer<'ctx>(PointerValue<'ctx>);
+impl<'ctx> Any<Value<'ctx>> for Pointer<'ctx> {
+    fn into_any_value(self) -> AnyValue<Value<'ctx>> {
+        AnyValue::Pointer(self)
+    }
+
+    fn load(
+        bb: &mut <Value<'ctx> as ValueBackend>::BasicBlock,
+        ptr: <Value<'ctx> as ValueBackend>::Pointer,
+    ) -> Self {
+        Self(
+            bb.builder
+                .build_load(bb.ctx.ptr_type(AddressSpace::default()), *ptr, "load_ptr")
+                .unwrap()
+                .into_pointer_value(),
+        )
+    }
+
+    fn store(
+        self,
+        bb: &mut <Value<'ctx> as ValueBackend>::BasicBlock,
+        ptr: <Value<'ctx> as ValueBackend>::Pointer,
+    ) {
+        bb.builder.build_store(*ptr, self.0).unwrap();
+    }
+}
+impl<'ctx> Deref for Pointer<'ctx> {
+    type Target = PointerValue<'ctx>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct I8<'ctx>(IntValue<'ctx>);
+impl<'ctx> Any<Value<'ctx>> for I8<'ctx> {
+    fn into_any_value(self) -> AnyValue<Value<'ctx>> {
+        self.into_integer_value().into_any_value()
+    }
+
+    fn load(bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) -> Self {
+        Self(
+            bb.builder
+                .build_load(bb.ctx.i8_type(), *ptr, "load_i8")
+                .unwrap()
+                .into_int_value(),
+        )
+    }
+
+    fn store(self, bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) {
+        bb.builder.build_store(*ptr, self.0).unwrap();
+    }
+}
 impl<'ctx> Integer<Value<'ctx>> for I8<'ctx> {
     fn into_integer_value(self) -> IntegerValue<Value<'ctx>> {
         IntegerValue::I8(self)
@@ -225,19 +283,6 @@ impl<'ctx> Integer<Value<'ctx>> for I8<'ctx> {
 
     fn add(bb: &mut BasicBlock<'ctx>, lhs: Self, rhs: Self) -> Self {
         Self(bb.builder.build_int_add(lhs.0, rhs.0, "add_i8").unwrap())
-    }
-
-    fn load(bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) -> Self {
-        Self(
-            bb.builder
-                .build_load(bb.ctx.i8_type(), ptr, "load_i8")
-                .unwrap()
-                .into_int_value(),
-        )
-    }
-
-    fn store(self, bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) {
-        bb.builder.build_store(ptr, self.0).unwrap();
     }
 }
 impl<'ctx> Constant<Value<'ctx>> for I8<'ctx> {
@@ -247,9 +292,34 @@ impl<'ctx> Constant<Value<'ctx>> for I8<'ctx> {
         Self(bb.ctx.i8_type().const_int(value as u64, false))
     }
 }
+impl<'ctx> Deref for I8<'ctx> {
+    type Target = IntValue<'ctx>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct U8<'ctx>(IntValue<'ctx>);
+impl<'ctx> Any<Value<'ctx>> for U8<'ctx> {
+    fn into_any_value(self) -> AnyValue<Value<'ctx>> {
+        self.into_integer_value().into_any_value()
+    }
+
+    fn load(bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) -> Self {
+        Self(
+            bb.builder
+                .build_load(bb.ctx.i8_type(), *ptr, "load_u8")
+                .unwrap()
+                .into_int_value(),
+        )
+    }
+
+    fn store(self, bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) {
+        bb.builder.build_store(*ptr, self.0).unwrap();
+    }
+}
 impl<'ctx> Integer<Value<'ctx>> for U8<'ctx> {
     fn into_integer_value(self) -> IntegerValue<Value<'ctx>> {
         IntegerValue::U8(self)
@@ -258,25 +328,19 @@ impl<'ctx> Integer<Value<'ctx>> for U8<'ctx> {
     fn add(bb: &mut BasicBlock<'ctx>, lhs: Self, rhs: Self) -> Self {
         Self(bb.builder.build_int_add(lhs.0, rhs.0, "add_u8").unwrap())
     }
-
-    fn load(bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) -> Self {
-        Self(
-            bb.builder
-                .build_load(bb.ctx.i8_type(), ptr, "load_u8")
-                .unwrap()
-                .into_int_value(),
-        )
-    }
-
-    fn store(self, bb: &mut BasicBlock<'ctx>, ptr: <Value<'ctx> as ValueBackend>::Pointer) {
-        bb.builder.build_store(ptr, self.0).unwrap();
-    }
 }
 impl<'ctx> Constant<Value<'ctx>> for U8<'ctx> {
     type Value = u8;
 
     fn create(bb: &mut <Value<'ctx> as ValueBackend>::BasicBlock, value: Self::Value) -> Self {
         Self(bb.ctx.i8_type().const_int(value as u64, false))
+    }
+}
+impl<'ctx> Deref for U8<'ctx> {
+    type Target = IntValue<'ctx>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

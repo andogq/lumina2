@@ -134,6 +134,14 @@ mod test {
                     module.run(stringify!($name))
                 };
                 assert_eq!(expected, llvm_output, "llvm");
+
+                let llvm_output_2 = {
+                    let llvm_ctx = Context::create();
+                    let mut backend = LowerLlvm::new(&llvm_ctx, &ctx.tys);
+                    lower(&ctx, &mut backend);
+                    backend.run("function_name")
+                };
+                assert_eq!(expected, llvm_output_2, "llvm_2");
             }
         };
     }
