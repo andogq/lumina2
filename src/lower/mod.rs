@@ -133,8 +133,7 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
 
                                 for (i, value) in values.iter().enumerate() {
                                     let i = <B::Value as ValueBackend>::U8::create(block, i as u8);
-                                    let ptr =
-                                        ptr.clone().element_pointer(block, i, ty_info.clone());
+                                    let ptr = ptr.clone().element_ptr(block, i, ty_info.clone());
                                     let (value, value_ty) =
                                         resolve_operand(value, block, &locals, &ir.tys, backend);
                                     assert_eq!(ty, value_ty);
@@ -208,7 +207,7 @@ fn resolve_place<'ctx, B: BasicBlock>(
                     panic!("expected ref to dereference, but found {ty_info:?}");
                 };
 
-                (block.p_deref(ptr), inner_ty)
+                (ptr.deref(block), inner_ty)
             }
             Projection::Field(_) => todo!(),
             Projection::Index(local) => {
@@ -226,7 +225,7 @@ fn resolve_place<'ctx, B: BasicBlock>(
                 assert!(matches!(tys.get(index_ty), TyInfo::U8));
 
                 let index = <B::Value as ValueBackend>::U8::load(block, index_ptr);
-                let item_ptr = ptr.element_pointer(block, index, backend.get_ty(item_ty));
+                let item_ptr = ptr.element_ptr(block, index, backend.get_ty(item_ty));
 
                 (item_ptr, item_ty)
             }
@@ -306,9 +305,4 @@ pub trait BasicBlock {
 
     fn storage_live(&mut self, ptr: <Self::Value as ValueBackend>::Pointer);
     fn storage_dead(&mut self, ptr: <Self::Value as ValueBackend>::Pointer);
-
-    fn p_deref(
-        &mut self,
-        ptr: <Self::Value as ValueBackend>::Pointer,
-    ) -> <Self::Value as ValueBackend>::Pointer;
 }

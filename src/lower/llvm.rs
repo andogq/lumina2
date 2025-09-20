@@ -201,18 +201,6 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
             .build_call(intrinsic_fn, &[(*ptr).into()], "lifetime.end")
             .unwrap();
     }
-
-    fn p_deref(
-        &mut self,
-        ptr: <Value<'ctx> as ValueBackend>::Pointer,
-    ) -> <Value<'ctx> as ValueBackend>::Pointer {
-        Pointer(
-            self.builder
-                .build_load(self.ctx.ptr_type(AddressSpace::default()), *ptr, "deref")
-                .unwrap()
-                .into_pointer_value(),
-        )
-    }
 }
 
 pub struct Value<'ctx>(PhantomData<&'ctx ()>);
@@ -230,7 +218,7 @@ impl<'ctx> lower::ValueBackend for Value<'ctx> {
 #[derive(Clone, Debug)]
 pub struct Pointer<'ctx>(PointerValue<'ctx>);
 impl<'ctx> crate::ir::integer::Pointer<Value<'ctx>> for Pointer<'ctx> {
-    fn element_pointer<I: Integer<Value<'ctx>>>(
+    fn element_ptr<I: Integer<Value<'ctx>>>(
         self,
         bb: &mut BasicBlock<'ctx>,
         i: I,
@@ -250,6 +238,15 @@ impl<'ctx> crate::ir::integer::Pointer<Value<'ctx>> for Pointer<'ctx> {
                     .build_in_bounds_gep(ty, *self, &ordered_indexes, name)
             }
             .unwrap(),
+        )
+    }
+
+    fn deref(self, bb: &mut BasicBlock<'ctx>) -> Self {
+        Self(
+            bb.builder
+                .build_load(bb.ctx.ptr_type(AddressSpace::default()), *self, "deref")
+                .unwrap()
+                .into_pointer_value(),
         )
     }
 }

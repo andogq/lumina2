@@ -61,5 +61,7 @@ pub trait Constant<B: ValueBackend + ?Sized> {
 }
 
 pub trait Pointer<B: ValueBackend + ?Sized>: Any<B> + Clone {
-    fn element_pointer<I: Integer<B>>(self, bb: &mut B::BasicBlock, i: I, ty: B::Ty) -> Self;
+    fn element_ptr<I: Integer<B>>(self, bb: &mut B::BasicBlock, i: I, ty: B::Ty) -> Self;
+
+    fn deref(self, bb: &mut B::BasicBlock) -> Self;
 }
