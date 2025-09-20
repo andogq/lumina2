@@ -205,6 +205,38 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
     fn term_goto(&self, target: &BasicBlock<'ctx>) {
         self.builder.build_unconditional_branch(target.bb).unwrap();
     }
+
+    fn term_switch<I: Integer<Self::Value>>(
+        &self,
+        discriminator: I,
+        default: &BasicBlock<'ctx>,
+        targets: Vec<(I::Value, &BasicBlock<'ctx>)>,
+    ) {
+        self.builder
+            .build_switch(
+                // HACK: Also mega hacky
+                discriminator
+                    .into_integer_value()
+                    .as_basic_value_enum()
+                    .into_int_value(),
+                default.bb,
+                targets
+                    .into_iter()
+                    .map(|(value, target)| {
+                        (
+                            // HACK: Mega hacky
+                            I::create(self, value)
+                                .into_integer_value()
+                                .as_basic_value_enum()
+                                .into_int_value(),
+                            target.bb,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )
+            .unwrap();
+    }
 }
 
 pub struct Value<'ctx>(PhantomData<&'ctx ()>);
@@ -229,7 +261,7 @@ impl<'ctx> crate::ir::integer::Pointer<Value<'ctx>> for Pointer<'ctx> {
         ty: BasicTypeEnum<'ctx>,
     ) -> Self {
         let ordered_indexes = [
-            // WARN: Mega hacky
+            // HACK: Mega hacky
             i.into_integer_value()
                 .as_basic_value_enum()
                 .into_int_value(),

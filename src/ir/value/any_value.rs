@@ -12,6 +12,20 @@ pub enum AnyValue<B: ValueBackend + ?Sized> {
     Pointer(B::Pointer),
 }
 impl<B: ValueBackend> AnyValue<B> {
+    pub fn into_integer_value(self) -> IntegerValue<B> {
+        match self {
+            Self::Integer(integer_value) => integer_value,
+            _ => panic!("expected IntegerValue"),
+        }
+    }
+
+    pub fn into_pointer_value(self) -> B::Pointer {
+        match self {
+            Self::Pointer(pointer_value) => pointer_value,
+            _ => panic!("expected PointerValue"),
+        }
+    }
+
     pub fn store(self, bb: &B::BasicBlock, ptr: B::Pointer) {
         match self {
             AnyValue::Integer(integer_value) => integer_value.store(bb, ptr),

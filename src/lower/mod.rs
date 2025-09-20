@@ -8,7 +8,7 @@ use crate::ir::{
     Value,
     any_value::{Any, AnyValue},
     ctx::IrCtx,
-    integer::{Constant, Integer, IntegerValue, Pointer, ValueBackend},
+    integer::{Constant, ConstantValue, Integer, IntegerValue, Pointer, ValueBackend},
 };
 
 pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
@@ -184,7 +184,58 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                     discriminator,
                     targets,
                     otherwise,
-                } => todo!(),
+                } => {
+                    let (discriminator, _) =
+                        resolve_operand(discriminator, block, &locals, &ir.tys, backend);
+                    let discriminator = discriminator.into_integer_value();
+
+                    // TODO: Temporary until `Value` is completely replaced
+                    let targets = targets
+                        .iter()
+                        .map(|(value, bb)| {
+                            let value = match value {
+                                Value::U8(u8) => ConstantValue::<B::Value>::U8(*u8),
+                                Value::I8(i8) => ConstantValue::I8(*i8),
+                                _ => panic!("invalid constant"),
+                            };
+
+                            (value, bb)
+                        })
+                        .collect::<Vec<_>>();
+
+                    let otherwise = &basic_blocks[otherwise];
+
+                    match discriminator {
+                        IntegerValue::I8(discriminator) => {
+                            let targets = targets
+                                .into_iter()
+                                .map(|(value, bb)| {
+                                    let ConstantValue::I8(value) = value else {
+                                        panic!("invalid constant");
+                                    };
+
+                                    (value, &basic_blocks[bb])
+                                })
+                                .collect();
+
+                            block.term_switch(discriminator, otherwise, targets);
+                        }
+                        IntegerValue::U8(discriminator) => {
+                            let targets = targets
+                                .into_iter()
+                                .map(|(value, bb)| {
+                                    let ConstantValue::U8(value) = value else {
+                                        panic!("invalid constant");
+                                    };
+
+                                    (value, &basic_blocks[bb])
+                                })
+                                .collect();
+
+                            block.term_switch(discriminator, otherwise, targets);
+                        }
+                    }
+                }
             }
         }
     }
@@ -303,6 +354,12 @@ pub trait BasicBlock {
 
     fn term_return(&self, value: IntegerValue<Self::Value>);
     fn term_goto(&self, bb: &<Self::Value as ValueBackend>::BasicBlock);
+    fn term_switch<I: Integer<Self::Value>>(
+        &self,
+        discriminator: I,
+        default: &<Self::Value as ValueBackend>::BasicBlock,
+        targets: Vec<(I::Value, &<Self::Value as ValueBackend>::BasicBlock)>,
+    );
 
     fn storage_live(&self, ptr: <Self::Value as ValueBackend>::Pointer);
     fn storage_dead(&self, ptr: <Self::Value as ValueBackend>::Pointer);
