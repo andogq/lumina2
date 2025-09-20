@@ -56,7 +56,7 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
 
         // Lower each basic block
         for (bb_id, bb) in bbs.iter_keys() {
-            let block = basic_blocks.get_mut(&bb_id).unwrap();
+            let block = basic_blocks.get(&bb_id).unwrap();
 
             for statement in &bb.statements {
                 match statement {
@@ -161,7 +161,7 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                     destination,
                     target,
                 } => todo!(),
-                Terminator::Goto(basic_block) => todo!(),
+                Terminator::Goto(basic_block) => block.term_goto(&basic_blocks[basic_block]),
                 Terminator::Return => {
                     let (value_ptr, value_ty) = &locals[&Local::zero()];
 
@@ -192,7 +192,7 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
 
 fn resolve_place<'ctx, B: BasicBlock>(
     place: &Place,
-    block: &mut B,
+    block: &B,
     locals: &HashMap<Local, (<B::Value as ValueBackend>::Pointer, Ty)>,
     tys: &Tys,
     backend: &impl Backend<'ctx, Value = B::Value>,
@@ -237,7 +237,7 @@ fn resolve_place<'ctx, B: BasicBlock>(
 
 fn resolve_operand<'ctx, B: BasicBlock>(
     operand: &Operand,
-    block: &mut B,
+    block: &B,
     locals: &HashMap<Local, (<B::Value as ValueBackend>::Pointer, Ty)>,
     tys: &Tys,
     backend: &impl Backend<'ctx, Value = B::Value>,
@@ -301,8 +301,9 @@ pub trait Function<'ctx> {
 pub trait BasicBlock {
     type Value: ValueBackend<BasicBlock = Self>;
 
-    fn term_return(&mut self, value: IntegerValue<Self::Value>);
+    fn term_return(&self, value: IntegerValue<Self::Value>);
+    fn term_goto(&self, bb: &<Self::Value as ValueBackend>::BasicBlock);
 
-    fn storage_live(&mut self, ptr: <Self::Value as ValueBackend>::Pointer);
-    fn storage_dead(&mut self, ptr: <Self::Value as ValueBackend>::Pointer);
+    fn storage_live(&self, ptr: <Self::Value as ValueBackend>::Pointer);
+    fn storage_dead(&self, ptr: <Self::Value as ValueBackend>::Pointer);
 }
