@@ -67,6 +67,10 @@ impl<'ctx, 'ir> lower::Backend<'ctx> for Llvm<'ctx, 'ir> {
     fn add_function(&self, name: &str, ret_ty: Ty) -> Self::Function {
         Function::new(self.ctx, Rc::clone(&self.module), self.tys, name, ret_ty)
     }
+
+    fn get_ty(&self, ty: Ty) -> <Self::Value as ValueBackend>::Ty {
+        to_llvm_ty(ty, self.tys, self.ctx)
+    }
 }
 
 pub struct Function<'ctx, 'ir> {
@@ -215,6 +219,8 @@ pub struct Value<'ctx>(PhantomData<&'ctx ()>);
 impl<'ctx> lower::ValueBackend for Value<'ctx> {
     type BasicBlock = BasicBlock<'ctx>;
 
+    type Ty = BasicTypeEnum<'ctx>;
+
     type Pointer = Pointer<'ctx>;
 
     type I8 = I8<'ctx>;
@@ -223,6 +229,30 @@ impl<'ctx> lower::ValueBackend for Value<'ctx> {
 
 #[derive(Clone, Debug)]
 pub struct Pointer<'ctx>(PointerValue<'ctx>);
+impl<'ctx> crate::ir::integer::Pointer<Value<'ctx>> for Pointer<'ctx> {
+    fn element_pointer<I: Integer<Value<'ctx>>>(
+        self,
+        bb: &mut BasicBlock<'ctx>,
+        i: I,
+        ty: BasicTypeEnum<'ctx>,
+    ) -> Self {
+        let ordered_indexes = [
+            // WARN: Mega hacky
+            i.into_integer_value()
+                .as_basic_value_enum()
+                .into_int_value(),
+        ];
+        let name = "el_pointer";
+
+        Self(
+            unsafe {
+                bb.builder
+                    .build_in_bounds_gep(ty, *self, &ordered_indexes, name)
+            }
+            .unwrap(),
+        )
+    }
+}
 impl<'ctx> Any<Value<'ctx>> for Pointer<'ctx> {
     fn into_any_value(self) -> AnyValue<Value<'ctx>> {
         AnyValue::Pointer(self)

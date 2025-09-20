@@ -201,6 +201,7 @@ mod test {
         bb0: {
             StorageLive(_1);
             StorageLive(_2);
+            _0 = const 0u8;
             _1 = [const 2u8, const 1u8, const 5u8];
 
             _2 = const 0u8;

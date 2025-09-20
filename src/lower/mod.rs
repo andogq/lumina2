@@ -8,7 +8,7 @@ use crate::ir::{
     Value,
     any_value::{Any, AnyValue},
     ctx::IrCtx,
-    integer::{Constant, Integer, IntegerValue, ValueBackend},
+    integer::{Constant, Integer, IntegerValue, Pointer, ValueBackend},
 };
 
 pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
@@ -61,58 +61,88 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
             for statement in &bb.statements {
                 match statement {
                     Statement::Assign { place, rvalue } => {
-                        let (ptr, place_ty) = resolve_place(place, block, &locals, &ir.tys);
+                        let (ptr, place_ty) =
+                            resolve_place(place, block, &locals, &ir.tys, backend);
 
-                        let (value, value_ty) = match rvalue {
+                        match rvalue {
                             RValue::Use(operand) => {
-                                resolve_operand(operand, block, &locals, &ir.tys)
+                                let (value, value_ty) =
+                                    resolve_operand(operand, block, &locals, &ir.tys, backend);
+
+                                assert_eq!(place_ty, value_ty);
+                                value.store(block, ptr);
                             }
                             RValue::Ref(place) => {
-                                let (ptr, ty) = resolve_place(place, block, &locals, &ir.tys);
+                                let (value, ty) =
+                                    resolve_place(place, block, &locals, &ir.tys, backend);
 
-                                (ptr.into_any_value(), ir.tys.find_or_insert(TyInfo::Ref(ty)))
+                                let value_ty = ir.tys.find_or_insert(TyInfo::Ref(ty));
+
+                                assert_eq!(place_ty, value_ty);
+                                value.store(block, ptr);
                             }
-                            RValue::BinaryOp { op, lhs, rhs } => match op {
-                                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
-                                    let (lhs, lhs_ty) =
-                                        resolve_operand(lhs, block, &locals, &ir.tys);
-                                    let (rhs, rhs_ty) =
-                                        resolve_operand(rhs, block, &locals, &ir.tys);
+                            RValue::BinaryOp { op, lhs, rhs } => {
+                                let (lhs, lhs_ty) =
+                                    resolve_operand(lhs, block, &locals, &ir.tys, backend);
+                                let (rhs, rhs_ty) =
+                                    resolve_operand(rhs, block, &locals, &ir.tys, backend);
 
-                                    assert_eq!(
-                                        lhs_ty, rhs_ty,
-                                        "lhs and rhs operands must match for {op:?}"
-                                    );
+                                let value = match op {
+                                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
+                                        assert_eq!(
+                                            lhs_ty, rhs_ty,
+                                            "lhs and rhs operands must match for {op:?}"
+                                        );
 
-                                    // TODO: Find reusable way to convert between `Value` enum, and
-                                    // the underlying types.
-                                    let result = match (lhs, rhs) {
-                                        (
-                                            AnyValue::Integer(IntegerValue::I8(lhs)),
-                                            AnyValue::Integer(IntegerValue::I8(rhs)),
-                                        ) => <B::Value as ValueBackend>::I8::add(block, lhs, rhs)
-                                            .into_integer_value(),
-                                        (
-                                            AnyValue::Integer(IntegerValue::U8(lhs)),
-                                            AnyValue::Integer(IntegerValue::U8(rhs)),
-                                        ) => <B::Value as ValueBackend>::U8::add(block, lhs, rhs)
-                                            .into_integer_value(),
-                                        _ => panic!("lhs and rhs are mis-matched"),
-                                    };
+                                        // TODO: Find reusable way to convert between `Value` enum, and
+                                        // the underlying types.
+                                        match (lhs, rhs) {
+                                            (
+                                                AnyValue::Integer(IntegerValue::I8(lhs)),
+                                                AnyValue::Integer(IntegerValue::I8(rhs)),
+                                            ) => {
+                                                <B::Value as ValueBackend>::I8::add(block, lhs, rhs)
+                                                    .into_integer_value()
+                                            }
+                                            (
+                                                AnyValue::Integer(IntegerValue::U8(lhs)),
+                                                AnyValue::Integer(IntegerValue::U8(rhs)),
+                                            ) => {
+                                                <B::Value as ValueBackend>::U8::add(block, lhs, rhs)
+                                                    .into_integer_value()
+                                            }
+                                            _ => panic!("lhs and rhs are mis-matched"),
+                                        }
+                                    }
+                                    _ => unimplemented!(),
+                                };
 
-                                    // lhs ty can be reused, since the result will be the same.
-                                    (result.into_any_value(), lhs_ty)
-                                }
-                                _ => unimplemented!(),
-                            },
+                                // Can re-use lhs type since it's the same as the result
+                                assert_eq!(place_ty, lhs_ty);
+                                value.store(block, ptr)
+                            }
                             RValue::UnaryOp { op, rhs } => todo!(),
-                            RValue::Aggregate { values } => todo!(),
+                            RValue::Aggregate { values } => {
+                                let TyInfo::Array { ty, length } = ir.tys.get(place_ty) else {
+                                    panic!("cannot assign aggregate to non-array");
+                                };
+
+                                let ty_info = backend.get_ty(ty);
+
+                                assert_eq!(values.len(), length);
+
+                                for (i, value) in values.iter().enumerate() {
+                                    let i = <B::Value as ValueBackend>::U8::create(block, i as u8);
+                                    let ptr =
+                                        ptr.clone().element_pointer(block, i, ty_info.clone());
+                                    let (value, value_ty) =
+                                        resolve_operand(value, block, &locals, &ir.tys, backend);
+                                    assert_eq!(ty, value_ty);
+                                    value.store(block, ptr);
+                                }
+                            }
                             RValue::Cast { kind, op, ty } => todo!(),
                         };
-
-                        assert_eq!(place_ty, value_ty);
-
-                        value.store(block, ptr);
                     }
                     Statement::StorageDead(local) => {
                         let (ptr, _) = &locals[local];
@@ -161,11 +191,12 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
     }
 }
 
-fn resolve_place<B: BasicBlock>(
+fn resolve_place<'ctx, B: BasicBlock>(
     place: &Place,
     block: &mut B,
     locals: &HashMap<Local, (<B::Value as ValueBackend>::Pointer, Ty)>,
     tys: &Tys,
+    backend: &impl Backend<'ctx, Value = B::Value>,
 ) -> (<B::Value as ValueBackend>::Pointer, Ty) {
     let (mut ptr, mut ty) = locals[&place.local].clone();
 
@@ -180,22 +211,41 @@ fn resolve_place<B: BasicBlock>(
                 (block.p_deref(ptr), inner_ty)
             }
             Projection::Field(_) => todo!(),
-            Projection::Index(local) => todo!(),
+            Projection::Index(local) => {
+                let TyInfo::Array {
+                    ty: item_ty,
+                    length,
+                } = tys.get(ty)
+                else {
+                    panic!("can only index on an array");
+                };
+
+                let (index_ptr, index_ty) = locals[local].clone();
+
+                // HACK: Can only index U8
+                assert!(matches!(tys.get(index_ty), TyInfo::U8));
+
+                let index = <B::Value as ValueBackend>::U8::load(block, index_ptr);
+                let item_ptr = ptr.element_pointer(block, index, backend.get_ty(item_ty));
+
+                (item_ptr, item_ty)
+            }
         };
     }
 
     (ptr, ty)
 }
 
-fn resolve_operand<B: BasicBlock>(
+fn resolve_operand<'ctx, B: BasicBlock>(
     operand: &Operand,
     block: &mut B,
     locals: &HashMap<Local, (<B::Value as ValueBackend>::Pointer, Ty)>,
     tys: &Tys,
+    backend: &impl Backend<'ctx, Value = B::Value>,
 ) -> (AnyValue<B::Value>, Ty) {
     match operand {
         Operand::Place(place) => {
-            let (ptr, ty) = resolve_place(place, block, locals, tys);
+            let (ptr, ty) = resolve_place(place, block, locals, tys, backend);
 
             (
                 match tys.get(ty) {
@@ -238,6 +288,7 @@ pub trait Backend<'ctx>: Sized {
     type Function: Function<'ctx, Value = Self::Value>;
 
     fn add_function(&self, name: &str, ret_ty: Ty) -> Self::Function;
+    fn get_ty(&self, ty: Ty) -> <Self::Value as ValueBackend>::Ty;
 }
 
 pub trait Function<'ctx> {

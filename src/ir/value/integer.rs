@@ -8,7 +8,9 @@ use crate::{
 pub trait ValueBackend {
     type BasicBlock: BasicBlock<Value = Self>;
 
-    type Pointer: Any<Self> + Clone;
+    type Ty: Clone;
+
+    type Pointer: Pointer<Self>;
 
     type I8: Integer<Self, Value = i8> + Clone + Debug;
     type U8: Integer<Self, Value = u8> + Clone + Debug;
@@ -56,4 +58,8 @@ pub trait Constant<B: ValueBackend + ?Sized> {
     type Value;
 
     fn create(bb: &mut B::BasicBlock, value: Self::Value) -> Self;
+}
+
+pub trait Pointer<B: ValueBackend + ?Sized>: Any<B> + Clone {
+    fn element_pointer<I: Integer<B>>(self, bb: &mut B::BasicBlock, i: I, ty: B::Ty) -> Self;
 }
