@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    ir::any_value::{Any, AnyValue},
+    ir::any_value::{Any, AnyValue, Loadable, Storable},
     lower::BasicBlock,
 };
 
@@ -12,12 +12,15 @@ pub trait ValueBackend {
 
     type Pointer: Pointer<Self>;
     type FatPointer: FatPointer<Self>;
+    type Array: Array<Self>;
 
     type I8: Integer<Self, Value = i8> + Clone + Debug;
     type U8: Integer<Self, Value = u8> + Clone + Debug;
 }
 
-pub trait Integer<B: ValueBackend + ?Sized>: Constant<B> + Any<B> {
+pub trait Integer<B: ValueBackend + ?Sized>:
+    Constant<B> + Loadable<B> + Storable<B> + Any<B>
+{
     fn into_integer_value(self) -> IntegerValue<B>;
 
     fn add(bb: &B::BasicBlock, lhs: Self, rhs: Self) -> Self;
@@ -82,7 +85,7 @@ impl<B: ValueBackend + ?Sized> ConstantValue<B> {
     }
 }
 
-pub trait Pointer<B: ValueBackend + ?Sized>: Any<B> + Clone {
+pub trait Pointer<B: ValueBackend + ?Sized>: Any<B> + Loadable<B> + Storable<B> + Clone {
     fn element_ptr<I: Integer<B>>(self, bb: &B::BasicBlock, i: I, ty: B::Ty) -> B::Pointer;
 
     fn deref(self, bb: &B::BasicBlock) -> B::Pointer;
@@ -91,4 +94,10 @@ pub trait Pointer<B: ValueBackend + ?Sized>: Any<B> + Clone {
 pub trait FatPointer<B: ValueBackend + ?Sized>: Pointer<B> {
     // TODO: Use something more appropriate than u8
     fn from_ptr(ptr: B::Pointer, data: B::U8) -> Self;
+
+    fn get_metadata(&self) -> B::U8;
+}
+
+pub trait Array<B: ValueBackend + ?Sized>: Storable<B> + Any<B> {
+    fn load_count(bb: &B::BasicBlock, ptr: B::Pointer, ty: B::Ty, count: usize) -> Self;
 }

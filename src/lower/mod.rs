@@ -5,10 +5,12 @@ use std::collections::HashMap;
 
 use crate::ir::{
     self, BinOp, CastKind, Local, Operand, Place, PointerCoercion, Projection, RValue, Statement,
-    Terminator, Ty, TyInfo, Tys, Value,
-    any_value::{Any, AnyValue},
+    Terminator, Ty, TyInfo, Tys, UnOp, Value,
+    any_value::{Any, AnyValue, Loadable, Storable},
     ctx::IrCtx,
-    integer::{Constant, ConstantValue, FatPointer, Integer, IntegerValue, Pointer, ValueBackend},
+    integer::{
+        Array, Constant, ConstantValue, FatPointer, Integer, IntegerValue, Pointer, ValueBackend,
+    },
 };
 
 pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
@@ -119,9 +121,32 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
 
                                 // Can re-use lhs type since it's the same as the result
                                 assert_eq!(place_ty, lhs_ty);
-                                value.store(block, ptr)
+                                value.store(block, ptr);
                             }
-                            RValue::UnaryOp { op, rhs } => todo!(),
+                            RValue::UnaryOp { op, rhs } => {
+                                let (rhs, rhs_ty) =
+                                    resolve_operand(rhs, block, &locals, &ir.tys, backend);
+
+                                match op {
+                                    UnOp::Not => todo!(),
+                                    UnOp::Neg => todo!(),
+                                    UnOp::PtrMetadata => {
+                                        let AnyValue::FatPointer(fat_ptr) = rhs else {
+                                            panic!(
+                                                "cannot get pointer metadata of non-fat pointer"
+                                            );
+                                        };
+
+                                        // TODO: Replace once something other than U8 is used for
+                                        // ptr info
+                                        assert_eq!(place_ty, ir.tys.find_or_insert(TyInfo::U8));
+
+                                        let metadata = fat_ptr.get_metadata();
+
+                                        metadata.store(block, ptr);
+                                    }
+                                }
+                            }
                             RValue::Aggregate { values } => {
                                 let TyInfo::Array { ty, length } = ir.tys.get(place_ty) else {
                                     panic!("cannot assign aggregate to non-array");
@@ -312,12 +337,9 @@ fn resolve_place<'ctx, B: BasicBlock>(
             }
             Projection::Field(_) => todo!(),
             Projection::Index(local) => {
-                let TyInfo::Array {
-                    ty: item_ty,
-                    length,
-                } = tys.get(ty)
+                let (TyInfo::Array { ty: item_ty, .. } | TyInfo::Slice(item_ty)) = tys.get(ty)
                 else {
-                    panic!("can only index on an array");
+                    panic!("can only index on an array or slice");
                 };
 
                 let (index_ptr, index_ty) = locals[local].clone();
@@ -356,12 +378,20 @@ fn resolve_operand<'ctx, B: BasicBlock>(
                         .into_integer_value()
                         .into_any_value(),
                     TyInfo::Ref(ty) => match tys.get(ty) {
-                        TyInfo::Slice(ty) => todo!(),
-                        TyInfo::Array { ty, length } => todo!(),
-                        _ => todo!(),
+                        TyInfo::Slice(ty) => {
+                            <B::Value as ValueBackend>::FatPointer::load(block, ptr)
+                                .into_any_value()
+                        }
+                        _ => <B::Value as ValueBackend>::Pointer::load(block, ptr).into_any_value(),
                     },
-                    TyInfo::Slice(ty) => todo!(),
-                    TyInfo::Array { ty, length } => todo!(),
+                    TyInfo::Slice(ty) => panic!("not possible, slice is unsized"),
+                    TyInfo::Array { ty, length } => <B::Value as ValueBackend>::Array::load_count(
+                        block,
+                        ptr,
+                        backend.get_ty(ty),
+                        length,
+                    )
+                    .into_any_value(),
                 },
                 ty,
             )
