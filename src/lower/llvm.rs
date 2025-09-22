@@ -23,17 +23,15 @@ use crate::{
     lower,
 };
 
-pub struct Llvm<'ctx, 'ir> {
+pub struct Llvm<'ctx> {
     ctx: &'ctx Context,
     module: Rc<Module<'ctx>>,
-    tys: &'ir Tys,
 }
-impl<'ctx, 'ir> Llvm<'ctx, 'ir> {
-    pub fn new(ctx: &'ctx Context, tys: &'ir Tys) -> Self {
+impl<'ctx> Llvm<'ctx> {
+    pub fn new(ctx: &'ctx Context) -> Self {
         Self {
             ctx,
             module: Rc::new(ctx.create_module("some_module")),
-            tys,
         }
     }
 
@@ -57,44 +55,55 @@ impl<'ctx, 'ir> Llvm<'ctx, 'ir> {
         unsafe { f.call() }
     }
 }
-impl<'ctx, 'ir> lower::Backend<'ctx> for Llvm<'ctx, 'ir> {
-    type Value
-        = Value<'ctx>
-    where
-        Self:;
-    type Function
-        = Function<'ctx, 'ir>
-    where
-        Self:;
+impl<'ctx> lower::Backend<'ctx> for Llvm<'ctx> {
+    type Value = Value<'ctx>;
+    type Function = Function<'ctx>;
 
-    fn add_function(&self, name: &str, ret_ty: Ty) -> Self::Function {
-        Function::new(self.ctx, Rc::clone(&self.module), self.tys, name, ret_ty)
+    fn add_function(
+        &self,
+        name: &str,
+        ret_ty: <Self::Value as ValueBackend>::Ty,
+    ) -> Self::Function {
+        Function::new(self.ctx, Rc::clone(&self.module), name, ret_ty)
     }
 
-    fn get_ty(&self, ty: Ty) -> <Self::Value as ValueBackend>::Ty {
-        to_llvm_ty(ty, self.tys, self.ctx)
+    fn get_ty(&self, tys: &Tys, ty: Ty) -> <Self::Value as ValueBackend>::Ty {
+        match tys.get(ty) {
+            TyInfo::U8 => self.ctx.i8_type().into(),
+            TyInfo::I8 => self.ctx.i8_type().into(),
+            TyInfo::Ref(inner_ty) => match tys.get(inner_ty) {
+                // Fat pointer
+                TyInfo::Slice(_) => self
+                    .ctx
+                    .ptr_type(AddressSpace::default())
+                    .array_type(2)
+                    .into(),
+                // Normal pointer
+                _ => self.ctx.ptr_type(AddressSpace::default()).into(),
+            },
+            TyInfo::Slice(_) => panic!("unsized type, cannot convert to LLVM"),
+            TyInfo::Array { ty, length } => self.get_ty(tys, ty).array_type(length as u32).into(),
+        }
     }
 }
 
-pub struct Function<'ctx, 'ir> {
+pub struct Function<'ctx> {
     ctx: &'ctx Context,
     module: Rc<Module<'ctx>>,
-    tys: &'ir Tys,
     builder: Builder<'ctx>,
     function: FunctionValue<'ctx>,
     entry_bb: inkwell::basic_block::BasicBlock<'ctx>,
 }
-impl<'ctx, 'ir> Function<'ctx, 'ir> {
+impl<'ctx> Function<'ctx> {
     pub fn new(
         ctx: &'ctx Context,
         module: Rc<Module<'ctx>>,
-        tys: &'ir Tys,
         name: &str,
-        ret_ty: Ty,
+        ret_ty: BasicTypeEnum<'ctx>,
     ) -> Self {
         let function = module.add_function(
             name,
-            to_llvm_ty(ret_ty, tys, ctx).fn_type(
+            ret_ty.fn_type(
                 // TODO: Params
                 &[],
                 false,
@@ -109,14 +118,17 @@ impl<'ctx, 'ir> Function<'ctx, 'ir> {
 
             ctx,
             module,
-            tys,
         }
     }
 }
-impl<'ctx, 'ir> lower::Function<'ctx> for Function<'ctx, 'ir> {
+impl<'ctx> lower::Function<'ctx> for Function<'ctx> {
     type Value = Value<'ctx>;
 
-    fn declare_local(&mut self, ty: Ty, name: &str) -> <Value<'ctx> as ValueBackend>::Pointer {
+    fn declare_local(
+        &mut self,
+        ty: <Self::Value as ValueBackend>::Ty,
+        name: &str,
+    ) -> <Value<'ctx> as ValueBackend>::Pointer {
         // Find the last non-terminator instruction.
         let mut last_non_terminator = self.entry_bb.get_last_instruction();
         while let Some(instr) = last_non_terminator
@@ -132,11 +144,7 @@ impl<'ctx, 'ir> lower::Function<'ctx> for Function<'ctx, 'ir> {
             None => self.builder.position_at_end(self.entry_bb),
         }
 
-        Pointer(
-            self.builder
-                .build_alloca(to_llvm_ty(ty, self.tys, self.ctx), name)
-                .unwrap(),
-        )
+        Pointer(self.builder.build_alloca(ty, name).unwrap())
     }
 
     fn add_basic_block(&mut self, name: &str) -> <Value<'ctx> as ValueBackend>::BasicBlock {
@@ -516,21 +524,6 @@ impl<'ctx> IntegerValueExt<'ctx> for IntegerValue<Value<'ctx>> {
             IntegerValue::I8(i8) => i8.0.as_basic_value_enum(),
             IntegerValue::U8(u8) => u8.0.as_basic_value_enum(),
         }
-    }
-}
-
-fn to_llvm_ty<'ctx>(ty: Ty, tys: &Tys, ctx: &'ctx Context) -> BasicTypeEnum<'ctx> {
-    match tys.get(ty) {
-        TyInfo::U8 => ctx.i8_type().into(),
-        TyInfo::I8 => ctx.i8_type().into(),
-        TyInfo::Ref(inner_ty) => match tys.get(inner_ty) {
-            // Fat pointer
-            TyInfo::Slice(_) => ctx.ptr_type(AddressSpace::default()).array_type(2).into(),
-            // Normal pointer
-            _ => ctx.ptr_type(AddressSpace::default()).into(),
-        },
-        TyInfo::Slice(_) => panic!("unsized type, cannot convert to LLVM"),
-        TyInfo::Array { ty, length } => to_llvm_ty(ty, tys, ctx).array_type(length as u32).into(),
     }
 }
 

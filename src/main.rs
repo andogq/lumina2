@@ -103,7 +103,7 @@ fn main() {
     assert_eq!(llvm_output, interpreter_output.into_u8().unwrap());
 
     let llvm_ctx = Context::create();
-    let mut backend = LowerLlvm::new(&llvm_ctx, &ctx.tys);
+    let mut backend = LowerLlvm::new(&llvm_ctx);
     lower(&ctx, &mut backend);
     dbg!(backend.run("function_name"));
 }
@@ -137,7 +137,7 @@ mod test {
 
                 let llvm_output_2 = {
                     let llvm_ctx = Context::create();
-                    let mut backend = LowerLlvm::new(&llvm_ctx, &ctx.tys);
+                    let mut backend = LowerLlvm::new(&llvm_ctx);
                     lower(&ctx, &mut backend);
                     backend.run("function_name")
                 };

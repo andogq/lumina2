@@ -25,7 +25,7 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                     // TODO: Function name
                     "function_name",
                     // `_0` holds the return value.
-                    body.local_decls[Local::zero()].ty,
+                    backend.get_ty(&ir.tys, body.local_decls[Local::zero()].ty),
                 ),
             )
         })
@@ -41,7 +41,10 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                 (
                     local,
                     (
-                        f.declare_local(decl.ty, local.to_string().as_str()),
+                        f.declare_local(
+                            backend.get_ty(&ir.tys, decl.ty),
+                            local.to_string().as_str(),
+                        ),
                         decl.ty,
                     ),
                 )
@@ -51,7 +54,7 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
         let bbs = &ir.functions[f_id].basic_blocks;
 
         // Forward declare all the basic blocks.
-        let mut basic_blocks: HashMap<ir::BasicBlock, <B::Value as ValueBackend>::BasicBlock> = bbs
+        let basic_blocks: HashMap<ir::BasicBlock, <B::Value as ValueBackend>::BasicBlock> = bbs
             .iter_keys()
             .map(|(bb_id, _bb)| (bb_id, f.add_basic_block(bb_id.to_string().as_str())))
             .collect();
@@ -152,7 +155,7 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                                     panic!("cannot assign aggregate to non-array");
                                 };
 
-                                let ty_info = backend.get_ty(ty);
+                                let ty_info = backend.get_ty(&ir.tys, ty);
 
                                 assert_eq!(values.len(), length);
 
@@ -348,7 +351,7 @@ fn resolve_place<'ctx, B: BasicBlock>(
                 assert!(matches!(tys.get(index_ty), TyInfo::U8));
 
                 let index = <B::Value as ValueBackend>::U8::load(block, index_ptr);
-                let item_ptr = ptr.element_ptr(block, index, backend.get_ty(item_ty));
+                let item_ptr = ptr.element_ptr(block, index, backend.get_ty(&tys, item_ty));
 
                 (item_ptr, item_ty)
             }
@@ -388,7 +391,7 @@ fn resolve_operand<'ctx, B: BasicBlock>(
                     TyInfo::Array { ty, length } => <B::Value as ValueBackend>::Array::load_count(
                         block,
                         ptr,
-                        backend.get_ty(ty),
+                        backend.get_ty(tys, ty),
                         length,
                     )
                     .into_any_value(),
@@ -421,14 +424,19 @@ pub trait Backend<'ctx>: Sized {
     type Value: ValueBackend;
     type Function: Function<'ctx, Value = Self::Value>;
 
-    fn add_function(&self, name: &str, ret_ty: Ty) -> Self::Function;
-    fn get_ty(&self, ty: Ty) -> <Self::Value as ValueBackend>::Ty;
+    fn add_function(&self, name: &str, ret_ty: <Self::Value as ValueBackend>::Ty)
+    -> Self::Function;
+    fn get_ty(&self, tys: &Tys, ty: Ty) -> <Self::Value as ValueBackend>::Ty;
 }
 
 pub trait Function<'ctx> {
     type Value: ValueBackend;
 
-    fn declare_local(&mut self, ty: Ty, name: &str) -> <Self::Value as ValueBackend>::Pointer;
+    fn declare_local(
+        &mut self,
+        ty: <Self::Value as ValueBackend>::Ty,
+        name: &str,
+    ) -> <Self::Value as ValueBackend>::Pointer;
 
     fn add_basic_block(&mut self, name: &str) -> <Self::Value as ValueBackend>::BasicBlock;
 }
