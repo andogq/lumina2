@@ -11,6 +11,7 @@ pub trait ValueBackend {
     type Ty: Clone;
 
     type Pointer: Pointer<Self>;
+    type FatPointer: FatPointer<Self>;
 
     type I8: Integer<Self, Value = i8> + Clone + Debug;
     type U8: Integer<Self, Value = u8> + Clone + Debug;
@@ -82,7 +83,12 @@ impl<B: ValueBackend + ?Sized> ConstantValue<B> {
 }
 
 pub trait Pointer<B: ValueBackend + ?Sized>: Any<B> + Clone {
-    fn element_ptr<I: Integer<B>>(self, bb: &B::BasicBlock, i: I, ty: B::Ty) -> Self;
+    fn element_ptr<I: Integer<B>>(self, bb: &B::BasicBlock, i: I, ty: B::Ty) -> B::Pointer;
 
-    fn deref(self, bb: &B::BasicBlock) -> Self;
+    fn deref(self, bb: &B::BasicBlock) -> B::Pointer;
+}
+
+pub trait FatPointer<B: ValueBackend + ?Sized>: Pointer<B> {
+    // TODO: Use something more appropriate than u8
+    fn from_ptr(ptr: B::Pointer, data: B::U8) -> Self;
 }

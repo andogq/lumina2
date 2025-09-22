@@ -4,11 +4,11 @@ pub mod llvm;
 use std::collections::HashMap;
 
 use crate::ir::{
-    self, BinOp, Local, Operand, Place, Projection, RValue, Statement, Terminator, Ty, TyInfo, Tys,
-    Value,
+    self, BinOp, CastKind, Local, Operand, Place, PointerCoercion, Projection, RValue, Statement,
+    Terminator, Ty, TyInfo, Tys, Value,
     any_value::{Any, AnyValue},
     ctx::IrCtx,
-    integer::{Constant, ConstantValue, Integer, IntegerValue, Pointer, ValueBackend},
+    integer::{Constant, ConstantValue, FatPointer, Integer, IntegerValue, Pointer, ValueBackend},
 };
 
 pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
@@ -140,7 +140,57 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                                     value.store(block, ptr);
                                 }
                             }
-                            RValue::Cast { kind, op, ty } => todo!(),
+                            RValue::Cast {
+                                kind,
+                                op,
+                                ty: target_ty,
+                            } => {
+                                let (op, op_ty) =
+                                    resolve_operand(op, block, &locals, &ir.tys, backend);
+
+                                match kind {
+                                    CastKind::PointerCoercion(PointerCoercion::Unsize) => {
+                                        // Ensure that the resulting type can be correctly stored.
+                                        assert_eq!(place_ty, *target_ty);
+
+                                        // Ensure the target type is correct
+                                        let TyInfo::Ref(inner_ty) = ir.tys.get(*target_ty) else {
+                                            panic!("cannot unsize coerce into non-ref");
+                                        };
+                                        let TyInfo::Slice(item_ty) = ir.tys.get(inner_ty) else {
+                                            panic!("cannot unsize coerce non-slice");
+                                        };
+
+                                        // Ensure the operand is of the correct type.
+                                        let TyInfo::Ref(inner_ty) = ir.tys.get(op_ty) else {
+                                            panic!("expected reference to pointer coerce");
+                                        };
+                                        let TyInfo::Array {
+                                            ty: array_item_ty,
+                                            length,
+                                        } = ir.tys.get(inner_ty)
+                                        else {
+                                            panic!("expected reference to array");
+                                        };
+
+                                        // Ensure the end type is compatible with this type.
+                                        assert_eq!(item_ty, array_item_ty);
+
+                                        let length = <B::Value as ValueBackend>::U8::create(
+                                            block,
+                                            length as u8,
+                                        );
+
+                                        let unsize_ptr =
+                                            <B::Value as ValueBackend>::FatPointer::from_ptr(
+                                                op.into_pointer_value(),
+                                                length,
+                                            );
+
+                                        unsize_ptr.store(block, ptr);
+                                    }
+                                }
+                            }
                         };
                     }
                     Statement::StorageDead(local) => {
@@ -305,7 +355,11 @@ fn resolve_operand<'ctx, B: BasicBlock>(
                     TyInfo::I8 => <B::Value as ValueBackend>::I8::load(block, ptr)
                         .into_integer_value()
                         .into_any_value(),
-                    TyInfo::Ref(ty) => todo!(),
+                    TyInfo::Ref(ty) => match tys.get(ty) {
+                        TyInfo::Slice(ty) => todo!(),
+                        TyInfo::Array { ty, length } => todo!(),
+                        _ => todo!(),
+                    },
                     TyInfo::Slice(ty) => todo!(),
                     TyInfo::Array { ty, length } => todo!(),
                 },

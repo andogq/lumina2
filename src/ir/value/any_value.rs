@@ -10,6 +10,7 @@ pub trait Any<B: ValueBackend + ?Sized> {
 pub enum AnyValue<B: ValueBackend + ?Sized> {
     Integer(IntegerValue<B>),
     Pointer(B::Pointer),
+    FatPointer(B::FatPointer),
 }
 impl<B: ValueBackend> AnyValue<B> {
     pub fn into_integer_value(self) -> IntegerValue<B> {
@@ -30,6 +31,7 @@ impl<B: ValueBackend> AnyValue<B> {
         match self {
             AnyValue::Integer(integer_value) => integer_value.store(bb, ptr),
             AnyValue::Pointer(ptr_value) => ptr_value.store(bb, ptr),
+            AnyValue::FatPointer(fat_ptr_value) => fat_ptr_value.store(bb, ptr),
         }
     }
 }

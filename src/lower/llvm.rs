@@ -246,6 +246,7 @@ impl<'ctx> lower::ValueBackend for Value<'ctx> {
     type Ty = BasicTypeEnum<'ctx>;
 
     type Pointer = Pointer<'ctx>;
+    type FatPointer = FatPointer<'ctx>;
 
     type I8 = I8<'ctx>;
     type U8 = U8<'ctx>;
@@ -309,6 +310,78 @@ impl<'ctx> Deref for Pointer<'ctx> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FatPointer<'ctx> {
+    pointer: Pointer<'ctx>,
+    data: U8<'ctx>,
+}
+impl<'ctx> crate::ir::integer::FatPointer<Value<'ctx>> for FatPointer<'ctx> {
+    fn from_ptr(ptr: Pointer<'ctx>, data: U8<'ctx>) -> Self {
+        Self { pointer: ptr, data }
+    }
+}
+impl<'ctx> crate::ir::integer::Pointer<Value<'ctx>> for FatPointer<'ctx> {
+    fn element_ptr<I: Integer<Value<'ctx>>>(
+        self,
+        bb: &<Value<'ctx> as ValueBackend>::BasicBlock,
+        i: I,
+        ty: <Value<'ctx> as ValueBackend>::Ty,
+    ) -> Pointer<'ctx> {
+        self.pointer.element_ptr(bb, i, ty)
+    }
+
+    fn deref(self, bb: &<Value<'ctx> as ValueBackend>::BasicBlock) -> Pointer<'ctx> {
+        self.pointer.deref(bb)
+    }
+}
+impl<'ctx> Any<Value<'ctx>> for FatPointer<'ctx> {
+    fn into_any_value(self) -> AnyValue<Value<'ctx>> {
+        AnyValue::FatPointer(self)
+    }
+
+    fn load(
+        bb: &<Value<'ctx> as ValueBackend>::BasicBlock,
+        ptr: <Value<'ctx> as ValueBackend>::Pointer,
+    ) -> Self {
+        let ptr_ty = bb.ctx.ptr_type(AddressSpace::default());
+        let pointer = bb
+            .builder
+            .build_load(ptr_ty, *ptr, "load_ptr")
+            .unwrap()
+            .into_pointer_value();
+
+        // HACK: Skip the `ptr` by pretending it's an array of pointers
+        let data_ptr = unsafe {
+            bb.builder.build_in_bounds_gep(
+                ptr_ty,
+                *ptr,
+                &[bb.ctx.i8_type().const_int(1, false)],
+                "data_ptr",
+            )
+        }
+        .unwrap();
+
+        let data = bb
+            .builder
+            .build_load(bb.ctx.i8_type(), data_ptr, "load_data")
+            .unwrap()
+            .into_int_value();
+
+        Self {
+            pointer: Pointer(pointer),
+            data: U8(data),
+        }
+    }
+
+    fn store(
+        self,
+        bb: &<Value<'ctx> as ValueBackend>::BasicBlock,
+        ptr: <Value<'ctx> as ValueBackend>::Pointer,
+    ) {
+        todo!()
     }
 }
 
