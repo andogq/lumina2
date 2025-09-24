@@ -1,4 +1,5 @@
-use crate::ir::{Pointer, Ty, TyInfo, Tys, repr::Constant};
+use super::Pointer;
+use crate::ir::{Ty, TyInfo, Tys, repr::Constant};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]

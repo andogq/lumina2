@@ -10,7 +10,7 @@ use inkwell::context::Context;
 
 use crate::{
     interpreter::Interpreter,
-    ir::{ctx::IrCtx, *},
+    ir::ctx::IrCtx,
     llvm::Llvm,
     lower::{llvm::Llvm as LowerLlvm, lower},
 };

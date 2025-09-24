@@ -1,12 +1,13 @@
+mod pointer;
 mod stack;
 mod value;
 
-use self::value::Value;
+use self::{pointer::Pointer, value::Value};
 use crate::{
     indexed_vec,
     interpreter::stack::Stack,
     ir::{
-        Pointer,
+        Tys,
         ctx::{Function, IrCtx},
         repr::{
             BasicBlock, BinOp, CastKind, Local, Operand, Place, PointerCoercion, Projection,
@@ -44,12 +45,10 @@ impl<'ctx> Interpreter<'ctx> {
 
         // Create the locals.
         for local_decl in &*body.local_decls {
-            let ptr = self.stack.get_frame().alloca(
-                self.ctx
-                    .tys
-                    .get(local_decl.ty)
-                    .allocated_size(&self.ctx.tys),
-            );
+            let ptr = self
+                .stack
+                .get_frame()
+                .alloca(get_allocated_size(local_decl.ty, &self.ctx.tys));
             self.locals.insert(InterpreterLocal {
                 ty: local_decl.ty,
                 ptr,
@@ -69,9 +68,6 @@ impl<'ctx> Interpreter<'ctx> {
                     Statement::Assign { place, rvalue } => {
                         let (target_ptr, target_ty) = self.resolve_place(place);
                         let (value, value_ty) = self.resolve_rvalue(rvalue);
-
-                        let target_ty = &self.ctx.tys.get(target_ty);
-                        let value_ty = &self.ctx.tys.get(value_ty);
 
                         assert_eq!(target_ty, value_ty, "cannot assign mismatched tys");
 
@@ -196,12 +192,7 @@ impl<'ctx> Interpreter<'ctx> {
                     );
 
                     // Perform the indexing on the pointer.
-                    ptr += index
-                        * self
-                            .ctx
-                            .tys
-                            .get(array_item_ty)
-                            .allocated_size(&self.ctx.tys);
+                    ptr += index * get_allocated_size(array_item_ty, &self.ctx.tys);
 
                     // Update the type.
                     ty = array_item_ty;
@@ -355,4 +346,18 @@ struct InterpreterLocal {
 enum LocalState {
     Alive,
     Dead,
+}
+
+fn get_allocated_size(ty: Ty, tys: &Tys) -> usize {
+    match tys.get(ty) {
+        TyInfo::U8 => size_of::<u8>(),
+        TyInfo::I8 => size_of::<i8>(),
+        TyInfo::Ref(inner) => match tys.get(inner) {
+            // If a ref to a slice, it's a fat pointer.
+            TyInfo::Slice(_) => size_of::<Pointer>() + size_of::<usize>(),
+            _ => size_of::<Pointer>(),
+        },
+        TyInfo::Slice(_) => panic!("slices are unsized"),
+        TyInfo::Array { ty, length } => get_allocated_size(ty, tys) * length,
+    }
 }

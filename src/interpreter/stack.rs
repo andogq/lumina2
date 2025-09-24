@@ -1,5 +1,5 @@
-use super::Value;
-use crate::ir::{Pointer, Ty, TyInfo, Tys};
+use super::{Pointer, Value, get_allocated_size};
+use crate::ir::{Ty, TyInfo, Tys};
 
 #[derive(Clone, Debug)]
 pub struct Stack {
@@ -37,8 +37,8 @@ impl Stack {
 
     /// Will serialise the provided value to the location of `ptr`. The stack pointer will not be
     /// advanced, and no checks will be performed to validate if the write is valid.
-    pub fn write_value(&mut self, ptr: Pointer, ty: &TyInfo, value: Value, tys: &Tys) {
-        let buf = &mut self.buf[*ptr..*ptr + ty.allocated_size(tys)];
+    pub fn write_value(&mut self, ptr: Pointer, ty: Ty, value: Value, tys: &Tys) {
+        let buf = &mut self.buf[*ptr..*ptr + get_allocated_size(ty, tys)];
 
         match value {
             Value::U8(value) => buf.copy_from_slice(&value.to_ne_bytes()),
@@ -46,13 +46,12 @@ impl Stack {
             Value::Ref(pointer) => buf.copy_from_slice(&pointer.to_ne_bytes()),
             Value::Array(array) => {
                 array.into_iter().enumerate().for_each(|(i, value)| {
-                    let TyInfo::Array { ty, length: _ } = ty else {
+                    let TyInfo::Array { ty, length: _ } = tys.get(ty) else {
                         panic!("need array");
                     };
-                    let ty = tys.get(*ty);
 
-                    let ptr = ptr + (i * ty.allocated_size(tys));
-                    self.write_value(ptr, &ty, value, tys);
+                    let ptr = ptr + (i * get_allocated_size(ty, tys));
+                    self.write_value(ptr, ty, value, tys);
                 });
             }
             Value::FatPointer { ptr, data } => {
@@ -66,15 +65,14 @@ impl Stack {
     }
 
     pub fn read_value(&self, ptr: Pointer, ty: Ty, tys: &Tys) -> Value {
-        let ty = &tys.get(ty);
-        let ty_size = ty.allocated_size(tys);
+        let ty_size = get_allocated_size(ty, tys);
 
         let buf = &self.buf[*ptr..*ptr + ty_size];
 
-        match ty {
+        match tys.get(ty) {
             TyInfo::U8 => Value::from_u8(u8::from_ne_bytes(buf.try_into().unwrap())),
             TyInfo::I8 => Value::from_i8(i8::from_ne_bytes(buf.try_into().unwrap())),
-            TyInfo::Ref(inner) => match tys.get(*inner) {
+            TyInfo::Ref(inner) => match tys.get(inner) {
                 TyInfo::Slice(_) => Value::FatPointer {
                     ptr: Pointer::new(usize::from_ne_bytes(
                         buf[..size_of::<Pointer>()].try_into().unwrap(),

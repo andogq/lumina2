@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use crate::{indexed_vec, ir::Pointer};
+use crate::indexed_vec;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[non_exhaustive]
@@ -10,22 +10,6 @@ pub enum TyInfo {
     Ref(Ty),
     Slice(Ty),
     Array { ty: Ty, length: usize },
-}
-
-impl TyInfo {
-    pub fn allocated_size(&self, tys: &Tys) -> usize {
-        match self {
-            TyInfo::U8 => size_of::<u8>(),
-            TyInfo::I8 => size_of::<i8>(),
-            TyInfo::Ref(inner) => match tys.get(*inner) {
-                // If a ref to a slice, it's a fat pointer.
-                TyInfo::Slice(_) => size_of::<Pointer>() + size_of::<usize>(),
-                _ => size_of::<Pointer>(),
-            },
-            TyInfo::Slice(_) => panic!("slices are unsized"),
-            TyInfo::Array { ty, length } => tys.get(*ty).allocated_size(tys) * length,
-        }
-    }
 }
 
 indexed_vec!(pub key Ty);
