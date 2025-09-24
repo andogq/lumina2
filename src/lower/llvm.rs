@@ -17,8 +17,7 @@ use inkwell::{
 use crate::{
     ir::{
         Ty, TyInfo, Tys,
-        any_value::{Any, AnyValue, Loadable, Storable},
-        integer::{Constant, Integer, IntegerValue, ValueBackend},
+        value::{Any, AnyValue, Constant, Integer, IntegerValue, Loadable, Storable, ValueBackend},
     },
     lower,
 };
@@ -267,7 +266,7 @@ impl<'ctx> lower::ValueBackend for Value<'ctx> {
 
 #[derive(Clone, Debug)]
 pub struct Pointer<'ctx>(PointerValue<'ctx>);
-impl<'ctx> crate::ir::integer::Pointer<Value<'ctx>> for Pointer<'ctx> {
+impl<'ctx> crate::ir::value::Pointer<Value<'ctx>> for Pointer<'ctx> {
     fn element_ptr<I: Integer<Value<'ctx>>>(
         self,
         bb: &BasicBlock<'ctx>,
@@ -333,7 +332,7 @@ pub struct FatPointer<'ctx> {
     pointer: Pointer<'ctx>,
     data: U8<'ctx>,
 }
-impl<'ctx> crate::ir::integer::FatPointer<Value<'ctx>> for FatPointer<'ctx> {
+impl<'ctx> crate::ir::value::FatPointer<Value<'ctx>> for FatPointer<'ctx> {
     fn from_ptr(ptr: Pointer<'ctx>, data: U8<'ctx>) -> Self {
         Self { pointer: ptr, data }
     }
@@ -342,7 +341,7 @@ impl<'ctx> crate::ir::integer::FatPointer<Value<'ctx>> for FatPointer<'ctx> {
         self.data.clone()
     }
 }
-impl<'ctx> crate::ir::integer::Pointer<Value<'ctx>> for FatPointer<'ctx> {
+impl<'ctx> crate::ir::value::Pointer<Value<'ctx>> for FatPointer<'ctx> {
     fn element_ptr<I: Integer<Value<'ctx>>>(
         self,
         bb: &<Value<'ctx> as ValueBackend>::BasicBlock,
@@ -528,7 +527,7 @@ impl<'ctx> IntegerValueExt<'ctx> for IntegerValue<Value<'ctx>> {
 }
 
 pub struct Array<'ctx>(ArrayValue<'ctx>);
-impl<'ctx> crate::ir::integer::Array<Value<'ctx>> for Array<'ctx> {
+impl<'ctx> crate::ir::value::Array<Value<'ctx>> for Array<'ctx> {
     fn load_count(
         bb: &BasicBlock<'ctx>,
         ptr: Pointer<'ctx>,

@@ -2,12 +2,12 @@
 macro_rules! ir_statement {
     // Statement in the form `Statement(params)`.
     ([$tys:expr] $statement:ident($($params:expr),* $(,)?)) => {
-        $crate::ir::Statement::$statement($($params,)*)
+        $crate::ir::repr::Statement::$statement($($params,)*)
     };
 
     // Callback for parsing an assignment statement.
     (@cb_assign[$tys:expr] [$($place:tt)*] [$($rvalue:tt)*]) => {
-        $crate::ir::Statement::Assign {
+        $crate::ir::repr::Statement::Assign {
             place: $crate::ir_place!($($place)*),
             rvalue: $crate::ir_rvalue!([$tys] $($rvalue)*),
         }
@@ -22,7 +22,7 @@ macro_rules! ir_statement {
 #[cfg(test)]
 mod test {
     #![allow(clippy::just_underscores_and_digits)]
-    use crate::ir::{Local, Statement};
+    use crate::ir::repr::{Local, Statement};
 
     mod statement {
         use super::*;
@@ -39,7 +39,7 @@ mod test {
     }
 
     mod assign {
-        use crate::ir::{Constant, Operand, Place, RValue};
+        use crate::ir::repr::{Constant, Operand, Place, RValue};
 
         use super::*;
 

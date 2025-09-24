@@ -7,7 +7,7 @@ macro_rules! ir_function {
 
     // Terminator, which can only occur as the last statement of a basic block.
     (@basic_block($ctx:ident) [$($statements:tt)*] [$($terminator:tt)+]) => {
-        BasicBlockData {
+        $crate::ir::repr::BasicBlockData {
             statements: ::std::vec![
                 $($statements)*
             ],
@@ -17,7 +17,7 @@ macro_rules! ir_function {
 
     // Section option 1: local declaration.
     (@section($ctx:ident, $body:ident) let $local:ident: $($ty:tt)*) => {
-        let $local = $body.local_decls.insert($crate::ir::LocalDecl {
+        let $local = $body.local_decls.insert($crate::ir::repr::LocalDecl {
             ty: ir_ty!([$ctx.tys] $($ty)*),
         });
     };
@@ -26,9 +26,9 @@ macro_rules! ir_function {
     (@section($ctx:ident, $body:ident) $($bb_name:ident: { $($bb:tt)* })*) => {
         // HACK: Predeclare all basic blocks.
         $(
-            let $bb_name = $body.basic_blocks.insert($crate::ir::BasicBlockData {
+            let $bb_name = $body.basic_blocks.insert($crate::ir::repr::BasicBlockData {
                 statements: ::std::vec![],
-                terminator: $crate::ir::Terminator::Return,
+                terminator: $crate::ir::repr::Terminator::Return,
             });
         )*
 
@@ -48,7 +48,7 @@ macro_rules! ir_function {
         let ctx = $ctx;
 
         #[allow(unused_mut)]
-        let mut body = $crate::ir::Body::default();
+        let mut body = $crate::ir::repr::Body::default();
 
         $(ir_function!(@section(ctx, body) $($section)*);)*
 
@@ -66,8 +66,12 @@ mod test {
     #![allow(clippy::just_underscores_and_digits)]
 
     use crate::ir::{
-        BasicBlockData, BinOp, Body, Constant, Local, LocalDecl, Operand, Place, Projection,
-        RValue, Statement, Terminator, TyInfo, ctx::IrCtx,
+        ctx::IrCtx,
+        repr::{
+            BasicBlockData, BinOp, Body, Constant, Local, LocalDecl, Operand, Place, Projection,
+            RValue, Statement, Terminator,
+        },
+        ty::TyInfo,
     };
 
     fn assert_body(body: &Body, locals: &[LocalDecl], basic_blocks: &[BasicBlockData]) {

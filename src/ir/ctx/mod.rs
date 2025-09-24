@@ -1,6 +1,6 @@
 use crate::{
     indexed_vec,
-    ir::{Body, Tys},
+    ir::{Tys, repr::Body},
 };
 
 #[derive(Clone, Debug, Default)]

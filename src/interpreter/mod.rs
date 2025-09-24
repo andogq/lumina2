@@ -3,12 +3,16 @@ mod value;
 
 use self::value::Value;
 use crate::{
-    BasicBlock, BinOp, Local, Operand, Place, Pointer, Projection, RValue, Statement, Terminator,
-    Ty, TyInfo, UnOp, indexed_vec,
+    indexed_vec,
     interpreter::stack::Stack,
     ir::{
-        CastKind, PointerCoercion,
+        Pointer,
         ctx::{Function, IrCtx},
+        repr::{
+            BasicBlock, BinOp, CastKind, Local, Operand, Place, PointerCoercion, Projection,
+            RValue, Statement, Terminator, UnOp,
+        },
+        ty::{Ty, TyInfo},
     },
 };
 

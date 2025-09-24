@@ -1,15 +1,15 @@
 #[macro_export(local_inner_macros)]
 macro_rules! ir_terminator {
     (return) => {
-        $crate::ir::Terminator::Return
+        $crate::ir::repr::Terminator::Return
     };
 
     (goto -> $bb:ident) => {
-        $crate::ir::Terminator::Goto($bb)
+        $crate::ir::repr::Terminator::Goto($bb)
     };
 
     (switchInt($($discriminator:tt)*) -> [$($value:literal: $bb:ident,)* otherwise: $otherwise:ident]) => {
-        $crate::ir::Terminator::SwitchInt {
+        $crate::ir::repr::Terminator::SwitchInt {
             discriminator: ir_operand!($($discriminator)*),
             targets: ::std::vec![$(($value.into(), $bb),)*],
             otherwise: $otherwise,
@@ -21,7 +21,7 @@ macro_rules! ir_terminator {
 mod test {
     #![allow(clippy::just_underscores_and_digits)]
 
-    use crate::ir::{BasicBlock, Constant, Local, Operand, Place, Terminator};
+    use crate::ir::repr::{BasicBlock, Constant, Local, Operand, Place, Terminator};
 
     #[test]
     fn term_return() {

@@ -31,7 +31,7 @@ macro_rules! ir_place {
             step
             local=[$($local)?]
             post=[$($post)*]
-            projection=[$($projection)* $crate::ir::Projection::Index($index),]
+            projection=[$($projection)* $crate::ir::repr::Projection::Index($index),]
             nested=[$($nested)*]
             $($rest)*
         )
@@ -57,7 +57,7 @@ macro_rules! ir_place {
         ir_place!(
             step
             local=[$($local)?]
-            post=[$($post)* $crate::ir::Projection::Deref,]
+            post=[$($post)* $crate::ir::repr::Projection::Deref,]
             projection=[$($projection)*]
             nested=[$($nested)*]
             $($rest)*
@@ -81,7 +81,7 @@ macro_rules! ir_place {
     // End case, no other projection tokens found. Projections within `post` are appended to
     // `projection`, and everything is returned as a `Place` instantiation.
     (step local=[$local:ident] post=[$($post:tt)*] projection=[$($projection:tt)*] nested=[]) => {
-        $crate::ir::Place {
+        $crate::ir::repr::Place {
             local: $local,
             projection: ::std::vec![$($projection)* $($post)*],
         }
@@ -109,7 +109,7 @@ macro_rules! ir_place {
 #[cfg(test)]
 mod test {
     #![allow(clippy::just_underscores_and_digits)]
-    use crate::ir::{Local, Place, Projection};
+    use crate::ir::repr::{Local, Place, Projection};
 
     #[test]
     fn local() {

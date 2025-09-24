@@ -14,9 +14,12 @@ use inkwell::{
 
 use crate::{
     ir::{
-        BasicBlock, BinOp, Body, CastKind, Constant, Local, Operand, Place, PointerCoercion,
-        Projection, RValue, Statement, Terminator, Ty, TyInfo, UnOp,
         ctx::{Function, IrCtx},
+        repr::{
+            BasicBlock, BinOp, Body, CastKind, Constant, Local, Operand, Place, PointerCoercion,
+            Projection, RValue, Statement, Terminator, UnOp,
+        },
+        ty::{Ty, TyInfo},
     },
     util::indexed_vec::IndexedVec,
 };

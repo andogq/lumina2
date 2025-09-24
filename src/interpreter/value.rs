@@ -1,4 +1,4 @@
-use crate::ir::{Constant, Pointer, Ty, TyInfo, Tys};
+use crate::ir::{Pointer, Ty, TyInfo, Tys, repr::Constant};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]

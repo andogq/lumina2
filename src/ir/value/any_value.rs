@@ -1,15 +1,7 @@
-use crate::ir::integer::{IntegerValue, ValueBackend};
+use super::{IntegerValue, Storable, ValueBackend};
 
 pub trait Any<B: ValueBackend + ?Sized> {
     fn into_any_value(self) -> AnyValue<B>;
-}
-
-pub trait Loadable<B: ValueBackend + ?Sized> {
-    fn load(bb: &B::BasicBlock, ptr: B::Pointer) -> Self;
-}
-
-pub trait Storable<B: ValueBackend + ?Sized> {
-    fn store(self, bb: &B::BasicBlock, ptr: B::Pointer);
 }
 
 pub enum AnyValue<B: ValueBackend + ?Sized> {
@@ -18,6 +10,7 @@ pub enum AnyValue<B: ValueBackend + ?Sized> {
     FatPointer(B::FatPointer),
     Array(B::Array),
 }
+
 impl<B: ValueBackend> AnyValue<B> {
     pub fn into_integer_value(self) -> IntegerValue<B> {
         match self {

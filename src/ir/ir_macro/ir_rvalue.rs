@@ -2,16 +2,16 @@
 macro_rules! ir_rvalue {
     // Handle unary operation (single argument).
     (cb_op($op:ident) [$($rhs:tt)*]) => {
-        $crate::ir::RValue::UnaryOp {
-            op: $crate::ir::UnOp::$op,
+        $crate::ir::repr::RValue::UnaryOp {
+            op: $crate::ir::repr::UnOp::$op,
             rhs: $crate::ir_operand!($($rhs)*),
         }
     };
 
     // Handle binary operation (two arguments).
     (cb_op($op:ident) [$($lhs:tt)*] [$($rhs:tt)*]) => {
-        $crate::ir::RValue::BinaryOp {
-            op: $crate::ir::BinOp::$op,
+        $crate::ir::repr::RValue::BinaryOp {
+            op: $crate::ir::repr::BinOp::$op,
             lhs: $crate::ir_operand!($($lhs)*),
             rhs: $crate::ir_operand!($($rhs)*),
         }
@@ -33,7 +33,7 @@ macro_rules! ir_rvalue {
 
     // Reference of a place.
     ([$tys:expr] & $($place:tt)*) => {
-        $crate::ir::RValue::Ref(ir_place!($($place)*))
+        $crate::ir::repr::RValue::Ref(ir_place!($($place)*))
     };
 
     // Array aggregate.
@@ -42,19 +42,19 @@ macro_rules! ir_rvalue {
     };
 
     (@cb_aggregate $([$($operand:tt)*])*) => {
-        $crate::ir::RValue::Aggregate {
+        $crate::ir::repr::RValue::Aggregate {
             values: ::std::vec![$(ir_operand!($($operand)*),)*],
         }
     };
 
     // Assume something with an operand (operand or cast).
     (@cb_operand_or_cast[$tys:expr] [$($operand:tt)*]) => {
-        $crate::ir::RValue::Use(ir_operand!($($operand)*))
+        $crate::ir::repr::RValue::Use(ir_operand!($($operand)*))
     };
     (@cb_operand_or_cast[$tys:expr] [$($operand:tt)*] [$($cast_info:tt)*]) => {{
         let (kind, ty) = $crate::ir_rvalue!(@extract_cast_info[$tys] ty=[] $($cast_info)*);
 
-        $crate::ir::RValue::Cast {
+        $crate::ir::repr::RValue::Cast {
             op: $crate::ir_operand!($($operand)*),
             kind,
             ty
@@ -63,9 +63,9 @@ macro_rules! ir_rvalue {
     // If the last group of tokens is wrapped in parens, it's the cast kind.
     (@extract_cast_info[$tys:expr] ty=[$($ty:tt)*] ($cast_kind:ident $(($($args:tt)*))?)) => {
         (
-            $crate::ir::CastKind::$cast_kind $(({
+            $crate::ir::repr::CastKind::$cast_kind $(({
                 // NOTE: Import all enums used as args.
-                use $crate::ir::PointerCoercion::*;
+                use $crate::ir::repr::PointerCoercion::*;
 
                 $($args)*
             }))?,
@@ -86,8 +86,11 @@ mod test {
     #![allow(clippy::just_underscores_and_digits)]
 
     use crate::ir::{
-        BinOp, CastKind, Constant, Local, Operand, Place, PointerCoercion, Projection, RValue,
-        TyInfo, Tys, UnOp,
+        repr::{
+            BinOp, CastKind, Constant, Local, Operand, Place, PointerCoercion, Projection, RValue,
+            UnOp,
+        },
+        ty::{TyInfo, Tys},
     };
 
     #[test]

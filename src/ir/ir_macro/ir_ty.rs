@@ -11,11 +11,11 @@ macro_rules! ir_ty {
      */
     // Type for `u8` primitive.
     ([$tys:expr] u8) => {
-        ir_ty!(insert [$tys] $crate::ir::TyInfo::U8)
+        ir_ty!(insert [$tys] $crate::ir::ty::TyInfo::U8)
     };
     // Type for `i8` primitive.
     ([$tys:expr] i8) => {
-        ir_ty!(insert [$tys] $crate::ir::TyInfo::I8)
+        ir_ty!(insert [$tys] $crate::ir::ty::TyInfo::I8)
     };
 
     /*
@@ -28,7 +28,7 @@ macro_rules! ir_ty {
     ([$tys:expr] & $($ty:tt)+) => {{
         let ty = ir_ty!([$tys] $($ty)+);
 
-        ir_ty!(insert [$tys] $crate::ir::TyInfo::Ref(ty))
+        ir_ty!(insert [$tys] $crate::ir::ty::TyInfo::Ref(ty))
     }};
 
     /*
@@ -47,12 +47,12 @@ macro_rules! ir_ty {
     (cb_array_parts [$tys:expr] [$($ty:tt)+] [$length:expr]) => {{
         let ty = ir_ty!([$tys] $($ty)+);
 
-        ir_ty!(insert [$tys] $crate::ir::TyInfo::Array { ty, length: $length })
+        ir_ty!(insert [$tys] $crate::ir::ty::TyInfo::Array { ty, length: $length })
     }};
     (cb_array_parts [$tys:expr] [$($ty:tt)+]) => {{
         let ty = ir_ty!([$tys] $($ty)+);
 
-        ir_ty!(insert [$tys] $crate::ir::TyInfo::Slice(ty))
+        ir_ty!(insert [$tys] $crate::ir::ty::TyInfo::Slice(ty))
     }};
 
 
@@ -67,7 +67,7 @@ macro_rules! ir_ty {
 
 #[cfg(test)]
 mod test {
-    use crate::ir::{TyInfo, Tys};
+    use crate::ir::ty::{TyInfo, Tys};
 
     macro_rules! assert_ty {
             (

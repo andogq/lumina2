@@ -1,22 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{
-    ir::any_value::{Any, AnyValue, Loadable, Storable},
-    lower::BasicBlock,
-};
-
-pub trait ValueBackend {
-    type BasicBlock: BasicBlock<Value = Self>;
-
-    type Ty: Clone;
-
-    type Pointer: Pointer<Self>;
-    type FatPointer: FatPointer<Self>;
-    type Array: Array<Self>;
-
-    type I8: Integer<Self, Value = i8> + Clone + Debug;
-    type U8: Integer<Self, Value = u8> + Clone + Debug;
-}
+use super::{Any, AnyValue, Constant, Loadable, Storable, ValueBackend};
 
 pub trait Integer<B: ValueBackend + ?Sized>:
     Constant<B> + Loadable<B> + Storable<B> + Any<B>
@@ -56,48 +40,4 @@ impl<B: ValueBackend + ?Sized> IntegerValue<B> {
     pub fn into_any_value(self) -> AnyValue<B> {
         AnyValue::Integer(self)
     }
-}
-
-pub trait Constant<B: ValueBackend + ?Sized> {
-    type Value;
-
-    fn create(bb: &B::BasicBlock, value: Self::Value) -> Self;
-}
-
-pub enum ConstantValue<B: ValueBackend + ?Sized> {
-    I8(<B::I8 as Constant<B>>::Value),
-    U8(<B::U8 as Constant<B>>::Value),
-}
-
-impl<B: ValueBackend + ?Sized> ConstantValue<B> {
-    pub fn into_i8(self) -> <B::I8 as Constant<B>>::Value {
-        match self {
-            Self::I8(value) => value,
-            _ => panic!("expected I8"),
-        }
-    }
-
-    pub fn into_u8(self) -> <B::U8 as Constant<B>>::Value {
-        match self {
-            Self::U8(value) => value,
-            _ => panic!("expected U8"),
-        }
-    }
-}
-
-pub trait Pointer<B: ValueBackend + ?Sized>: Any<B> + Loadable<B> + Storable<B> + Clone {
-    fn element_ptr<I: Integer<B>>(self, bb: &B::BasicBlock, i: I, ty: B::Ty) -> B::Pointer;
-
-    fn deref(self, bb: &B::BasicBlock) -> B::Pointer;
-}
-
-pub trait FatPointer<B: ValueBackend + ?Sized>: Pointer<B> {
-    // TODO: Use something more appropriate than u8
-    fn from_ptr(ptr: B::Pointer, data: B::U8) -> Self;
-
-    fn get_metadata(&self) -> B::U8;
-}
-
-pub trait Array<B: ValueBackend + ?Sized>: Storable<B> + Any<B> {
-    fn load_count(bb: &B::BasicBlock, ptr: B::Pointer, ty: B::Ty, count: usize) -> Self;
 }

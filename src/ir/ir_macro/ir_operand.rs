@@ -9,12 +9,12 @@
 macro_rules! ir_operand {
     // Parse value as constant expression.
     (const $const:expr) => {
-        $crate::ir::Operand::Constant($const.into())
+        $crate::ir::repr::Operand::Constant($const.into())
     };
 
     // Parse as a place, deferring to `ir_place` macro.
     ($($place:tt)*) => {
-        $crate::ir::Operand::Place(
+        $crate::ir::repr::Operand::Place(
             $crate::ir_place!($($place)*)
         )
     };
@@ -23,7 +23,7 @@ macro_rules! ir_operand {
 #[cfg(test)]
 mod test {
     #![allow(clippy::just_underscores_and_digits)]
-    use crate::ir::{Constant, Local, Operand, Place};
+    use crate::ir::repr::{Constant, Local, Operand, Place};
 
     #[test]
     fn op_const() {
