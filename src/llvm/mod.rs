@@ -14,8 +14,8 @@ use inkwell::{
 
 use crate::{
     ir::{
-        BasicBlock, BinOp, Body, CastKind, Local, Operand, Place, PointerCoercion, Projection,
-        RValue, Statement, Terminator, Ty, TyInfo, UnOp, Value,
+        BasicBlock, BinOp, Body, CastKind, Constant, Local, Operand, Place, PointerCoercion,
+        Projection, RValue, Statement, Terminator, Ty, TyInfo, UnOp,
         ctx::{Function, IrCtx},
     },
     util::indexed_vec::IndexedVec,
@@ -226,15 +226,20 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                             .iter()
                             .map(|(value, bb)| {
                                 (
-                                    self.module
-                                        .tys
-                                        .get(value.get_const_ty(&self.module.llvm.ir.tys))
-                                        .into_int_type()
-                                        .const_int(
-                                            // HACK: Only supports u8
-                                            value.clone().into_u8().unwrap() as u64,
-                                            false,
-                                        ),
+                                    match value {
+                                        Constant::I8(value) => self
+                                            .module
+                                            .tys
+                                            .get(self.module.llvm.ir.tys.find_or_insert(TyInfo::I8))
+                                            .into_int_type()
+                                            .const_int(*value as u64, true),
+                                        Constant::U8(value) => self
+                                            .module
+                                            .tys
+                                            .get(self.module.llvm.ir.tys.find_or_insert(TyInfo::U8))
+                                            .into_int_type()
+                                            .const_int(*value as u64, false),
+                                    },
                                     self.basic_blocks[*bb],
                                 )
                             })
@@ -521,7 +526,7 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                 )
             }
             Operand::Constant(value) => match value {
-                Value::U8(value) => (
+                Constant::U8(value) => (
                     self.module
                         .tys
                         .get(self.module.llvm.ir.tys.find_or_insert(TyInfo::U8))
@@ -530,7 +535,7 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                         .into(),
                     TyInfo::U8,
                 ),
-                Value::I8(value) => (
+                Constant::I8(value) => (
                     self.module
                         .tys
                         .get(self.module.llvm.ir.tys.find_or_insert(TyInfo::I8))
@@ -539,9 +544,6 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                         .into(),
                     TyInfo::I8,
                 ),
-                Value::Ref(pointer) => todo!(),
-                Value::Array(values) => todo!(),
-                Value::FatPointer { .. } => todo!(),
             },
         }
     }

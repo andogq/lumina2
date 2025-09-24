@@ -1,8 +1,10 @@
 mod stack;
+mod value;
 
+use self::value::Value;
 use crate::{
     BasicBlock, BinOp, Local, Operand, Place, Pointer, Projection, RValue, Statement, Terminator,
-    Ty, TyInfo, UnOp, Value, indexed_vec,
+    Ty, TyInfo, UnOp, indexed_vec,
     interpreter::stack::Stack,
     ir::{
         CastKind, PointerCoercion,
@@ -89,7 +91,7 @@ impl<'ctx> Interpreter<'ctx> {
                     let (discriminator, _) = self.resolve_operand(discriminator);
                     next_block = targets
                         .iter()
-                        .find(|(value, _)| discriminator == *value)
+                        .find(|(value, _)| discriminator == value.clone().into())
                         .map(|(_, block)| *block)
                         .unwrap_or(*otherwise);
                 }
@@ -326,7 +328,12 @@ impl<'ctx> Interpreter<'ctx> {
 
                 (self.stack.read_value(ptr, ty, &self.ctx.tys), ty)
             }
-            Operand::Constant(value) => (value.clone(), value.get_const_ty(&self.ctx.tys)),
+            Operand::Constant(value) => {
+                let value: Value = value.clone().into();
+                let ty = value.get_const_ty(&self.ctx.tys);
+
+                (value, ty)
+            }
         }
     }
 }

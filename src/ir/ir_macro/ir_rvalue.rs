@@ -86,8 +86,8 @@ mod test {
     #![allow(clippy::just_underscores_and_digits)]
 
     use crate::ir::{
-        BinOp, CastKind, Local, Operand, Place, PointerCoercion, Projection, RValue, TyInfo, Tys,
-        UnOp, Value,
+        BinOp, CastKind, Constant, Local, Operand, Place, PointerCoercion, Projection, RValue,
+        TyInfo, Tys, UnOp,
     };
 
     #[test]
@@ -96,7 +96,7 @@ mod test {
             ir_rvalue!([_] Neg(const 1_u8)),
             RValue::UnaryOp {
                 op: UnOp::Neg,
-                rhs: Operand::Constant(Value::U8(1))
+                rhs: Operand::Constant(Constant::U8(1))
             },
         );
     }
@@ -107,8 +107,8 @@ mod test {
             ir_rvalue!([_] Add(const 1_u8, const 2_u8)),
             RValue::BinaryOp {
                 op: BinOp::Add,
-                lhs: Operand::Constant(Value::U8(1)),
-                rhs: Operand::Constant(Value::U8(2)),
+                lhs: Operand::Constant(Constant::U8(1)),
+                rhs: Operand::Constant(Constant::U8(2)),
             },
         );
     }
@@ -130,7 +130,7 @@ mod test {
     fn use_constant() {
         assert_eq!(
             ir_rvalue!([_] const 1_u8),
-            RValue::Use(Operand::Constant(Value::U8(1))),
+            RValue::Use(Operand::Constant(Constant::U8(1))),
         );
     }
 

@@ -23,11 +23,14 @@ macro_rules! ir_operand {
 #[cfg(test)]
 mod test {
     #![allow(clippy::just_underscores_and_digits)]
-    use crate::ir::{Local, Operand, Place, Value};
+    use crate::ir::{Constant, Local, Operand, Place};
 
     #[test]
     fn op_const() {
-        assert_eq!(ir_operand!(const 123_u8), Operand::Constant(Value::U8(123)));
+        assert_eq!(
+            ir_operand!(const 123_u8),
+            Operand::Constant(Constant::U8(123))
+        );
     }
 
     #[test]

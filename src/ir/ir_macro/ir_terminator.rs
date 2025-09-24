@@ -21,7 +21,7 @@ macro_rules! ir_terminator {
 mod test {
     #![allow(clippy::just_underscores_and_digits)]
 
-    use crate::ir::{BasicBlock, Local, Operand, Place, Terminator, Value};
+    use crate::ir::{BasicBlock, Constant, Local, Operand, Place, Terminator};
 
     #[test]
     fn term_return() {
@@ -43,7 +43,7 @@ mod test {
                     local: _0,
                     projection: vec![]
                 }),
-                targets: vec![(Value::U8(0), bb0), (Value::U8(10), bb1)],
+                targets: vec![(Constant::U8(0), bb0), (Constant::U8(10), bb1)],
                 otherwise: bb2
             }
         );

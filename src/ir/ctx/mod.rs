@@ -1,6 +1,6 @@
 use crate::{
     indexed_vec,
-    ir::{Body, value::Tys},
+    ir::{Body, Tys},
 };
 
 #[derive(Clone, Debug, Default)]
@@ -11,4 +11,3 @@ pub struct IrCtx {
 
 indexed_vec!(pub key Function);
 indexed_vec!(pub Functions<Function, Body>);
-

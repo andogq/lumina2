@@ -1,4 +1,5 @@
-use crate::ir::{Pointer, Ty, TyInfo, Tys, Value};
+use super::Value;
+use crate::ir::{Pointer, Ty, TyInfo, Tys};
 
 #[derive(Clone, Debug)]
 pub struct Stack {

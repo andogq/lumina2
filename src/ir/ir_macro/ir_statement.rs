@@ -39,7 +39,7 @@ mod test {
     }
 
     mod assign {
-        use crate::ir::{Operand, Place, RValue, Value};
+        use crate::ir::{Constant, Operand, Place, RValue};
 
         use super::*;
 
@@ -54,7 +54,7 @@ mod test {
                         local: _0,
                         projection: vec![]
                     },
-                    rvalue: RValue::Use(Operand::Constant(Value::U8(1)))
+                    rvalue: RValue::Use(Operand::Constant(Constant::U8(1)))
                 }
             );
         }

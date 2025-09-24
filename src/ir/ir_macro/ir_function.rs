@@ -66,8 +66,8 @@ mod test {
     #![allow(clippy::just_underscores_and_digits)]
 
     use crate::ir::{
-        BasicBlockData, BinOp, Body, Local, LocalDecl, Operand, Place, Projection, RValue,
-        Statement, Terminator, TyInfo, Value, ctx::IrCtx,
+        BasicBlockData, BinOp, Body, Constant, Local, LocalDecl, Operand, Place, Projection,
+        RValue, Statement, Terminator, TyInfo, ctx::IrCtx,
     };
 
     fn assert_body(body: &Body, locals: &[LocalDecl], basic_blocks: &[BasicBlockData]) {
@@ -171,7 +171,7 @@ mod test {
                                 local: _0,
                                 projection: vec![],
                             },
-                            rvalue: RValue::Use(Operand::Constant(Value::U8(1))),
+                            rvalue: RValue::Use(Operand::Constant(Constant::U8(1))),
                         },
                         Statement::Assign {
                             place: Place {

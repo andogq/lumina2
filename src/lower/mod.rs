@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::ir::{
     self, BinOp, CastKind, Local, Operand, Place, PointerCoercion, Projection, RValue, Statement,
-    Terminator, Ty, TyInfo, Tys, UnOp, Value,
+    Terminator, Ty, TyInfo, Tys, UnOp,
     any_value::{Any, AnyValue, Loadable, Storable},
     ctx::IrCtx,
     integer::{
@@ -272,9 +272,8 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                         .iter()
                         .map(|(value, bb)| {
                             let value = match value {
-                                Value::U8(u8) => ConstantValue::<B::Value>::U8(*u8),
-                                Value::I8(i8) => ConstantValue::I8(*i8),
-                                _ => panic!("invalid constant"),
+                                crate::Constant::U8(u8) => ConstantValue::<B::Value>::U8(*u8),
+                                crate::Constant::I8(i8) => ConstantValue::I8(*i8),
                             };
 
                             (value, bb)
@@ -402,13 +401,13 @@ fn resolve_operand<'ctx, B: BasicBlock>(
         Operand::Constant(value) => {
             // TODO: Use something other than `Value` which doesn't have non-constant variants.
             match value {
-                Value::U8(value) => (
+                crate::Constant::U8(value) => (
                     <B::Value as ValueBackend>::U8::create(block, *value)
                         .into_integer_value()
                         .into_any_value(),
                     tys.find_or_insert(TyInfo::U8),
                 ),
-                Value::I8(value) => (
+                crate::Constant::I8(value) => (
                     <B::Value as ValueBackend>::I8::create(block, *value)
                         .into_integer_value()
                         .into_any_value(),
