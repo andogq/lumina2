@@ -57,7 +57,7 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
         let bbs = &ir.functions[f_id].basic_blocks;
 
         // Forward declare all the basic blocks.
-        let basic_blocks: HashMap<ReprBasicBlock, <B::Value as ValueBackend>::BasicBlock> = bbs
+        let basic_blocks: HashMap<ReprBasicBlock, B::BasicBlock> = bbs
             .iter_keys()
             .map(|(bb_id, _bb)| (bb_id, f.add_basic_block(bb_id.to_string().as_str())))
             .collect();
@@ -108,17 +108,11 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                                             (
                                                 AnyValue::Integer(IntegerValue::I8(lhs)),
                                                 AnyValue::Integer(IntegerValue::I8(rhs)),
-                                            ) => {
-                                                <B::Value as ValueBackend>::I8::add(block, lhs, rhs)
-                                                    .into_integer_value()
-                                            }
+                                            ) => B::I8::add(block, lhs, rhs).into_integer_value(),
                                             (
                                                 AnyValue::Integer(IntegerValue::U8(lhs)),
                                                 AnyValue::Integer(IntegerValue::U8(rhs)),
-                                            ) => {
-                                                <B::Value as ValueBackend>::U8::add(block, lhs, rhs)
-                                                    .into_integer_value()
-                                            }
+                                            ) => B::U8::add(block, lhs, rhs).into_integer_value(),
                                             _ => panic!("lhs and rhs are mis-matched"),
                                         }
                                     }
@@ -163,7 +157,7 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                                 assert_eq!(values.len(), length);
 
                                 for (i, value) in values.iter().enumerate() {
-                                    let i = <B::Value as ValueBackend>::U8::create(block, i as u8);
+                                    let i = B::U8::create(block, i as u8);
                                     let ptr = ptr.clone().element_ptr(block, i, ty_info.clone());
                                     let (value, value_ty) =
                                         resolve_operand(value, block, &locals, &ir.tys, backend);
@@ -207,16 +201,12 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                                         // Ensure the end type is compatible with this type.
                                         assert_eq!(item_ty, array_item_ty);
 
-                                        let length = <B::Value as ValueBackend>::U8::create(
-                                            block,
-                                            length as u8,
-                                        );
+                                        let length = B::U8::create(block, length as u8);
 
-                                        let unsize_ptr =
-                                            <B::Value as ValueBackend>::FatPointer::from_ptr(
-                                                op.into_pointer_value(),
-                                                length,
-                                            );
+                                        let unsize_ptr = B::FatPointer::from_ptr(
+                                            op.into_pointer_value(),
+                                            length,
+                                        );
 
                                         unsize_ptr.store(block, ptr);
                                     }
@@ -248,14 +238,8 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
 
                     // TODO: Add type overloads for `block.l` to load specific values.
                     let value = match ir.tys.get(*value_ty) {
-                        TyInfo::U8 => {
-                            <B::Value as ValueBackend>::U8::load(block, value_ptr.clone())
-                                .into_integer_value()
-                        }
-                        TyInfo::I8 => {
-                            <B::Value as ValueBackend>::I8::load(block, value_ptr.clone())
-                                .into_integer_value()
-                        }
+                        TyInfo::U8 => B::U8::load(block, value_ptr.clone()).into_integer_value(),
+                        TyInfo::I8 => B::I8::load(block, value_ptr.clone()).into_integer_value(),
                         _ => unimplemented!(),
                     };
 
@@ -275,7 +259,7 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
                         .iter()
                         .map(|(value, bb)| {
                             let value = match value {
-                                ReprConstant::U8(u8) => ConstantValue::<B::Value>::U8(*u8),
+                                ReprConstant::U8(u8) => ConstantValue::<B>::U8(*u8),
                                 ReprConstant::I8(i8) => ConstantValue::I8(*i8),
                             };
 
@@ -321,13 +305,13 @@ pub fn lower<'ctx, B: Backend<'ctx>>(ir: &IrCtx, backend: &mut B) {
     }
 }
 
-fn resolve_place<'ctx, B: BasicBlock>(
+fn resolve_place<'ctx, B: Backend<'ctx>>(
     place: &Place,
-    block: &B,
-    locals: &HashMap<Local, (<B::Value as ValueBackend>::Pointer, Ty)>,
+    block: &B::BasicBlock,
+    locals: &HashMap<Local, (B::Pointer, Ty)>,
     tys: &Tys,
-    backend: &impl Backend<'ctx, Value = B::Value>,
-) -> (<B::Value as ValueBackend>::Pointer, Ty) {
+    backend: &B,
+) -> (B::Pointer, Ty) {
     let (mut ptr, mut ty) = locals[&place.local].clone();
 
     for proj in &place.projection {
@@ -352,7 +336,7 @@ fn resolve_place<'ctx, B: BasicBlock>(
                 // HACK: Can only index U8
                 assert!(matches!(tys.get(index_ty), TyInfo::U8));
 
-                let index = <B::Value as ValueBackend>::U8::load(block, index_ptr);
+                let index = B::U8::load(block, index_ptr);
                 let item_ptr = ptr.element_ptr(block, index, backend.get_ty(&tys, item_ty));
 
                 (item_ptr, item_ty)
@@ -363,40 +347,34 @@ fn resolve_place<'ctx, B: BasicBlock>(
     (ptr, ty)
 }
 
-fn resolve_operand<'ctx, B: BasicBlock>(
+fn resolve_operand<'ctx, B: Backend<'ctx>>(
     operand: &Operand,
-    block: &B,
-    locals: &HashMap<Local, (<B::Value as ValueBackend>::Pointer, Ty)>,
+    block: &B::BasicBlock,
+    locals: &HashMap<Local, (B::Pointer, Ty)>,
     tys: &Tys,
-    backend: &impl Backend<'ctx, Value = B::Value>,
-) -> (AnyValue<B::Value>, Ty) {
+    backend: &B,
+) -> (AnyValue<B>, Ty) {
     match operand {
         Operand::Place(place) => {
             let (ptr, ty) = resolve_place(place, block, locals, tys, backend);
 
             (
                 match tys.get(ty) {
-                    TyInfo::U8 => <B::Value as ValueBackend>::U8::load(block, ptr)
+                    TyInfo::U8 => B::U8::load(block, ptr)
                         .into_integer_value()
                         .into_any_value(),
-                    TyInfo::I8 => <B::Value as ValueBackend>::I8::load(block, ptr)
+                    TyInfo::I8 => B::I8::load(block, ptr)
                         .into_integer_value()
                         .into_any_value(),
                     TyInfo::Ref(ty) => match tys.get(ty) {
-                        TyInfo::Slice(ty) => {
-                            <B::Value as ValueBackend>::FatPointer::load(block, ptr)
-                                .into_any_value()
-                        }
-                        _ => <B::Value as ValueBackend>::Pointer::load(block, ptr).into_any_value(),
+                        TyInfo::Slice(ty) => B::FatPointer::load(block, ptr).into_any_value(),
+                        _ => B::Pointer::load(block, ptr).into_any_value(),
                     },
                     TyInfo::Slice(ty) => panic!("not possible, slice is unsized"),
-                    TyInfo::Array { ty, length } => <B::Value as ValueBackend>::Array::load_count(
-                        block,
-                        ptr,
-                        backend.get_ty(tys, ty),
-                        length,
-                    )
-                    .into_any_value(),
+                    TyInfo::Array { ty, length } => {
+                        B::Array::load_count(block, ptr, backend.get_ty(tys, ty), length)
+                            .into_any_value()
+                    }
                 },
                 ty,
             )
@@ -405,13 +383,13 @@ fn resolve_operand<'ctx, B: BasicBlock>(
             // TODO: Use something other than `Value` which doesn't have non-constant variants.
             match value {
                 ReprConstant::U8(value) => (
-                    <B::Value as ValueBackend>::U8::create(block, *value)
+                    B::U8::create(block, *value)
                         .into_integer_value()
                         .into_any_value(),
                     tys.find_or_insert(TyInfo::U8),
                 ),
                 ReprConstant::I8(value) => (
-                    <B::Value as ValueBackend>::I8::create(block, *value)
+                    B::I8::create(block, *value)
                         .into_integer_value()
                         .into_any_value(),
                     tys.find_or_insert(TyInfo::I8),
@@ -422,13 +400,11 @@ fn resolve_operand<'ctx, B: BasicBlock>(
     }
 }
 
-pub trait Backend<'ctx>: Sized {
-    type Value: ValueBackend;
-    type Function: Function<'ctx, Value = Self::Value>;
+pub trait Backend<'ctx>: ValueBackend + Sized {
+    type Function: Function<'ctx, Value = Self>;
 
-    fn add_function(&self, name: &str, ret_ty: <Self::Value as ValueBackend>::Ty)
-    -> Self::Function;
-    fn get_ty(&self, tys: &Tys, ty: Ty) -> <Self::Value as ValueBackend>::Ty;
+    fn add_function(&self, name: &str, ret_ty: Self::Ty) -> Self::Function;
+    fn get_ty(&self, tys: &Tys, ty: Ty) -> Self::Ty;
 }
 
 pub trait Function<'ctx> {

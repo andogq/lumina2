@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::Deref, rc::Rc};
+use std::{ops::Deref, rc::Rc};
 
 use inkwell::{
     AddressSpace,
@@ -54,19 +54,27 @@ impl<'ctx> Llvm<'ctx> {
         unsafe { f.call() }
     }
 }
+impl<'ctx> lower::ValueBackend for Llvm<'ctx> {
+    type BasicBlock = BasicBlock<'ctx>;
+
+    type Ty = BasicTypeEnum<'ctx>;
+
+    type Pointer = Pointer<'ctx>;
+    type FatPointer = FatPointer<'ctx>;
+
+    type Array = Array<'ctx>;
+
+    type I8 = I8<'ctx>;
+    type U8 = U8<'ctx>;
+}
 impl<'ctx> lower::Backend<'ctx> for Llvm<'ctx> {
-    type Value = Value<'ctx>;
     type Function = Function<'ctx>;
 
-    fn add_function(
-        &self,
-        name: &str,
-        ret_ty: <Self::Value as ValueBackend>::Ty,
-    ) -> Self::Function {
+    fn add_function(&self, name: &str, ret_ty: Self::Ty) -> Self::Function {
         Function::new(self.ctx, Rc::clone(&self.module), name, ret_ty)
     }
 
-    fn get_ty(&self, tys: &Tys, ty: Ty) -> <Self::Value as ValueBackend>::Ty {
+    fn get_ty(&self, tys: &Tys, ty: Ty) -> Self::Ty {
         match tys.get(ty) {
             TyInfo::U8 => self.ctx.i8_type().into(),
             TyInfo::I8 => self.ctx.i8_type().into(),
@@ -121,13 +129,13 @@ impl<'ctx> Function<'ctx> {
     }
 }
 impl<'ctx> lower::Function<'ctx> for Function<'ctx> {
-    type Value = Value<'ctx>;
+    type Value = Llvm<'ctx>;
 
     fn declare_local(
         &mut self,
         ty: <Self::Value as ValueBackend>::Ty,
         name: &str,
-    ) -> <Value<'ctx> as ValueBackend>::Pointer {
+    ) -> <Llvm<'ctx> as ValueBackend>::Pointer {
         // Find the last non-terminator instruction.
         let mut last_non_terminator = self.entry_bb.get_last_instruction();
         while let Some(instr) = last_non_terminator
@@ -146,7 +154,7 @@ impl<'ctx> lower::Function<'ctx> for Function<'ctx> {
         Pointer(self.builder.build_alloca(ty, name).unwrap())
     }
 
-    fn add_basic_block(&mut self, name: &str) -> <Value<'ctx> as ValueBackend>::BasicBlock {
+    fn add_basic_block(&mut self, name: &str) -> <Llvm<'ctx> as ValueBackend>::BasicBlock {
         let bb = self.ctx.append_basic_block(self.function, name);
 
         // If this is the first basic block added after the entry, ensure the entry jumps to it.
@@ -184,7 +192,7 @@ pub struct BasicBlock<'ctx> {
     bb: inkwell::basic_block::BasicBlock<'ctx>,
 }
 impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
-    type Value = Value<'ctx>;
+    type Value = Llvm<'ctx>;
 
     fn term_return(&self, value: IntegerValue<Self::Value>) {
         self.builder
@@ -249,25 +257,10 @@ impl<'ctx> lower::BasicBlock for BasicBlock<'ctx> {
     }
 }
 
-pub struct Value<'ctx>(PhantomData<&'ctx ()>);
-impl<'ctx> lower::ValueBackend for Value<'ctx> {
-    type BasicBlock = BasicBlock<'ctx>;
-
-    type Ty = BasicTypeEnum<'ctx>;
-
-    type Pointer = Pointer<'ctx>;
-    type FatPointer = FatPointer<'ctx>;
-
-    type Array = Array<'ctx>;
-
-    type I8 = I8<'ctx>;
-    type U8 = U8<'ctx>;
-}
-
 #[derive(Clone, Debug)]
 pub struct Pointer<'ctx>(PointerValue<'ctx>);
-impl<'ctx> crate::ir::value::Pointer<Value<'ctx>> for Pointer<'ctx> {
-    fn element_ptr<I: Integer<Value<'ctx>>>(
+impl<'ctx> crate::ir::value::Pointer<Llvm<'ctx>> for Pointer<'ctx> {
+    fn element_ptr<I: Integer<Llvm<'ctx>>>(
         self,
         bb: &BasicBlock<'ctx>,
         i: I,
@@ -299,7 +292,7 @@ impl<'ctx> crate::ir::value::Pointer<Value<'ctx>> for Pointer<'ctx> {
         )
     }
 }
-impl<'ctx> Loadable<Value<'ctx>> for Pointer<'ctx> {
+impl<'ctx> Loadable<Llvm<'ctx>> for Pointer<'ctx> {
     fn load(bb: &BasicBlock<'ctx>, ptr: Pointer<'ctx>) -> Self {
         Self(
             bb.builder
@@ -309,13 +302,13 @@ impl<'ctx> Loadable<Value<'ctx>> for Pointer<'ctx> {
         )
     }
 }
-impl<'ctx> Storable<Value<'ctx>> for Pointer<'ctx> {
+impl<'ctx> Storable<Llvm<'ctx>> for Pointer<'ctx> {
     fn store(self, bb: &BasicBlock<'ctx>, ptr: Pointer<'ctx>) {
         bb.builder.build_store(*ptr, self.0).unwrap();
     }
 }
-impl<'ctx> Any<Value<'ctx>> for Pointer<'ctx> {
-    fn into_any_value(self) -> AnyValue<Value<'ctx>> {
+impl<'ctx> Any<Llvm<'ctx>> for Pointer<'ctx> {
+    fn into_any_value(self) -> AnyValue<Llvm<'ctx>> {
         AnyValue::Pointer(self)
     }
 }
@@ -332,33 +325,33 @@ pub struct FatPointer<'ctx> {
     pointer: Pointer<'ctx>,
     data: U8<'ctx>,
 }
-impl<'ctx> crate::ir::value::FatPointer<Value<'ctx>> for FatPointer<'ctx> {
+impl<'ctx> crate::ir::value::FatPointer<Llvm<'ctx>> for FatPointer<'ctx> {
     fn from_ptr(ptr: Pointer<'ctx>, data: U8<'ctx>) -> Self {
         Self { pointer: ptr, data }
     }
 
-    fn get_metadata(&self) -> <Value<'ctx> as ValueBackend>::U8 {
+    fn get_metadata(&self) -> <Llvm<'ctx> as ValueBackend>::U8 {
         self.data.clone()
     }
 }
-impl<'ctx> crate::ir::value::Pointer<Value<'ctx>> for FatPointer<'ctx> {
-    fn element_ptr<I: Integer<Value<'ctx>>>(
+impl<'ctx> crate::ir::value::Pointer<Llvm<'ctx>> for FatPointer<'ctx> {
+    fn element_ptr<I: Integer<Llvm<'ctx>>>(
         self,
-        bb: &<Value<'ctx> as ValueBackend>::BasicBlock,
+        bb: &<Llvm<'ctx> as ValueBackend>::BasicBlock,
         i: I,
-        ty: <Value<'ctx> as ValueBackend>::Ty,
+        ty: <Llvm<'ctx> as ValueBackend>::Ty,
     ) -> Pointer<'ctx> {
         self.pointer.element_ptr(bb, i, ty)
     }
 
-    fn deref(self, bb: &<Value<'ctx> as ValueBackend>::BasicBlock) -> Pointer<'ctx> {
+    fn deref(self, bb: &<Llvm<'ctx> as ValueBackend>::BasicBlock) -> Pointer<'ctx> {
         self.pointer.deref(bb)
     }
 }
-impl<'ctx> Loadable<Value<'ctx>> for FatPointer<'ctx> {
+impl<'ctx> Loadable<Llvm<'ctx>> for FatPointer<'ctx> {
     fn load(
-        bb: &<Value<'ctx> as ValueBackend>::BasicBlock,
-        ptr: <Value<'ctx> as ValueBackend>::Pointer,
+        bb: &<Llvm<'ctx> as ValueBackend>::BasicBlock,
+        ptr: <Llvm<'ctx> as ValueBackend>::Pointer,
     ) -> Self {
         let ptr_ty = bb.ctx.ptr_type(AddressSpace::default());
         let pointer = bb
@@ -390,11 +383,11 @@ impl<'ctx> Loadable<Value<'ctx>> for FatPointer<'ctx> {
         }
     }
 }
-impl<'ctx> Storable<Value<'ctx>> for FatPointer<'ctx> {
+impl<'ctx> Storable<Llvm<'ctx>> for FatPointer<'ctx> {
     fn store(
         self,
-        bb: &<Value<'ctx> as ValueBackend>::BasicBlock,
-        ptr: <Value<'ctx> as ValueBackend>::Pointer,
+        bb: &<Llvm<'ctx> as ValueBackend>::BasicBlock,
+        ptr: <Llvm<'ctx> as ValueBackend>::Pointer,
     ) {
         // Store pointer.
         bb.builder.build_store(*ptr, *self.pointer).unwrap();
@@ -415,21 +408,21 @@ impl<'ctx> Storable<Value<'ctx>> for FatPointer<'ctx> {
         bb.builder.build_store(data_ptr, *self.data).unwrap();
     }
 }
-impl<'ctx> Any<Value<'ctx>> for FatPointer<'ctx> {
-    fn into_any_value(self) -> AnyValue<Value<'ctx>> {
+impl<'ctx> Any<Llvm<'ctx>> for FatPointer<'ctx> {
+    fn into_any_value(self) -> AnyValue<Llvm<'ctx>> {
         AnyValue::FatPointer(self)
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct I8<'ctx>(IntValue<'ctx>);
-impl<'ctx> Any<Value<'ctx>> for I8<'ctx> {
-    fn into_any_value(self) -> AnyValue<Value<'ctx>> {
+impl<'ctx> Any<Llvm<'ctx>> for I8<'ctx> {
+    fn into_any_value(self) -> AnyValue<Llvm<'ctx>> {
         self.into_integer_value().into_any_value()
     }
 }
-impl<'ctx> Integer<Value<'ctx>> for I8<'ctx> {
-    fn into_integer_value(self) -> IntegerValue<Value<'ctx>> {
+impl<'ctx> Integer<Llvm<'ctx>> for I8<'ctx> {
+    fn into_integer_value(self) -> IntegerValue<Llvm<'ctx>> {
         IntegerValue::I8(self)
     }
 
@@ -437,14 +430,14 @@ impl<'ctx> Integer<Value<'ctx>> for I8<'ctx> {
         Self(bb.builder.build_int_add(lhs.0, rhs.0, "add_i8").unwrap())
     }
 }
-impl<'ctx> Constant<Value<'ctx>> for I8<'ctx> {
+impl<'ctx> Constant<Llvm<'ctx>> for I8<'ctx> {
     type Value = i8;
 
     fn create(bb: &BasicBlock<'ctx>, value: Self::Value) -> Self {
         Self(bb.ctx.i8_type().const_int(value as u64, false))
     }
 }
-impl<'ctx> Loadable<Value<'ctx>> for I8<'ctx> {
+impl<'ctx> Loadable<Llvm<'ctx>> for I8<'ctx> {
     fn load(bb: &BasicBlock<'ctx>, ptr: Pointer<'ctx>) -> Self {
         Self(
             bb.builder
@@ -454,7 +447,7 @@ impl<'ctx> Loadable<Value<'ctx>> for I8<'ctx> {
         )
     }
 }
-impl<'ctx> Storable<Value<'ctx>> for I8<'ctx> {
+impl<'ctx> Storable<Llvm<'ctx>> for I8<'ctx> {
     fn store(self, bb: &BasicBlock<'ctx>, ptr: Pointer<'ctx>) {
         bb.builder.build_store(*ptr, self.0).unwrap();
     }
@@ -469,13 +462,13 @@ impl<'ctx> Deref for I8<'ctx> {
 
 #[derive(Clone, Debug)]
 pub struct U8<'ctx>(IntValue<'ctx>);
-impl<'ctx> Any<Value<'ctx>> for U8<'ctx> {
-    fn into_any_value(self) -> AnyValue<Value<'ctx>> {
+impl<'ctx> Any<Llvm<'ctx>> for U8<'ctx> {
+    fn into_any_value(self) -> AnyValue<Llvm<'ctx>> {
         self.into_integer_value().into_any_value()
     }
 }
-impl<'ctx> Integer<Value<'ctx>> for U8<'ctx> {
-    fn into_integer_value(self) -> IntegerValue<Value<'ctx>> {
+impl<'ctx> Integer<Llvm<'ctx>> for U8<'ctx> {
+    fn into_integer_value(self) -> IntegerValue<Llvm<'ctx>> {
         IntegerValue::U8(self)
     }
 
@@ -483,14 +476,14 @@ impl<'ctx> Integer<Value<'ctx>> for U8<'ctx> {
         Self(bb.builder.build_int_add(lhs.0, rhs.0, "add_u8").unwrap())
     }
 }
-impl<'ctx> Constant<Value<'ctx>> for U8<'ctx> {
+impl<'ctx> Constant<Llvm<'ctx>> for U8<'ctx> {
     type Value = u8;
 
     fn create(bb: &BasicBlock<'ctx>, value: Self::Value) -> Self {
         Self(bb.ctx.i8_type().const_int(value as u64, false))
     }
 }
-impl<'ctx> Loadable<Value<'ctx>> for U8<'ctx> {
+impl<'ctx> Loadable<Llvm<'ctx>> for U8<'ctx> {
     fn load(bb: &BasicBlock<'ctx>, ptr: Pointer<'ctx>) -> Self {
         Self(
             bb.builder
@@ -501,7 +494,7 @@ impl<'ctx> Loadable<Value<'ctx>> for U8<'ctx> {
     }
 }
 
-impl<'ctx> Storable<Value<'ctx>> for U8<'ctx> {
+impl<'ctx> Storable<Llvm<'ctx>> for U8<'ctx> {
     fn store(self, bb: &BasicBlock<'ctx>, ptr: Pointer<'ctx>) {
         bb.builder.build_store(*ptr, self.0).unwrap();
     }
@@ -517,7 +510,7 @@ impl<'ctx> Deref for U8<'ctx> {
 trait IntegerValueExt<'ctx> {
     fn as_basic_value_enum(&self) -> BasicValueEnum<'ctx>;
 }
-impl<'ctx> IntegerValueExt<'ctx> for IntegerValue<Value<'ctx>> {
+impl<'ctx> IntegerValueExt<'ctx> for IntegerValue<Llvm<'ctx>> {
     fn as_basic_value_enum(&self) -> BasicValueEnum<'ctx> {
         match self {
             IntegerValue::I8(i8) => i8.0.as_basic_value_enum(),
@@ -527,7 +520,7 @@ impl<'ctx> IntegerValueExt<'ctx> for IntegerValue<Value<'ctx>> {
 }
 
 pub struct Array<'ctx>(ArrayValue<'ctx>);
-impl<'ctx> crate::ir::value::Array<Value<'ctx>> for Array<'ctx> {
+impl<'ctx> crate::ir::value::Array<Llvm<'ctx>> for Array<'ctx> {
     fn load_count(
         bb: &BasicBlock<'ctx>,
         ptr: Pointer<'ctx>,
@@ -543,17 +536,17 @@ impl<'ctx> crate::ir::value::Array<Value<'ctx>> for Array<'ctx> {
         todo!()
     }
 }
-impl<'ctx> Storable<Value<'ctx>> for Array<'ctx> {
+impl<'ctx> Storable<Llvm<'ctx>> for Array<'ctx> {
     fn store(
         self,
-        bb: &<Value<'ctx> as ValueBackend>::BasicBlock,
-        ptr: <Value<'ctx> as ValueBackend>::Pointer,
+        bb: &<Llvm<'ctx> as ValueBackend>::BasicBlock,
+        ptr: <Llvm<'ctx> as ValueBackend>::Pointer,
     ) {
         todo!()
     }
 }
-impl<'ctx> Any<Value<'ctx>> for Array<'ctx> {
-    fn into_any_value(self) -> AnyValue<Value<'ctx>> {
+impl<'ctx> Any<Llvm<'ctx>> for Array<'ctx> {
+    fn into_any_value(self) -> AnyValue<Llvm<'ctx>> {
         AnyValue::Array(todo!())
     }
 }
