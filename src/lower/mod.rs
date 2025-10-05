@@ -337,7 +337,7 @@ fn resolve_place<'ctx, B: Backend<'ctx>>(
                 assert!(matches!(tys.get(index_ty), TyInfo::U8));
 
                 let index = B::U8::load(block, index_ptr);
-                let item_ptr = ptr.element_ptr(block, index, backend.get_ty(&tys, item_ty));
+                let item_ptr = ptr.element_ptr(block, index, backend.get_ty(tys, item_ty));
 
                 (item_ptr, item_ty)
             }

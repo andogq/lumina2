@@ -3,6 +3,7 @@
 mod interpreter;
 mod ir;
 mod llvm;
+mod llvm2;
 mod lower;
 mod util;
 
@@ -142,6 +143,13 @@ mod test {
                     backend.run("function_name")
                 };
                 assert_eq!(expected, llvm_output_2, "llvm_2");
+
+                let llvm_output_3 = {
+                    let llvm_ctx = Context::create();
+                    let backend = llvm2::Llvm::new(&llvm_ctx, &ctx);
+                    backend.run("func_Function(Key(0))")
+                };
+                assert_eq!(expected, llvm_output_3, "llvm_3");
             }
         };
     }
