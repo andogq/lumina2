@@ -1,20 +1,10 @@
 #![recursion_limit = "256"]
 
-mod interpreter;
 mod ir;
 mod llvm;
-mod llvm2;
-mod lower;
 mod util;
 
-use inkwell::context::Context;
-
-use crate::{
-    interpreter::Interpreter,
-    ir::ctx::IrCtx,
-    llvm::Llvm,
-    lower::{llvm::Llvm as LowerLlvm, lower},
-};
+use crate::ir::ctx::IrCtx;
 
 fn main() {
     let mut ctx = IrCtx::default();
@@ -74,11 +64,6 @@ fn main() {
         }
     };
 
-    let mut interpreter = Interpreter::new(&ctx);
-    dbg!(interpreter.run(program1));
-    dbg!(interpreter.run(program2));
-    dbg!(interpreter.run(program3));
-
     let mut ctx = IrCtx::default();
     let add_something = ir_function! {
         [&mut ctx]
@@ -94,19 +79,6 @@ fn main() {
             return;
         }
     };
-    let llvm = Llvm::new(&ctx);
-    let module = llvm.new_module("something");
-    module.compile(add_something, "add_something");
-    let llvm_output = module.run("add_something");
-
-    let interpreter_output = Interpreter::new(&ctx).run(add_something);
-
-    assert_eq!(llvm_output, interpreter_output.into_u8().unwrap());
-
-    let llvm_ctx = Context::create();
-    let mut backend = LowerLlvm::new(&llvm_ctx);
-    lower(&ctx, &mut backend);
-    dbg!(backend.run("function_name"));
 }
 
 #[cfg(test)]
@@ -125,31 +97,12 @@ mod test {
 
                 let expected = $expected;
 
-                let interpreter_output = Interpreter::new(&ctx).run(program).into_u8().unwrap();
-                assert_eq!(expected, interpreter_output, "interpreter");
-
                 let llvm_output = {
-                    let llvm = Llvm::new(&ctx);
-                    let module = llvm.new_module("module");
-                    module.compile(program, stringify!($name));
-                    module.run(stringify!($name))
-                };
-                assert_eq!(expected, llvm_output, "llvm");
-
-                let llvm_output_2 = {
-                    let llvm_ctx = Context::create();
-                    let mut backend = LowerLlvm::new(&llvm_ctx);
-                    lower(&ctx, &mut backend);
-                    backend.run("function_name")
-                };
-                assert_eq!(expected, llvm_output_2, "llvm_2");
-
-                let llvm_output_3 = {
-                    let llvm_ctx = Context::create();
-                    let backend = llvm2::Llvm::new(&llvm_ctx, &ctx);
+                    let llvm_ctx = inkwell::context::Context::create();
+                    let backend = llvm::Llvm::new(&llvm_ctx, &ctx);
                     backend.run("func_Function(Key(0))")
                 };
-                assert_eq!(expected, llvm_output_3, "llvm_3");
+                assert_eq!(expected, llvm_output);
             }
         };
     }

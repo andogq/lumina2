@@ -1,62 +1,46 @@
+use core::net;
 use std::{cell::RefCell, collections::HashMap};
 
 use inkwell::{
     AddressSpace,
-    basic_block::BasicBlock as IBasicBlock,
     builder::Builder,
-    context::Context as IContext,
+    context::Context as InkContext,
     execution_engine::JitFunction,
     intrinsics::Intrinsic,
-    module::Module as IModule,
+    module::Module,
     types::{BasicType, BasicTypeEnum},
-    values::{AnyValue, BasicValueEnum, PointerValue},
+    values::{BasicMetadataValueEnum, BasicValueEnum, PointerValue},
 };
 
-use crate::{
-    ir::{
-        ctx::{Function, IrCtx},
-        repr::{
-            BasicBlock, BinOp, Body, CastKind, Constant, Local, Operand, Place, PointerCoercion,
-            Projection, RValue, Statement, Terminator, UnOp,
-        },
-        ty::{Ty, TyInfo},
+use crate::ir::{
+    Ty, TyInfo,
+    ctx::IrCtx,
+    repr::{
+        BasicBlock, BinOp, CastKind, Constant, Local, Locals, Operand, Place, PointerCoercion,
+        Projection, RValue, Statement, Terminator, UnOp,
     },
-    util::indexed_vec::IndexedVec,
 };
 
-pub struct Llvm<'ir> {
-    ctx: IContext,
+pub struct Llvm<'ink, 'ir> {
+    ctx: &'ink InkContext,
     ir: &'ir IrCtx,
+    module: Module<'ink>,
+
+    tys: RefCell<HashMap<Ty, BasicTypeEnum<'ink>>>,
 }
-impl<'ir> Llvm<'ir> {
-    pub fn new(ir: &'ir IrCtx) -> Self {
-        Self {
-            ctx: IContext::create(),
+
+impl<'ink, 'ir> Llvm<'ink, 'ir> {
+    pub fn new(ctx: &'ink InkContext, ir: &'ir IrCtx) -> Self {
+        let mut llvm = Self {
+            ctx,
             ir,
-        }
-    }
+            module: ctx.create_module("module"),
+            tys: RefCell::new(HashMap::new()),
+        };
 
-    pub fn new_module(&self, name: &str) -> Module<'ir, '_> {
-        Module::new(self, name)
-    }
-}
+        llvm.lower();
 
-pub struct Module<'ir, 'ctx> {
-    llvm: &'ctx Llvm<'ir>,
-    module: IModule<'ctx>,
-    tys: LlvmTys<'ir, 'ctx>,
-}
-impl<'ir, 'ctx> Module<'ir, 'ctx> {
-    pub fn new(llvm: &'ctx Llvm<'ir>, name: &str) -> Self {
-        Self {
-            llvm,
-            module: llvm.ctx.create_module(name),
-            tys: LlvmTys::new(llvm),
-        }
-    }
-
-    pub fn compile(&self, function: Function, name: &str) {
-        FunctionBuilder::compile(self, function, name);
+        llvm
     }
 
     pub fn run(&self, name: &str) -> u8 {
@@ -64,215 +48,225 @@ impl<'ir, 'ctx> Module<'ir, 'ctx> {
             .module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        let f: JitFunction<'ctx, unsafe extern "C" fn() -> u8> =
+        let f: JitFunction<'ink, unsafe extern "C" fn() -> u8> =
             unsafe { engine.get_function(name).unwrap() };
 
         unsafe { f.call() }
     }
-}
 
-pub struct FunctionBuilder<'m, 'ir, 'ctx> {
-    module: &'m Module<'ir, 'ctx>,
-    builder: Builder<'ctx>,
+    fn lower(&mut self) {
+        // Forward declare all functions.
+        let functions = self
+            .ir
+            .functions
+            .iter_keys()
+            .map(|(id, function)| {
+                let ret = self
+                    .get_ty(function.local_decls[Local::zero()].ty)
+                    .fn_type(&[], false);
 
-    body: &'m Body,
+                (
+                    id,
+                    (
+                        self.module
+                            .add_function(format!("func_{id:?}").as_str(), ret, None),
+                        function,
+                    ),
+                )
+            })
+            .collect::<HashMap<_, _>>();
 
-    locals: IndexedVec<Local, (PointerValue<'ctx>, Ty)>,
-    basic_blocks: IndexedVec<BasicBlock, IBasicBlock<'ctx>>,
-}
-impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
-    fn compile(module: &'m Module<'ir, 'ctx>, function: Function, name: &str) {
-        let builder = module.llvm.ctx.create_builder();
-        let body = &module.llvm.ir.functions[function];
-        let function = module.module.add_function(
-            name,
-            {
-                let ret_ty = module.tys.get(body.local_decls[Local::zero()].ty);
-                ret_ty.fn_type(&[], false)
+        for (function_id, (function, ir)) in &functions {
+            let entry_bb = self.ctx.append_basic_block(*function, "entry");
+            let builder = self.ctx.create_builder();
+            builder.position_at_end(entry_bb);
+
+            // Build all locals.
+            let local_ptrs = ir
+                .local_decls
+                .iter_keys()
+                .map(|(id, local)| {
+                    (
+                        id,
+                        builder
+                            .build_alloca(self.get_ty(local.ty), id.to_string().as_str())
+                            .unwrap(),
+                    )
+                })
+                .collect::<HashMap<_, _>>();
+
+            // Forward declare all basic blocks.
+            let basic_blocks = ir
+                .basic_blocks
+                .iter_keys()
+                .map(|(bb_id, _)| {
+                    (
+                        bb_id,
+                        self.ctx
+                            .append_basic_block(*function, bb_id.to_string().as_str()),
+                    )
+                })
+                .collect::<HashMap<_, _>>();
+
+            // Terminate the entry basic block by jumping to the first user basic block.
+            builder
+                .build_unconditional_branch(basic_blocks[&BasicBlock::zero()])
+                .unwrap();
+
+            // Lower each of the blocks.
+            for (bb_id, block) in ir.basic_blocks.iter_keys() {
+                let bb = basic_blocks[&bb_id];
+                builder.position_at_end(bb);
+
+                for statement in &block.statements {
+                    match statement {
+                        Statement::Assign { place, rvalue } => {
+                            let (place_ptr, place_ty) =
+                                self.resolve_place(&builder, place, &ir.local_decls, &local_ptrs);
+                            self.store_rvalue(
+                                &builder,
+                                rvalue,
+                                place_ptr,
+                                place_ty,
+                                &ir.local_decls,
+                                &local_ptrs,
+                            );
+                        }
+                        Statement::StorageDead(local) => {
+                            let ptr = local_ptrs[local];
+                            self.build_intrinsic(
+                                &builder,
+                                "llvm.lifetime.end",
+                                &[ptr.get_type().into()],
+                                &[ptr.into()],
+                            );
+                        }
+                        Statement::StorageLive(local) => {
+                            let ptr = local_ptrs[local];
+                            self.build_intrinsic(
+                                &builder,
+                                "llvm.lifetime.start",
+                                &[ptr.get_type().into()],
+                                &[ptr.into()],
+                            );
+                        }
+                    }
+                }
+
+                match &block.terminator {
+                    Terminator::Call {
+                        func,
+                        args,
+                        destination,
+                        target,
+                    } => todo!(),
+                    Terminator::Goto(basic_block) => {
+                        builder
+                            .build_unconditional_branch(basic_blocks[basic_block])
+                            .unwrap();
+                    }
+                    Terminator::Return => {
+                        let ret_local = Local::zero();
+                        let ret_ty = ir.local_decls[ret_local].ty;
+                        let ret_ptr = local_ptrs[&ret_local];
+
+                        let out = builder
+                            .build_load(self.get_ty(ret_ty), ret_ptr, "load ret")
+                            .unwrap();
+                        builder.build_return(Some(&out)).unwrap();
+                    }
+                    Terminator::SwitchInt {
+                        discriminator,
+                        targets,
+                        otherwise,
+                    } => {
+                        builder
+                            .build_switch(
+                                self.get_operand(
+                                    &builder,
+                                    discriminator,
+                                    &ir.local_decls,
+                                    &local_ptrs,
+                                )
+                                .0
+                                .into_int_value(),
+                                basic_blocks[otherwise],
+                                &targets
+                                    .iter()
+                                    .map(|(value, bb)| {
+                                        (
+                                            match value {
+                                                Constant::I8(value) => self
+                                                    .get_ty(self.ir.tys.find_or_insert(TyInfo::I8))
+                                                    .into_int_type()
+                                                    .const_int(*value as u64, true),
+                                                Constant::U8(value) => self
+                                                    .get_ty(self.ir.tys.find_or_insert(TyInfo::U8))
+                                                    .into_int_type()
+                                                    .const_int(*value as u64, false),
+                                            },
+                                            basic_blocks[bb],
+                                        )
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                            .unwrap();
+                    }
+                }
+            }
+        }
+    }
+
+    fn get_ty(&self, ty: Ty) -> BasicTypeEnum<'ink> {
+        if let Some(ty) = self.tys.borrow().get(&ty) {
+            return *ty;
+        }
+
+        let ty_info = match self.ir.tys.get(ty) {
+            TyInfo::U8 => self.ctx.i8_type().into(),
+            TyInfo::I8 => self.ctx.i8_type().into(),
+            TyInfo::Ref(ty) => match self.ir.tys.get(ty) {
+                // Ref to slice is a fat pointer.
+                TyInfo::Slice(_) => self
+                    .ctx
+                    .ptr_type(AddressSpace::default())
+                    .array_type(2)
+                    .into(),
+                _ => self.ctx.ptr_type(AddressSpace::default()).into(),
             },
-            None,
-        );
-
-        // Create the entry basic block, and position the builder so that local allocations will be
-        // added to it.
-        let entry_bb = module.llvm.ctx.append_basic_block(function, "entry");
-        builder.position_at_end(entry_bb);
-
-        // Allocate all of the locals.
-        let locals = body
-            .local_decls
-            .iter()
-            .fold(IndexedVec::new(), |mut locals, decl| {
-                locals.insert((
-                    builder
-                        .build_alloca(module.tys.get(decl.ty), "some_local")
-                        .unwrap(),
-                    decl.ty,
-                ));
-
-                locals
-            });
-
-        // Create all the basic blocks.
-        let basic_blocks = body.basic_blocks.iter_keys().fold(
-            IndexedVec::new(),
-            |mut basic_blocks, (bb, _basic_block)| {
-                basic_blocks.insert(
-                    module
-                        .llvm
-                        .ctx
-                        .append_basic_block(function, &bb.to_string()),
-                );
-
-                basic_blocks
-            },
-        );
-
-        // Ensure entry bb jumps to first basic block.
-        builder
-            .build_unconditional_branch(basic_blocks[BasicBlock::zero()])
-            .unwrap();
-
-        // Gather all state into single object to share.
-        let f = Self {
-            locals,
-            basic_blocks,
-
-            module,
-            builder,
-            body,
+            TyInfo::Array { ty, length } => self.get_ty(ty).array_type(length as u32).into(),
+            TyInfo::Slice(ty) => panic!("cannot have type for slice, as it's unsized"),
         };
 
-        // Compile each of the basic blocks.
-        for (bb, _) in f.basic_blocks.iter_keys() {
-            f.compile_basic_block(bb);
-        }
+        self.tys.borrow_mut().insert(ty, ty_info);
 
-        println!("{}", function.print_to_string().to_string());
+        ty_info
     }
 
-    fn compile_basic_block(&self, basic_block: BasicBlock) {
-        self.builder.position_at_end(self.basic_blocks[basic_block]);
-
-        let bb = &self.body.basic_blocks[basic_block];
-
-        for statement in &bb.statements {
-            match statement {
-                Statement::Assign { place, rvalue } => {
-                    let (place_ptr, place_ty) = self.get_place_ptr(place);
-                    self.store_rvalue(rvalue, place_ptr, place_ty);
-                }
-                Statement::StorageDead(local) => {
-                    let ptr = self.locals[*local].0;
-
-                    let intrinsic = Intrinsic::find("llvm.lifetime.end").unwrap();
-                    let intrinsic_fn = intrinsic
-                        .get_declaration(
-                            &self.module.module,
-                            &[BasicTypeEnum::PointerType(ptr.get_type())],
-                        )
-                        .unwrap();
-                    self.builder
-                        .build_call(intrinsic_fn, &[ptr.into()], "lifetime.end")
-                        .unwrap();
-                }
-                Statement::StorageLive(local) => {
-                    let ptr = self.locals[*local].0;
-
-                    let intrinsic = Intrinsic::find("llvm.lifetime.start").unwrap();
-                    let intrinsic_fn = intrinsic
-                        .get_declaration(
-                            &self.module.module,
-                            &[BasicTypeEnum::PointerType(ptr.get_type())],
-                        )
-                        .unwrap();
-                    self.builder
-                        .build_call(intrinsic_fn, &[ptr.into()], "lifetime.start")
-                        .unwrap();
-                }
-            }
-        }
-
-        match &bb.terminator {
-            Terminator::Call {
-                func,
-                args,
-                destination,
-                target,
-            } => todo!(),
-            Terminator::Goto(basic_block) => {
-                self.builder
-                    .build_unconditional_branch(self.basic_blocks[*basic_block])
-                    .unwrap();
-            }
-            Terminator::Return => {
-                let ret_local = Local::zero();
-
-                let (ret_ptr, ret_ty) = self.locals[ret_local];
-
-                let out = self
-                    .builder
-                    .build_load(self.module.tys.get(ret_ty), ret_ptr, "idk")
-                    .unwrap();
-                self.builder.build_return(Some(&out)).unwrap();
-            }
-            Terminator::SwitchInt {
-                discriminator,
-                targets,
-                otherwise,
-            } => {
-                self.builder
-                    .build_switch(
-                        self.get_operand(discriminator).0.into_int_value(),
-                        self.basic_blocks[*otherwise],
-                        &targets
-                            .iter()
-                            .map(|(value, bb)| {
-                                (
-                                    match value {
-                                        Constant::I8(value) => self
-                                            .module
-                                            .tys
-                                            .get(self.module.llvm.ir.tys.find_or_insert(TyInfo::I8))
-                                            .into_int_type()
-                                            .const_int(*value as u64, true),
-                                        Constant::U8(value) => self
-                                            .module
-                                            .tys
-                                            .get(self.module.llvm.ir.tys.find_or_insert(TyInfo::U8))
-                                            .into_int_type()
-                                            .const_int(*value as u64, false),
-                                    },
-                                    self.basic_blocks[*bb],
-                                )
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                    .unwrap();
-            }
-        }
-    }
-
-    fn get_place_ptr(&self, place: &Place) -> (PointerValue<'ctx>, TyInfo) {
-        let (mut ptr, ty) = self.locals[place.local];
-        let mut ty = self.module.llvm.ir.tys.get(ty);
+    fn resolve_place(
+        &self,
+        builder: &Builder<'ink>,
+        place: &Place,
+        locals: &Locals,
+        local_ptrs: &HashMap<Local, PointerValue<'ink>>,
+    ) -> (PointerValue<'ink>, Ty) {
+        let mut ptr = local_ptrs[&place.local];
+        let mut ty = locals[place.local].ty;
 
         for projection in &place.projection {
             match projection {
                 Projection::Deref => {
-                    let TyInfo::Ref(inner_ty) = ty else {
-                        panic!("can only deref a reference");
+                    let TyInfo::Ref(inner_ty) = self.ir.tys.get(ty) else {
+                        panic!("Can only dereference a reference");
                     };
 
-                    match self.module.llvm.ir.tys.get(inner_ty) {
+                    match self.ir.tys.get(inner_ty) {
                         TyInfo::Slice(_) => {
-                            // Load pointer component of fat pointer
-                            ptr = self
-                                .builder
+                            // Load pointer component of fat pointer.
+                            ptr = builder
                                 .build_load(
-                                    // HACK: Directly pulling out the pointer type, assuming that
-                                    // the fat pointer ptr is at the start.
-                                    self.module.llvm.ctx.ptr_type(AddressSpace::default()),
+                                    // HACK: Assuming pointer is stored at the start of the address.
+                                    self.ctx.ptr_type(AddressSpace::default()),
                                     ptr,
                                     "deref",
                                 )
@@ -280,25 +274,18 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                                 .into_pointer_value();
                         }
                         _ => {
-                            ptr = self
-                                .builder
-                                .build_load(
-                                    self.module
-                                        .tys
-                                        .get(self.module.llvm.ir.tys.find_or_insert(ty)),
-                                    ptr,
-                                    "deref",
-                                )
+                            ptr = builder
+                                .build_load(self.get_ty(ty), ptr, "deref")
                                 .unwrap()
-                                .into_pointer_value();
+                                .into_pointer_value()
                         }
                     }
 
-                    ty = self.module.llvm.ir.tys.get(inner_ty);
+                    ty = inner_ty;
                 }
                 Projection::Field(_) => todo!(),
                 Projection::Index(local) => {
-                    let inner_ty = match ty {
+                    let inner_ty = match self.ir.tys.get(ty) {
                         TyInfo::Array { ty, .. } => ty,
                         TyInfo::Slice(ty) => ty,
                         _ => {
@@ -306,24 +293,20 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                         }
                     };
 
-                    let (local_ptr, local_ty) = self.locals[*local];
-                    let index = self
-                        .builder
-                        .build_load(self.module.tys.get(local_ty), local_ptr, "load index")
+                    let local_ty = locals[*local].ty;
+                    let TyInfo::U8 = self.ir.tys.get(local_ty) else {
+                        panic!("can only index using u8");
+                    };
+                    let index = builder
+                        .build_load(self.get_ty(local_ty), local_ptrs[local], "load index")
                         .unwrap()
                         .into_int_value();
 
                     ptr = unsafe {
-                        self.builder
-                            .build_in_bounds_gep(
-                                self.module.tys.get(inner_ty),
-                                ptr,
-                                &[index],
-                                "index something",
-                            )
-                            .unwrap()
-                    };
-                    ty = self.module.llvm.ir.tys.get(inner_ty);
+                        builder.build_in_bounds_gep(self.get_ty(inner_ty), ptr, &[index], "index")
+                    }
+                    .unwrap();
+                    ty = inner_ty;
                 }
             }
         }
@@ -331,133 +314,154 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
         (ptr, ty)
     }
 
-    fn store_rvalue(&self, rvalue: &RValue, place_ptr: PointerValue<'ctx>, place_ty: TyInfo) {
+    fn store_rvalue(
+        &self,
+        builder: &Builder<'ink>,
+        rvalue: &RValue,
+        place_ptr: PointerValue<'ink>,
+        place_ty: Ty,
+        locals: &Locals,
+        local_ptrs: &HashMap<Local, PointerValue<'ink>>,
+    ) {
         match rvalue {
             RValue::Use(operand) => {
-                let (value, ty) = self.get_operand(operand);
-                assert_eq!(place_ty, ty,);
-                self.builder.build_store(place_ptr, value).unwrap();
+                let (value, ty) = self.get_operand(builder, operand, locals, local_ptrs);
+                assert_eq!(place_ty, ty);
+                builder.build_store(place_ptr, value).unwrap();
             }
             RValue::Ref(place) => {
-                let (ptr, inner_ty) = self.get_place_ptr(place);
-                let ty = TyInfo::Ref(self.module.llvm.ir.tys.find_or_insert(inner_ty));
+                let (ptr, inner_ty) = self.resolve_place(builder, place, locals, local_ptrs);
+                let ty = self.ir.tys.find_or_insert(TyInfo::Ref(inner_ty));
                 assert_eq!(place_ty, ty);
-                self.builder.build_store(place_ptr, ptr).unwrap();
+                builder.build_store(place_ptr, ptr).unwrap();
             }
             RValue::BinaryOp { op, lhs, rhs } => {
-                let (BasicValueEnum::IntValue(lhs), lhs_ty) = self.get_operand(lhs) else {
-                    panic!("not good");
+                let (BasicValueEnum::IntValue(lhs), lhs_ty) =
+                    self.get_operand(builder, lhs, locals, local_ptrs)
+                else {
+                    panic!("expected integer lhs");
                 };
-                let (BasicValueEnum::IntValue(rhs), rhs_ty) = self.get_operand(rhs) else {
-                    panic!("not good");
+
+                let (BasicValueEnum::IntValue(rhs), rhs_ty) =
+                    self.get_operand(builder, rhs, locals, local_ptrs)
+                else {
+                    panic!("expected integer rhs");
                 };
+
+                // Operands must be of the same type.
                 assert_eq!(lhs_ty, rhs_ty);
 
-                assert_eq!(place_ty, lhs_ty);
+                let ty = lhs_ty;
+                assert_eq!(place_ty, ty);
 
                 let value = match op {
-                    BinOp::Add => self.builder.build_int_add(lhs, rhs, "add shit").unwrap(),
-                    BinOp::Sub => self.builder.build_int_sub(lhs, rhs, "sub shit").unwrap(),
-                    BinOp::Mul => self.builder.build_int_mul(lhs, rhs, "mul shit").unwrap(),
-                    BinOp::Div => match lhs_ty {
-                        TyInfo::U8 => self
-                            .builder
-                            .build_int_unsigned_div(lhs, rhs, "div shit")
+                    BinOp::Add => builder.build_int_add(lhs, rhs, "add").unwrap(),
+                    BinOp::Sub => builder.build_int_sub(lhs, rhs, "sub").unwrap(),
+                    BinOp::Mul => builder.build_int_mul(lhs, rhs, "mul").unwrap(),
+                    BinOp::Div => match self.ir.tys.get(ty) {
+                        TyInfo::U8 => builder
+                            .build_int_unsigned_div(lhs, rhs, "unsigned div")
                             .unwrap(),
-                        TyInfo::I8 => self
-                            .builder
-                            .build_int_signed_div(lhs, rhs, "div shit (but signed)")
+                        TyInfo::I8 => builder
+                            .build_int_signed_div(lhs, rhs, "signed div")
                             .unwrap(),
-                        _ => panic!("can't div this type"),
+                        _ => panic!("invalid div type"),
                     },
                 };
-                self.builder.build_store(place_ptr, value).unwrap();
+
+                builder.build_store(place_ptr, value).unwrap();
             }
             RValue::UnaryOp { op, rhs } => {
-                let (rhs, rhs_ty) = self.get_operand(rhs);
+                let (rhs, rhs_ty) = self.get_operand(builder, rhs, locals, local_ptrs);
 
                 match op {
                     UnOp::Not => {
-                        todo!()
+                        let (TyInfo::U8 | TyInfo::I8) = self.ir.tys.get(rhs_ty) else {
+                            panic!("cannot unary not a non-primitive");
+                        };
+
+                        assert_eq!(place_ty, rhs_ty);
+
+                        let result = builder.build_not(rhs.into_int_value(), "not").unwrap();
+                        builder.build_store(place_ptr, result).unwrap();
                     }
                     UnOp::Neg => {
-                        todo!()
+                        let TyInfo::I8 = self.ir.tys.get(rhs_ty) else {
+                            panic!("cannot unary neg a non-signed integer");
+                        };
+
+                        assert_eq!(place_ty, rhs_ty);
+
+                        let result = builder.build_not(rhs.into_int_value(), "not").unwrap();
+                        builder.build_store(place_ptr, result).unwrap();
                     }
                     UnOp::PtrMetadata => {
-                        let TyInfo::Ref(inner_ty) = rhs_ty else {
-                            panic!("can only get ptr metadata of reference")
+                        let TyInfo::Ref(inner_ty) = self.ir.tys.get(rhs_ty) else {
+                            panic!("can only get ptr metadata of reference");
                         };
-                        let TyInfo::Slice(_) = self.module.llvm.ir.tys.get(inner_ty) else {
+                        let TyInfo::Slice(_) = self.ir.tys.get(inner_ty) else {
                             panic!("can only get ptr metadata of slice reference");
                         };
 
-                        // HACK: Assuming rhs is an array value
-                        let data = self
-                            .builder
-                            .build_extract_value(rhs.into_array_value(), 1, "extract data")
+                        // HACK: Hard-coding pointer metadata as u8
+                        assert_eq!(place_ty, self.ir.tys.find_or_insert(TyInfo::U8));
+
+                        // HACK: Assuming fat pointer is two pointers wide.
+                        let data = builder
+                            .build_extract_value(rhs.into_array_value(), 1, "ptr metadata")
                             .unwrap();
-                        self.builder.build_store(place_ptr, data).unwrap();
+                        builder.build_store(place_ptr, data).unwrap();
                     }
                 }
             }
             RValue::Aggregate { values } => {
+                // If there's no values, there's nothing that needs to be stored.
+                if values.is_empty() {
+                    return;
+                }
+
                 let values = values
                     .iter()
-                    .map(|value| self.get_operand(value))
+                    .map(|value| self.get_operand(builder, value, locals, local_ptrs))
                     .collect::<Vec<_>>();
 
-                let pointee_ty = self.module.llvm.ir.tys.find_or_insert(values[0].1.clone());
-                let ty = TyInfo::Array {
-                    ty: pointee_ty,
-                    length: values.len(),
-                };
-                assert_eq!(place_ty, ty);
+                let pointee_ty = values[0].1;
+                let index_ty = self
+                    .get_ty(self.ir.tys.find_or_insert(TyInfo::U8))
+                    .into_int_type();
 
-                let pointee_ty = self.module.tys.get(pointee_ty);
+                for (i, (value, ty)) in values.into_iter().enumerate() {
+                    assert_eq!(pointee_ty, ty);
 
-                for (i, (value, _)) in values.into_iter().enumerate() {
                     let ptr = unsafe {
-                        self.builder.build_in_bounds_gep(
-                            pointee_ty,
+                        builder.build_in_bounds_gep(
+                            self.get_ty(pointee_ty),
                             place_ptr,
-                            &[self
-                                .module
-                                .tys
-                                .get(self.module.llvm.ir.tys.find_or_insert(TyInfo::U8))
-                                .into_int_type()
-                                .const_int(i as u64, false)],
-                            "something",
+                            &[index_ty.const_int(i as u64, false)],
+                            format!("gep agg {i}").as_str(),
                         )
                     }
                     .unwrap();
-
-                    self.builder.build_store(ptr, value).unwrap();
+                    builder.build_store(ptr, value).unwrap();
                 }
             }
-            RValue::Cast {
-                kind,
-                op,
-                ty: cast_ty,
-            } => {
-                let (op, op_ty) = self.get_operand(op);
-
+            RValue::Cast { kind, op, ty } => {
+                let (op, op_ty) = self.get_operand(builder, op, locals, local_ptrs);
                 match kind {
                     CastKind::PointerCoercion(PointerCoercion::Unsize) => {
-                        let TyInfo::Ref(_place_inner) = place_ty else {
-                            panic!("can only store coercion in reference");
+                        let TyInfo::Ref(place_inner_ty) = self.ir.tys.get(place_ty) else {
+                            panic!("can only store pointer coercion in reference");
+                        };
+                        let TyInfo::Ref(to_ty) = self.ir.tys.get(*ty) else {
+                            panic!("can only unsize coerce to a reference");
+                        };
+                        let TyInfo::Ref(from_ty) = self.ir.tys.get(op_ty) else {
+                            panic!("can only unsize coerce from a reference");
                         };
 
-                        let TyInfo::Ref(ref_ty) = self.module.llvm.ir.tys.get(*cast_ty) else {
-                            panic!("can only unsize coerce to reference");
-                        };
-                        let TyInfo::Ref(op_ty) = op_ty else {
-                            panic!("can only unsize coerce if operand is a reference");
-                        };
+                        assert_eq!(place_inner_ty, to_ty);
 
-                        let op_ty = self.module.llvm.ir.tys.get(op_ty);
-                        let ref_ty = self.module.llvm.ir.tys.get(ref_ty);
-
-                        match (op_ty, ref_ty) {
+                        match (self.ir.tys.get(from_ty), self.ir.tys.get(to_ty)) {
                             (
                                 TyInfo::Array {
                                     ty: inner_ty,
@@ -469,13 +473,11 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
 
                                 let data_ptr = {
                                     // HACK: Assumes that fat pointers are allocated as an array of
-                                    // two pointers. This will access the second item (the data).
-                                    let pointee_ty =
-                                        self.module.llvm.ctx.ptr_type(AddressSpace::default());
-                                    let ordered_indexes =
-                                        &[self.module.llvm.ctx.i8_type().const_int(1, false)];
+                                    // two pointers.
+                                    let pointee_ty = self.ctx.ptr_type(AddressSpace::default());
+                                    let ordered_indexes = &[self.ctx.i8_type().const_int(1, false)];
                                     unsafe {
-                                        self.builder.build_in_bounds_gep(
+                                        builder.build_in_bounds_gep(
                                             pointee_ty,
                                             place_ptr,
                                             ordered_indexes,
@@ -485,25 +487,21 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
                                     .unwrap()
                                 };
 
-                                // Write the pointer to the start.
-                                self.builder.build_store(place_ptr, ptr).unwrap();
+                                // Write the pointer.
+                                builder.build_store(place_ptr, ptr).unwrap();
 
-                                // Write the data to the end.
-                                self.builder
+                                // Write the data after the pointer.
+                                builder
                                     .build_store(
                                         data_ptr,
-                                        // HACK: Directly creating int for the length.
-                                        self.module
-                                            .llvm
-                                            .ctx
-                                            .i64_type()
-                                            .const_int(length as u64, false),
+                                        // HACK: Directly creating the length.
+                                        self.ctx.i64_type().const_int(length as u64, false),
                                     )
                                     .unwrap();
                             }
-                            (op_ty, ref_ty) => panic!(
-                                "cannot coerce pointer to {op_ty:?} into pointer of {ref_ty:?}"
-                            ),
+                            (from_ty, to_ty) => {
+                                panic!("cannot coerce pointer from {from_ty:?} to {to_ty:?}")
+                            }
                         }
                     }
                 }
@@ -511,94 +509,58 @@ impl<'m, 'ir, 'ctx> FunctionBuilder<'m, 'ir, 'ctx> {
         }
     }
 
-    fn get_operand(&self, operand: &Operand) -> (BasicValueEnum<'ctx>, TyInfo) {
+    fn get_operand(
+        &self,
+        builder: &Builder<'ink>,
+        operand: &Operand,
+        locals: &Locals,
+        local_ptrs: &HashMap<Local, PointerValue<'ink>>,
+    ) -> (BasicValueEnum<'ink>, Ty) {
         match operand {
             Operand::Place(place) => {
-                let (ptr, ty) = self.get_place_ptr(place);
+                let (ptr, ty) = self.resolve_place(builder, place, locals, local_ptrs);
                 (
-                    self.builder
-                        .build_load(
-                            self.module
-                                .tys
-                                .get(self.module.llvm.ir.tys.find_or_insert(ty.clone())),
-                            ptr,
-                            "asdfasdf",
-                        )
+                    builder
+                        .build_load(self.get_ty(ty), ptr, "load place operand")
                         .unwrap(),
                     ty,
                 )
             }
-            Operand::Constant(value) => match value {
-                Constant::U8(value) => (
-                    self.module
-                        .tys
-                        .get(self.module.llvm.ir.tys.find_or_insert(TyInfo::U8))
-                        .into_int_type()
-                        .const_int(*value as u64, false)
-                        .into(),
-                    TyInfo::U8,
-                ),
-                Constant::I8(value) => (
-                    self.module
-                        .tys
-                        .get(self.module.llvm.ir.tys.find_or_insert(TyInfo::I8))
-                        .into_int_type()
-                        .const_int(*value as u64, false)
-                        .into(),
-                    TyInfo::I8,
-                ),
+            Operand::Constant(constant) => match constant {
+                Constant::U8(value) => {
+                    let ty = self.ir.tys.find_or_insert(TyInfo::U8);
+                    (
+                        self.get_ty(ty)
+                            .into_int_type()
+                            .const_int(*value as u64, false)
+                            .into(),
+                        ty,
+                    )
+                }
+                Constant::I8(value) => {
+                    let ty = self.ir.tys.find_or_insert(TyInfo::I8);
+                    (
+                        self.get_ty(ty)
+                            .into_int_type()
+                            .const_int(*value as u64, true)
+                            .into(),
+                        ty,
+                    )
+                }
             },
         }
     }
-}
 
-struct LlvmTys<'ir, 'ctx> {
-    cache: RefCell<HashMap<Ty, BasicTypeEnum<'ctx>>>,
-    llvm: &'ctx Llvm<'ir>,
-}
-impl<'ir, 'ctx> LlvmTys<'ir, 'ctx> {
-    pub fn new(llvm: &'ctx Llvm<'ir>) -> Self {
-        Self {
-            cache: RefCell::new(HashMap::new()),
-            llvm,
-        }
-    }
-
-    pub fn get(&self, ty: Ty) -> BasicTypeEnum<'ctx> {
-        let cache = self.cache.borrow().get(&ty).cloned();
-        match cache {
-            Some(ty) => ty,
-            None => {
-                let mut cache = self.cache.borrow_mut();
-                cache.insert(ty, self.of_ty(ty));
-                cache[&ty]
-            }
-        }
-    }
-
-    fn of_ty(&self, ty: Ty) -> BasicTypeEnum<'ctx> {
-        match self.llvm.ir.tys.get(ty) {
-            TyInfo::U8 => self.llvm.ctx.i8_type().as_basic_type_enum(),
-            TyInfo::I8 => self.llvm.ctx.i8_type().as_basic_type_enum(),
-            TyInfo::Ref(inner) => match self.llvm.ir.tys.get(inner) {
-                // References to slices are fat pointers, so are 2 pointers wide.
-                TyInfo::Slice(_) => self
-                    .llvm
-                    .ctx
-                    .ptr_type(AddressSpace::default())
-                    .array_type(2)
-                    .as_basic_type_enum(),
-                _ => self
-                    .llvm
-                    .ctx
-                    .ptr_type(AddressSpace::default())
-                    .as_basic_type_enum(),
-            },
-            TyInfo::Slice(_) => unimplemented!(),
-            TyInfo::Array { ty, length } => self
-                .of_ty(ty)
-                .array_type(length as u32)
-                .as_basic_type_enum(),
-        }
+    // Call an intrinsic function.
+    fn build_intrinsic(
+        &self,
+        builder: &Builder<'ink>,
+        name: &str,
+        tys: &[BasicTypeEnum],
+        values: &[BasicMetadataValueEnum],
+    ) {
+        let intrinsic = Intrinsic::find(name).unwrap();
+        let intrinsic_fn = intrinsic.get_declaration(&self.module, tys).unwrap();
+        builder.build_call(intrinsic_fn, values, name).unwrap();
     }
 }
