@@ -1,0 +1,5 @@
+---
+source: src/ast/mod.rs
+expression: "parse_expr(&mut\nLexer::from_iter(&ctx, toks.into_iter().map(|tok| (tok, Span::default()))))"
+---
+ident0

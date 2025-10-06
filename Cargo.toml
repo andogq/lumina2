@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 inkwell = { version = "0.6.0", features = ["llvm18-1"] }
+insta = "1.43.2"
+rstest = "0.26.1"
 
 
 [dev-dependencies]

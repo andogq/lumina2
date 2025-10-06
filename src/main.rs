@@ -1,8 +1,13 @@
 #![recursion_limit = "256"]
 
+mod ast;
+mod ctx;
 mod ir;
+mod lex;
 mod llvm;
 mod util;
+
+pub use self::{ctx::*, lex::Tok};
 
 use crate::ir::ctx::IrCtx;
 
