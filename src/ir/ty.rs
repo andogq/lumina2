@@ -10,6 +10,7 @@ pub enum TyInfo {
     Ref(Ty),
     Slice(Ty),
     Array { ty: Ty, length: usize },
+    Unit,
 }
 
 indexed_vec!(pub key Ty);

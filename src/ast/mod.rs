@@ -7,7 +7,7 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct Program {
-    functions: Vec<Function>,
+    pub functions: Vec<Function>,
 }
 
 impl Program {
@@ -20,15 +20,15 @@ impl Program {
 
 #[derive(Clone, Debug)]
 pub struct Function {
-    name: Ident,
-    params: Vec<(Ident, Ident)>,
-    ret: Option<Ident>,
-    body: Block,
+    pub name: Ident,
+    pub params: Vec<(Ident, Ident)>,
+    pub ret: Option<Ident>,
+    pub body: Block,
 }
 
 #[derive(Clone, Debug)]
 pub struct Block {
-    statements: Vec<Statement>,
+    pub statements: Vec<Statement>,
 }
 
 impl Block {
@@ -203,6 +203,12 @@ pub enum BinOp {
     LogicOr,
     BitAnd,
     BitOr,
+    Eq,
+    Ne,
+    Gt,
+    Ge,
+    Lt,
+    Le,
 }
 
 impl Display for BinOp {
@@ -216,6 +222,12 @@ impl Display for BinOp {
             BinOp::LogicOr => write!(f, "||"),
             BinOp::BitAnd => write!(f, "&"),
             BinOp::BitOr => write!(f, "|"),
+            BinOp::Eq => write!(f, "=="),
+            BinOp::Ne => write!(f, "!="),
+            BinOp::Gt => write!(f, ">"),
+            BinOp::Ge => write!(f, ">="),
+            BinOp::Lt => write!(f, "<"),
+            BinOp::Le => write!(f, "<="),
         }
     }
 }
@@ -239,6 +251,10 @@ pub fn parse(mut toks: Lexer<'_, '_, impl Iterator<Item = (Tok, Span)>>) -> Prog
     let mut program = Program::new();
 
     while toks.peek().is_some() {
+        if toks.try_expect(Tok::Eof) {
+            break;
+        }
+
         toks.expect(Tok::Fn);
 
         let name = toks.ident();
@@ -260,11 +276,10 @@ pub fn parse(mut toks: Lexer<'_, '_, impl Iterator<Item = (Tok, Span)>>) -> Prog
 
             trailing_comma = toks.try_expect(Tok::Comma);
         }
+        toks.expect(Tok::RParen);
 
         // Optional return type.
         let ret = toks.try_expect(Tok::ThinArrow).then(|| toks.ident());
-
-        toks.expect(Tok::RParen);
 
         let body = parse_block(&mut toks);
         program.functions.push(Function {

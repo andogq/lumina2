@@ -5,90 +5,27 @@ mod ctx;
 mod ir;
 mod lex;
 mod llvm;
+mod tir;
 mod util;
 
 pub use self::{ctx::*, lex::Tok};
 
-use crate::ir::ctx::IrCtx;
-
 fn main() {
-    let mut ctx = IrCtx::default();
+    let source = "fn main() -> u8 { 123 }";
+    let ctx = Ctx::new();
 
-    let program1 = ir_function! {
-        [&mut ctx]
-        let _0: u8;
-        let _1: u8;
-        let _2: u8;
+    let toks = lex::Lexer::new(&ctx, source);
+    let program = ast::parse(toks);
+    let tir = tir::lower(&ctx, &program);
 
-        bb0: {
-            StorageLive(_1);
-            StorageLive(_2);
-            _1 = const 2_u8;
-            _2 = const 3_u8;
-            _0 = Mul(_1, _2);
-            StorageDead(_2);
-            StorageDead(_1);
-            return;
-        }
-    };
-
-    let program2 = ir_function! {
-        [&mut ctx]
-        let _0: u8;
-        let _1: [u8; 3];
-        let _2: u8;
-
-        bb0: {
-            StorageLive(_1);
-            StorageLive(_2);
-            _1 = [const 1_u8, const 2_u8, const 3_u8];
-            _2 = const 1_u8;
-            _2 = Add(_2, _2);
-            _0 = _1[_2];
-            StorageDead(_2);
-            StorageDead(_1);
-            return;
-        }
-    };
-
-    let program3 = ir_function! {
-        [&mut ctx]
-        let _0: u8;
-
-        bb0: {
-            switchInt(_0) -> [5_u8: bb2, otherwise: bb1];
-        }
-
-        bb1: {
-            _0 = Add(_0, const 1_u8);
-            goto -> bb0;
-        }
-
-        bb2: {
-            return;
-        }
-    };
-
-    let mut ctx = IrCtx::default();
-    let add_something = ir_function! {
-        [&mut ctx]
-
-        let _0: u8;
-        let _1: u8;
-
-        bb0: {
-            StorageLive(_1);
-            _1 = const 42_u8;
-            _0 = Add(const 23_u8, _1);
-            StorageDead(_1);
-            return;
-        }
-    };
+    dbg!(tir);
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use crate::ir::ctx::IrCtx;
 
     macro_rules! run_test {
         ($name:ident => [$expected:expr] $($program:tt)*) => {

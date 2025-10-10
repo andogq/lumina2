@@ -236,6 +236,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
             },
             TyInfo::Array { ty, length } => self.get_ty(ty).array_type(length as u32).into(),
             TyInfo::Slice(ty) => panic!("cannot have type for slice, as it's unsized"),
+            TyInfo::Unit => todo!("unit type"),
         };
 
         self.tys.borrow_mut().insert(ty, ty_info);
