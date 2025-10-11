@@ -108,6 +108,7 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Loc
             rvalue: RValue::Use(Operand::Constant(match literal {
                 tir::Literal::I8(i8) => Constant::I8(*i8),
                 tir::Literal::U8(u8) => Constant::U8(*u8),
+                tir::Literal::Boolean(bool) => Constant::Boolean(*bool),
             })),
         }),
         tir::ExprKind::If {

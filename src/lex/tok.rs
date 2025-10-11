@@ -31,6 +31,9 @@ pub enum Tok {
 
     ThinArrow,
 
+    True,
+    False,
+
     Fn,
     Let,
     Return,
@@ -74,6 +77,9 @@ impl Display for Tok {
             Tok::BarBar => write!(f, "||"),
 
             Tok::ThinArrow => write!(f, "->"),
+
+            Tok::True => write!(f, "true"),
+            Tok::False => write!(f, "false"),
 
             Tok::Fn => write!(f, "fn"),
             Tok::Let => write!(f, "let"),

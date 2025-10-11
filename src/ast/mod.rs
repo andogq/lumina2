@@ -183,12 +183,14 @@ impl Display for Expr {
 #[derive(Clone, Debug)]
 pub enum Literal {
     Integer(usize),
+    Boolean(bool),
 }
 
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Literal::Integer(value) => write!(f, "{value}"),
+            Literal::Boolean(value) => write!(f, "{value}"),
         }
     }
 }
@@ -332,8 +334,17 @@ fn parse_expr(toks: &mut Lexer<'_, '_, impl Iterator<Item = (Tok, Span)>>) -> Ex
     /// Parse a prefix expression
     fn parse_prefix(toks: &mut Lexer<'_, '_, impl Iterator<Item = (Tok, Span)>>) -> Expr {
         match &toks.peek().unwrap().0 {
-            Tok::Ident(ident) => Expr::Variable(toks.ident()),
-            Tok::IntLit(lit) => Expr::Literal(Literal::Integer(toks.int_lit())),
+            Tok::Ident(_) => Expr::Variable(toks.ident()),
+            Tok::IntLit(_) => Expr::Literal(Literal::Integer(toks.int_lit())),
+
+            Tok::True => {
+                toks.expect(Tok::True);
+                Expr::Literal(Literal::Boolean(true))
+            }
+            Tok::False => {
+                toks.expect(Tok::False);
+                Expr::Literal(Literal::Boolean(false))
+            }
 
             Tok::Minus => {
                 toks.expect(Tok::Minus);

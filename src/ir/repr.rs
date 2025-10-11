@@ -170,6 +170,7 @@ pub enum Projection {
 pub enum Constant {
     U8(u8),
     I8(i8),
+    Boolean(bool),
 }
 impl From<u8> for Constant {
     fn from(value: u8) -> Self {

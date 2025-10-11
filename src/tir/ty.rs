@@ -2,6 +2,7 @@
 pub enum Ty {
     I8,
     U8,
+    Boolean,
     Unit,
     Ref(Box<Ty>),
     Slice(Box<Ty>),

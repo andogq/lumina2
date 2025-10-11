@@ -104,6 +104,7 @@ pub enum ExprKind {
 pub enum Literal {
     I8(i8),
     U8(u8),
+    Boolean(bool),
 }
 
 pub fn lower(ctx: &Ctx, ast: &ast::Program) -> Program {
@@ -236,6 +237,7 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
             let (ty, literal) = match literal {
                 // TODO: Literal could be i8 or u8, depending on what it's around.
                 ast::Literal::Integer(literal) => (Ty::U8, Literal::U8(*literal as u8)),
+                ast::Literal::Boolean(bool) => (Ty::Boolean, Literal::Boolean(*bool)),
             };
 
             Expr {
@@ -351,7 +353,7 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
             let (id, binding) = bindings
                 .iter_keys()
                 .find(|(_, binding)| binding.ident == *ident)
-                .expect("ident to exist");
+                .expect("ident to exist: {ident}");
 
             Expr {
                 ty: binding.ty.clone(),

@@ -205,6 +205,10 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                                                     .get_ty(&Ty::U8)
                                                     .into_int_type()
                                                     .const_int(*value as u64, false),
+                                                Constant::Boolean(bool) => self
+                                                    .get_ty(&Ty::Boolean)
+                                                    .into_int_type()
+                                                    .const_int(if *bool { 1 } else { 0 }, false),
                                             },
                                             basic_blocks[bb],
                                         )
@@ -226,6 +230,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
         let ty_info = match ty {
             Ty::U8 => self.ctx.i8_type().into(),
             Ty::I8 => self.ctx.i8_type().into(),
+            Ty::Boolean => self.ctx.bool_type().into(),
             Ty::Ref(ty) => match **ty {
                 // Ref to slice is a fat pointer.
                 Ty::Slice(_) => self
@@ -539,6 +544,16 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                         self.get_ty(&ty)
                             .into_int_type()
                             .const_int(*value as u64, true)
+                            .into(),
+                        ty,
+                    )
+                }
+                Constant::Boolean(value) => {
+                    let ty = Ty::Boolean;
+                    (
+                        self.get_ty(&ty)
+                            .into_int_type()
+                            .const_int(if *value { 1 } else { 0 }, false)
                             .into(),
                         ty,
                     )

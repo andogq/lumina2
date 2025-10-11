@@ -13,7 +13,7 @@ impl Ctx {
         let mut ctx = Self::default();
 
         // Preload with built-in types.
-        [("u8", Ty::U8), ("i8", Ty::I8)]
+        [("u8", Ty::U8), ("i8", Ty::I8), ("bool", Ty::Boolean)]
             .into_iter()
             .for_each(|(ident, ty)| {
                 let ident = ctx.idents.intern(ident.to_string());

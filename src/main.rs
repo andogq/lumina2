@@ -53,6 +53,14 @@ mod test {
                 124
             );
         }
+
+        #[test]
+        fn booleans() {
+            assert_eq!(
+                run("fn main() -> bool { let my_bool = true; let other_bool = false; my_bool }"),
+                1
+            );
+        }
     }
 
     mod ir {

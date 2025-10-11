@@ -288,6 +288,9 @@ impl<'src> TokenIter<'src> {
                     return self.next_tok();
                 }
                 (State::Ident(ident), _) => match ident.as_str() {
+                    "true" => Tok::True,
+                    "false" => Tok::False,
+
                     "fn" => Tok::Fn,
                     "let" => Tok::Let,
                     "return" => Tok::Return,
@@ -421,6 +424,8 @@ mod test {
     #[case("&&", &[Tok::AmpAmp, Tok::Eof])]
     #[case("||", &[Tok::BarBar, Tok::Eof])]
     #[case("->", &[Tok::ThinArrow, Tok::Eof])]
+    #[case("true", &[Tok::True, Tok::Eof])]
+    #[case("false", &[Tok::False, Tok::Eof])]
     #[case("fn", &[Tok::Fn, Tok::Eof])]
     #[case("let", &[Tok::Let, Tok::Eof])]
     #[case("return", &[Tok::Return, Tok::Eof])]
