@@ -2,7 +2,7 @@
 macro_rules! ir_function {
     // Basic block statement, with further trailing statements.
     (@basic_block($ctx:ident) [$($statements:tt)*] [$($statement:tt)*] $($rest:tt)+) => {
-        ir_function!(@basic_block($ctx) [$($statements)* ir_statement!([$ctx.tys] $($statement)*),] $($rest)*)
+        ir_function!(@basic_block($ctx) [$($statements)* ir_statement!($($statement)*),] $($rest)*)
     };
 
     // Terminator, which can only occur as the last statement of a basic block.
@@ -18,13 +18,13 @@ macro_rules! ir_function {
     // Section option 1: local declaration.
     (@section($ctx:ident, $body:ident) let $local:ident: $($ty:tt)*) => {
         let $local = $body.local_decls.insert($crate::ir::repr::LocalDecl {
-            ty: ir_ty!([$ctx.tys] $($ty)*),
+            ty: ir_ty!($($ty)*),
         });
     };
 
     // Section option 2: basic block section.
     (@section($ctx:ident, $body:ident) $($bb_name:ident: { $($bb:tt)* })*) => {
-        // HACK: Predeclare all basic blocks.
+        // HACK: Pre-declare all basic blocks.
         $(
             let $bb_name = $body.basic_blocks.insert($crate::ir::repr::BasicBlockData {
                 statements: ::std::vec![],
@@ -65,13 +65,15 @@ macro_rules! ir_function {
 mod test {
     #![allow(clippy::just_underscores_and_digits)]
 
-    use crate::ir::{
-        ctx::IrCtx,
-        repr::{
-            BasicBlockData, BinOp, Body, Constant, Local, LocalDecl, Operand, Place, Projection,
-            RValue, Statement, Terminator,
+    use crate::{
+        ir::{
+            ctx::IrCtx,
+            repr::{
+                BasicBlockData, BinOp, Body, Constant, Local, LocalDecl, Operand, Place,
+                Projection, RValue, Statement, Terminator,
+            },
         },
-        ty::TyInfo,
+        tir::Ty,
     };
 
     fn assert_body(body: &Body, locals: &[LocalDecl], basic_blocks: &[BasicBlockData]) {
@@ -98,12 +100,14 @@ mod test {
             let _1: &u8;
         };
 
-        let u8_ty = ctx.tys.find_or_insert(TyInfo::U8);
-        let ref_u8_ty = ctx.tys.find_or_insert(TyInfo::Ref(u8_ty));
-
         assert_body(
             &ctx.functions[program],
-            &[LocalDecl { ty: u8_ty }, LocalDecl { ty: ref_u8_ty }],
+            &[
+                LocalDecl { ty: Ty::U8 },
+                LocalDecl {
+                    ty: Ty::Ref(Box::new(Ty::U8)),
+                },
+            ],
             &[],
         );
     }
@@ -161,12 +165,15 @@ mod test {
 
         let _0 = Local::zero();
         let _1 = Local::of(1);
-        let u8_ty = ctx.tys.find_or_insert(TyInfo::U8);
-        let ref_u8_ty = ctx.tys.find_or_insert(TyInfo::Ref(u8_ty));
 
         assert_body(
             &ctx.functions[program],
-            &[LocalDecl { ty: u8_ty }, LocalDecl { ty: ref_u8_ty }],
+            &[
+                LocalDecl { ty: Ty::U8 },
+                LocalDecl {
+                    ty: Ty::Ref(Box::new(Ty::U8)),
+                },
+            ],
             &[
                 BasicBlockData {
                     statements: vec![

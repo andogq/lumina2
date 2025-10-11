@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use crate::{indexed_vec, ir::Ty};
+use crate::{indexed_vec, tir::Ty};
 
 /// Representation of a function.
 #[derive(Clone, Debug, Default)]

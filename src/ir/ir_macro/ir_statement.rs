@@ -1,21 +1,21 @@
 #[macro_export(local_inner_macros)]
 macro_rules! ir_statement {
     // Statement in the form `Statement(params)`.
-    ([$tys:expr] $statement:ident($($params:expr),* $(,)?)) => {
+    ($statement:ident($($params:expr),* $(,)?)) => {
         $crate::ir::repr::Statement::$statement($($params,)*)
     };
 
     // Callback for parsing an assignment statement.
-    (@cb_assign[$tys:expr] [$($place:tt)*] [$($rvalue:tt)*]) => {
+    (@cb_assign [$($place:tt)*] [$($rvalue:tt)*]) => {
         $crate::ir::repr::Statement::Assign {
             place: $crate::ir_place!($($place)*),
-            rvalue: $crate::ir_rvalue!([$tys] $($rvalue)*),
+            rvalue: $crate::ir_rvalue!($($rvalue)*),
         }
     };
 
     // Assume an assignment. Split at `=`, and continue at `cb_assign`.
-    ([$tys:expr] $($toks:tt)*) => {
-        $crate::split_token!([=] without_trailing [ir_statement(@cb_assign[$tys])] $($toks)*)
+    ($($toks:tt)*) => {
+        $crate::split_token!([=] without_trailing [ir_statement(@cb_assign)] $($toks)*)
     };
 }
 
@@ -31,10 +31,7 @@ mod test {
         fn simple() {
             let _0 = Local::zero();
 
-            assert_eq!(
-                ir_statement!([_] StorageLive(_0)),
-                Statement::StorageLive(_0),
-            );
+            assert_eq!(ir_statement!(StorageLive(_0)), Statement::StorageLive(_0),);
         }
     }
 
@@ -48,7 +45,7 @@ mod test {
             let _0 = Local::zero();
 
             assert_eq!(
-                ir_statement!([_] _0 = const 1_u8),
+                ir_statement!(_0 = const 1_u8),
                 Statement::Assign {
                     place: Place {
                         local: _0,

@@ -17,10 +17,7 @@ fn main() {
     let toks = lex::Lexer::new(&ctx, source);
     let program = ast::parse(toks);
     let tir = tir::lower(&ctx, &program);
-    let mut ir = ir::lower(&ctx, &tir);
-
-    // WARN: hack
-    ir.tys = ctx.tys;
+    let ir = ir::lower(&ctx, &tir);
 
     let ink_ctx = inkwell::context::Context::create();
     let llvm = llvm::Llvm::new(&ink_ctx, &ir);
@@ -40,7 +37,7 @@ mod test {
             #[test]
             fn $name() {
                 let mut ctx = IrCtx::default();
-                let program = ir_function! {
+                ir_function! {
                     [&mut ctx]
                     $($program)*
                 };
@@ -50,7 +47,7 @@ mod test {
                 let llvm_output = {
                     let llvm_ctx = inkwell::context::Context::create();
                     let backend = llvm::Llvm::new(&llvm_ctx, &ctx);
-                    backend.run("func_Function(Key(0))")
+                    backend.run("func_FunctionId(Key(0))")
                 };
                 assert_eq!(expected, llvm_output);
             }

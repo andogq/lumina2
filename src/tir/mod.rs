@@ -1,9 +1,12 @@
+mod ty;
+
 use crate::{
     Ctx, Ident,
     ast::{self, BinOp, UnOp},
     indexed_vec,
-    ir::{Ty, TyInfo},
 };
+
+pub use self::ty::Ty;
 
 #[derive(Clone, Debug, Default)]
 pub struct Program {
@@ -114,15 +117,15 @@ pub fn lower(ctx: &Ctx, ast: &ast::Program) -> Program {
                 ident: *ident,
                 binding: bindings.insert(Binding {
                     ident: *ident,
-                    ty: ctx.ty_names[ty_name],
+                    ty: ctx.ty_names[ty_name].clone(),
                 }),
             })
             .collect();
 
         let ret = ast_function
             .ret
-            .map(|ret| ctx.ty_names[&ret])
-            .unwrap_or_else(|| ctx.tys.find_or_insert(TyInfo::Unit));
+            .map(|ret| ctx.ty_names[&ret].clone())
+            .unwrap_or(Ty::Unit);
 
         let block = lower_block(ctx, &mut bindings, &ast_function.body);
 
@@ -158,14 +161,13 @@ fn lower_block(ctx: &Ctx, bindings: &mut Bindings, block: &ast::Block) -> Block 
         "only final expression can omit semicolon"
     );
 
-    let unit_ty = ctx.tys.find_or_insert(TyInfo::Unit);
     let (yield_statement, ty) = statements
         .last()
         .and_then(|statement| match statement {
-            Statement::Expr { expr, semicolon } if !*semicolon => Some((true, expr.ty)),
+            Statement::Expr { expr, semicolon } if !*semicolon => Some((true, expr.ty.clone())),
             _ => None,
         })
-        .unwrap_or((false, unit_ty));
+        .unwrap_or((false, Ty::Unit));
 
     Block {
         ty,
@@ -184,11 +186,11 @@ fn lower_statement(ctx: &Ctx, bindings: &mut Bindings, statement: &ast::Statemen
             let value = lower_expr(ctx, bindings, value);
             let ty = match ty_annotation {
                 Some(ty_annotation) => {
-                    let ty = ctx.ty_names[ty_annotation];
+                    let ty = ctx.ty_names[ty_annotation].clone();
                     assert_eq!(ty, value.ty);
                     ty
                 }
-                None => value.ty,
+                None => value.ty.clone(),
             };
 
             Statement::Declaration {
@@ -221,7 +223,7 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
             assert_eq!(binding.ty, value.ty);
 
             Expr {
-                ty: ctx.tys.find_or_insert(TyInfo::Unit),
+                ty: Ty::Unit,
                 kind: ExprKind::Assignment {
                     binding: Box::new(binding),
                     value: Box::new(value),
@@ -231,10 +233,7 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
         ast::Expr::Literal(literal) => {
             let (ty, literal) = match literal {
                 // TODO: Literal could be i8 or u8, depending on what it's around.
-                ast::Literal::Integer(literal) => (
-                    ctx.tys.find_or_insert(TyInfo::U8),
-                    Literal::U8(*literal as u8),
-                ),
+                ast::Literal::Integer(literal) => (Ty::U8, Literal::U8(*literal as u8)),
             };
 
             Expr {
@@ -250,10 +249,8 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
             let condition = lower_expr(ctx, bindings, condition);
             assert_eq!(
                 condition.ty,
-                ctx.tys.find_or_insert(
-                    // TODO: Boolean
-                    TyInfo::U8
-                )
+                // TODO: Boolean
+                Ty::U8
             );
 
             let block = lower_block(ctx, bindings, block);
@@ -264,12 +261,12 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
                 assert_eq!(otherwise.ty, block.ty);
                 Some(otherwise)
             } else {
-                assert_eq!(block.ty, ctx.tys.find_or_insert(TyInfo::Unit));
+                assert_eq!(block.ty, Ty::Unit);
                 None
             };
 
             Expr {
-                ty: block.ty,
+                ty: block.ty.clone(),
                 kind: ExprKind::If {
                     condition: Box::new(condition),
                     block,
@@ -282,7 +279,7 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
         ast::Expr::Block(block) => {
             let block = lower_block(ctx, bindings, block);
             Expr {
-                ty: block.ty,
+                ty: block.ty.clone(),
                 kind: ExprKind::Block(block),
             }
         }
@@ -290,29 +287,29 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
             let lhs = lower_expr(ctx, bindings, lhs);
             let rhs = lower_expr(ctx, bindings, rhs);
 
-            let ty = match (ctx.tys.get(lhs.ty), op, ctx.tys.get(rhs.ty)) {
+            let ty = match (&lhs.ty, op, &rhs.ty) {
                 (
-                    lhs @ (TyInfo::U8 | TyInfo::I8),
+                    lhs @ (Ty::U8 | Ty::I8),
                     BinOp::Plus
                     | BinOp::Minus
                     | BinOp::Multiply
                     | BinOp::Divide
                     | BinOp::BitAnd
                     | BinOp::BitOr,
-                    rhs @ (TyInfo::U8 | TyInfo::I8),
-                ) if lhs == rhs => ctx.tys.find_or_insert(lhs),
+                    rhs @ (Ty::U8 | Ty::I8),
+                ) if lhs == rhs => lhs.clone(),
                 // TODO: Boolean
-                (lhs @ TyInfo::U8, BinOp::LogicAnd | BinOp::LogicOr, TyInfo::U8) => {
-                    ctx.tys.find_or_insert(lhs)
-                }
+                (lhs @ Ty::U8, BinOp::LogicAnd | BinOp::LogicOr, Ty::U8) => lhs.clone(),
                 (
-                    lhs @ (TyInfo::U8 | TyInfo::I8),
+                    lhs @ (Ty::U8 | Ty::I8),
                     BinOp::Eq | BinOp::Ne | BinOp::Gt | BinOp::Ge | BinOp::Lt | BinOp::Le,
-                    rhs @ (TyInfo::U8 | TyInfo::I8),
-                ) if lhs == rhs => ctx.tys.find_or_insert(
-                    // TODO: Boolean
-                    TyInfo::U8,
-                ),
+                    rhs @ (Ty::U8 | Ty::I8),
+                ) if lhs == rhs =>
+                // TODO: Boolean
+                {
+                    Ty::U8
+                }
+
                 (lhs, op, rhs) => panic!("cannot apply bin: {lhs:?} {op} {rhs:?}"),
             };
 
@@ -328,9 +325,9 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
         ast::Expr::UnOp { op, rhs } => {
             let rhs = lower_expr(ctx, bindings, rhs);
 
-            let ty = match (op, ctx.tys.get(rhs.ty)) {
-                (UnOp::Deref, TyInfo::Ref(inner)) => inner,
-                (UnOp::Minus, rhs @ TyInfo::I8) => ctx.tys.find_or_insert(rhs),
+            let ty = match (op, &rhs.ty) {
+                (UnOp::Deref, Ty::Ref(inner)) => *inner.clone(),
+                (UnOp::Minus, rhs @ Ty::I8) => rhs.clone(),
                 (op, rhs) => panic!("cannot apply unary: {op} {rhs:?}"),
             };
 

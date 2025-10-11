@@ -1,14 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, fmt::Display};
 
-use crate::{
-    indexed_vec,
-    ir::{Ty, TyInfo, Tys},
-};
+use crate::{indexed_vec, tir::Ty};
 
 #[derive(Clone, Debug, Default)]
 pub struct Ctx {
     pub idents: Idents,
-    pub tys: Tys,
     pub ty_names: HashMap<Ident, Ty>,
 }
 
@@ -17,11 +13,10 @@ impl Ctx {
         let mut ctx = Self::default();
 
         // Preload with built-in types.
-        [("u8", TyInfo::U8), ("i8", TyInfo::I8)]
+        [("u8", Ty::U8), ("i8", Ty::I8)]
             .into_iter()
             .for_each(|(ident, ty)| {
                 let ident = ctx.idents.intern(ident.to_string());
-                let ty = ctx.tys.find_or_insert(ty);
                 ctx.ty_names.insert(ident, ty);
             });
 

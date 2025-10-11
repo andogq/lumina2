@@ -11,13 +11,15 @@ use inkwell::{
     values::{BasicMetadataValueEnum, BasicValueEnum, PointerValue},
 };
 
-use crate::ir::{
-    Ty, TyInfo,
-    ctx::IrCtx,
-    repr::{
-        BasicBlock, BinOp, CastKind, Constant, Local, Locals, Operand, Place, PointerCoercion,
-        Projection, RValue, Statement, Terminator, UnOp,
+use crate::{
+    ir::{
+        ctx::IrCtx,
+        repr::{
+            BasicBlock, BinOp, CastKind, Constant, Local, Locals, Operand, Place, PointerCoercion,
+            Projection, RValue, Statement, Terminator, UnOp,
+        },
     },
+    tir::Ty,
 };
 
 pub struct Llvm<'ink, 'ir> {
@@ -61,7 +63,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
             .iter_keys()
             .map(|(id, function)| {
                 let ret = self
-                    .get_ty(function.local_decls[Local::zero()].ty)
+                    .get_ty(&function.local_decls[Local::zero()].ty)
                     .fn_type(&[], false);
 
                 (
@@ -88,7 +90,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                     (
                         id,
                         builder
-                            .build_alloca(self.get_ty(local.ty), id.to_string().as_str())
+                            .build_alloca(self.get_ty(&local.ty), id.to_string().as_str())
                             .unwrap(),
                     )
                 })
@@ -166,7 +168,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                     }
                     Terminator::Return => {
                         let ret_local = Local::zero();
-                        let ret_ty = ir.local_decls[ret_local].ty;
+                        let ret_ty = &ir.local_decls[ret_local].ty;
                         let ret_ptr = local_ptrs[&ret_local];
 
                         let out = builder
@@ -196,11 +198,11 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                                         (
                                             match value {
                                                 Constant::I8(value) => self
-                                                    .get_ty(self.ir.tys.find_or_insert(TyInfo::I8))
+                                                    .get_ty(&Ty::I8)
                                                     .into_int_type()
                                                     .const_int(*value as u64, true),
                                                 Constant::U8(value) => self
-                                                    .get_ty(self.ir.tys.find_or_insert(TyInfo::U8))
+                                                    .get_ty(&Ty::U8)
                                                     .into_int_type()
                                                     .const_int(*value as u64, false),
                                             },
@@ -216,29 +218,29 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
         }
     }
 
-    fn get_ty(&self, ty: Ty) -> BasicTypeEnum<'ink> {
-        if let Some(ty) = self.tys.borrow().get(&ty) {
+    fn get_ty(&self, ty: &Ty) -> BasicTypeEnum<'ink> {
+        if let Some(ty) = self.tys.borrow().get(ty) {
             return *ty;
         }
 
-        let ty_info = match self.ir.tys.get(ty) {
-            TyInfo::U8 => self.ctx.i8_type().into(),
-            TyInfo::I8 => self.ctx.i8_type().into(),
-            TyInfo::Ref(ty) => match self.ir.tys.get(ty) {
+        let ty_info = match ty {
+            Ty::U8 => self.ctx.i8_type().into(),
+            Ty::I8 => self.ctx.i8_type().into(),
+            Ty::Ref(ty) => match **ty {
                 // Ref to slice is a fat pointer.
-                TyInfo::Slice(_) => self
+                Ty::Slice(_) => self
                     .ctx
                     .ptr_type(AddressSpace::default())
                     .array_type(2)
                     .into(),
                 _ => self.ctx.ptr_type(AddressSpace::default()).into(),
             },
-            TyInfo::Array { ty, length } => self.get_ty(ty).array_type(length as u32).into(),
-            TyInfo::Slice(ty) => panic!("cannot have type for slice, as it's unsized"),
-            TyInfo::Unit => todo!("unit type"),
+            Ty::Array(ty, length) => self.get_ty(ty).array_type(*length as u32).into(),
+            Ty::Slice(ty) => panic!("cannot have type for slice, as it's unsized"),
+            Ty::Unit => todo!("unit type"),
         };
 
-        self.tys.borrow_mut().insert(ty, ty_info);
+        self.tys.borrow_mut().insert(ty.clone(), ty_info);
 
         ty_info
     }
@@ -251,17 +253,17 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
         local_ptrs: &HashMap<Local, PointerValue<'ink>>,
     ) -> (PointerValue<'ink>, Ty) {
         let mut ptr = local_ptrs[&place.local];
-        let mut ty = locals[place.local].ty;
+        let mut ty = &locals[place.local].ty;
 
         for projection in &place.projection {
             match projection {
                 Projection::Deref => {
-                    let TyInfo::Ref(inner_ty) = self.ir.tys.get(ty) else {
+                    let Ty::Ref(inner_ty) = ty else {
                         panic!("Can only dereference a reference");
                     };
 
-                    match self.ir.tys.get(inner_ty) {
-                        TyInfo::Slice(_) => {
+                    match **inner_ty {
+                        Ty::Slice(_) => {
                             // Load pointer component of fat pointer.
                             ptr = builder
                                 .build_load(
@@ -275,7 +277,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                         }
                         _ => {
                             ptr = builder
-                                .build_load(self.get_ty(ty), ptr, "deref")
+                                .build_load(self.get_ty(&ty), ptr, "deref")
                                 .unwrap()
                                 .into_pointer_value()
                         }
@@ -285,25 +287,25 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                 }
                 Projection::Field(_) => todo!(),
                 Projection::Index(local) => {
-                    let inner_ty = match self.ir.tys.get(ty) {
-                        TyInfo::Array { ty, .. } => ty,
-                        TyInfo::Slice(ty) => ty,
+                    let inner_ty = match ty {
+                        Ty::Array(ty, ..) => ty,
+                        Ty::Slice(ty) => ty,
                         _ => {
                             panic!("can only index an array or slice");
                         }
                     };
 
-                    let local_ty = locals[*local].ty;
-                    let TyInfo::U8 = self.ir.tys.get(local_ty) else {
+                    let local_ty = &locals[*local].ty;
+                    let Ty::U8 = local_ty else {
                         panic!("can only index using u8");
                     };
                     let index = builder
-                        .build_load(self.get_ty(local_ty), local_ptrs[local], "load index")
+                        .build_load(self.get_ty(&local_ty), local_ptrs[local], "load index")
                         .unwrap()
                         .into_int_value();
 
                     ptr = unsafe {
-                        builder.build_in_bounds_gep(self.get_ty(inner_ty), ptr, &[index], "index")
+                        builder.build_in_bounds_gep(self.get_ty(&inner_ty), ptr, &[index], "index")
                     }
                     .unwrap();
                     ty = inner_ty;
@@ -311,7 +313,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
             }
         }
 
-        (ptr, ty)
+        (ptr, ty.clone())
     }
 
     fn store_rvalue(
@@ -331,7 +333,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
             }
             RValue::Ref(place) => {
                 let (ptr, inner_ty) = self.resolve_place(builder, place, locals, local_ptrs);
-                let ty = self.ir.tys.find_or_insert(TyInfo::Ref(inner_ty));
+                let ty = Ty::Ref(Box::new(inner_ty));
                 assert_eq!(place_ty, ty);
                 builder.build_store(place_ptr, ptr).unwrap();
             }
@@ -358,11 +360,11 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                     BinOp::Add => builder.build_int_add(lhs, rhs, "add").unwrap(),
                     BinOp::Sub => builder.build_int_sub(lhs, rhs, "sub").unwrap(),
                     BinOp::Mul => builder.build_int_mul(lhs, rhs, "mul").unwrap(),
-                    BinOp::Div => match self.ir.tys.get(ty) {
-                        TyInfo::U8 => builder
+                    BinOp::Div => match ty {
+                        Ty::U8 => builder
                             .build_int_unsigned_div(lhs, rhs, "unsigned div")
                             .unwrap(),
-                        TyInfo::I8 => builder
+                        Ty::I8 => builder
                             .build_int_signed_div(lhs, rhs, "signed div")
                             .unwrap(),
                         _ => panic!("invalid div type"),
@@ -376,7 +378,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
 
                 match op {
                     UnOp::Not => {
-                        let (TyInfo::U8 | TyInfo::I8) = self.ir.tys.get(rhs_ty) else {
+                        let (Ty::U8 | Ty::I8) = rhs_ty else {
                             panic!("cannot unary not a non-primitive");
                         };
 
@@ -386,7 +388,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                         builder.build_store(place_ptr, result).unwrap();
                     }
                     UnOp::Neg => {
-                        let TyInfo::I8 = self.ir.tys.get(rhs_ty) else {
+                        let Ty::I8 = rhs_ty else {
                             panic!("cannot unary neg a non-signed integer");
                         };
 
@@ -396,15 +398,15 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                         builder.build_store(place_ptr, result).unwrap();
                     }
                     UnOp::PtrMetadata => {
-                        let TyInfo::Ref(inner_ty) = self.ir.tys.get(rhs_ty) else {
+                        let Ty::Ref(inner_ty) = rhs_ty else {
                             panic!("can only get ptr metadata of reference");
                         };
-                        let TyInfo::Slice(_) = self.ir.tys.get(inner_ty) else {
+                        let Ty::Slice(_) = *inner_ty else {
                             panic!("can only get ptr metadata of slice reference");
                         };
 
                         // HACK: Hard-coding pointer metadata as u8
-                        assert_eq!(place_ty, self.ir.tys.find_or_insert(TyInfo::U8));
+                        assert_eq!(place_ty, Ty::U8);
 
                         // HACK: Assuming fat pointer is two pointers wide.
                         let data = builder
@@ -425,17 +427,15 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                     .map(|value| self.get_operand(builder, value, locals, local_ptrs))
                     .collect::<Vec<_>>();
 
-                let pointee_ty = values[0].1;
-                let index_ty = self
-                    .get_ty(self.ir.tys.find_or_insert(TyInfo::U8))
-                    .into_int_type();
+                let pointee_ty = values[0].1.clone();
+                let index_ty = self.get_ty(&Ty::U8).into_int_type();
 
                 for (i, (value, ty)) in values.into_iter().enumerate() {
                     assert_eq!(pointee_ty, ty);
 
                     let ptr = unsafe {
                         builder.build_in_bounds_gep(
-                            self.get_ty(pointee_ty),
+                            self.get_ty(&pointee_ty),
                             place_ptr,
                             &[index_ty.const_int(i as u64, false)],
                             format!("gep agg {i}").as_str(),
@@ -449,26 +449,22 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                 let (op, op_ty) = self.get_operand(builder, op, locals, local_ptrs);
                 match kind {
                     CastKind::PointerCoercion(PointerCoercion::Unsize) => {
-                        let TyInfo::Ref(place_inner_ty) = self.ir.tys.get(place_ty) else {
+                        let Ty::Ref(place_inner_ty) = place_ty else {
                             panic!("can only store pointer coercion in reference");
                         };
-                        let TyInfo::Ref(to_ty) = self.ir.tys.get(*ty) else {
+                        let Ty::Ref(to_ty) = ty else {
                             panic!("can only unsize coerce to a reference");
                         };
-                        let TyInfo::Ref(from_ty) = self.ir.tys.get(op_ty) else {
+                        let Ty::Ref(from_ty) = &op_ty else {
                             panic!("can only unsize coerce from a reference");
                         };
 
-                        assert_eq!(place_inner_ty, to_ty);
+                        assert_eq!(place_inner_ty, *to_ty);
 
-                        match (self.ir.tys.get(from_ty), self.ir.tys.get(to_ty)) {
-                            (
-                                TyInfo::Array {
-                                    ty: inner_ty,
-                                    length,
-                                },
-                                TyInfo::Slice(slice_ty),
-                            ) if inner_ty == slice_ty => {
+                        match (&**from_ty, &**to_ty) {
+                            (Ty::Array(inner_ty, length), Ty::Slice(slice_ty))
+                                if inner_ty == slice_ty =>
+                            {
                                 let ptr = op.into_pointer_value();
 
                                 let data_ptr = {
@@ -495,7 +491,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                                     .build_store(
                                         data_ptr,
                                         // HACK: Directly creating the length.
-                                        self.ctx.i64_type().const_int(length as u64, false),
+                                        self.ctx.i64_type().const_int(*length as u64, false),
                                     )
                                     .unwrap();
                             }
@@ -521,16 +517,16 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                 let (ptr, ty) = self.resolve_place(builder, place, locals, local_ptrs);
                 (
                     builder
-                        .build_load(self.get_ty(ty), ptr, "load place operand")
+                        .build_load(self.get_ty(&ty), ptr, "load place operand")
                         .unwrap(),
                     ty,
                 )
             }
             Operand::Constant(constant) => match constant {
                 Constant::U8(value) => {
-                    let ty = self.ir.tys.find_or_insert(TyInfo::U8);
+                    let ty = Ty::U8;
                     (
-                        self.get_ty(ty)
+                        self.get_ty(&ty)
                             .into_int_type()
                             .const_int(*value as u64, false)
                             .into(),
@@ -538,9 +534,9 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                     )
                 }
                 Constant::I8(value) => {
-                    let ty = self.ir.tys.find_or_insert(TyInfo::I8);
+                    let ty = Ty::I8;
                     (
-                        self.get_ty(ty)
+                        self.get_ty(&ty)
                             .into_int_type()
                             .const_int(*value as u64, true)
                             .into(),

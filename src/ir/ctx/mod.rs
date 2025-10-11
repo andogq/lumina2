@@ -1,12 +1,7 @@
-use crate::{
-    indexed_vec,
-    ir::{Tys, repr::Body},
-    tir::FunctionId,
-};
+use crate::{indexed_vec, ir::repr::Body, tir::FunctionId};
 
 #[derive(Clone, Debug, Default)]
 pub struct IrCtx {
-    pub tys: Tys,
     pub functions: Functions,
 }
 

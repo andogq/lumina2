@@ -13,13 +13,22 @@ pub fn lower(ctx: &Ctx, tir: &tir::Program) -> IrCtx {
         let mut body = Body::default();
 
         // Create local for return value.
-        let ret_value = body.local_decls.insert(LocalDecl { ty: function.ret });
+        let ret_value = body.local_decls.insert(LocalDecl {
+            ty: function.ret.clone(),
+        });
 
         // Allocate all bindings
         let bindings = function
             .bindings
             .iter_keys()
-            .map(|(id, binding)| (id, body.local_decls.insert(LocalDecl { ty: binding.ty })))
+            .map(|(id, binding)| {
+                (
+                    id,
+                    body.local_decls.insert(LocalDecl {
+                        ty: binding.ty.clone(),
+                    }),
+                )
+            })
             .collect::<HashMap<_, _>>();
 
         let block = lower_block(ctx, &function.block, ret_value);
