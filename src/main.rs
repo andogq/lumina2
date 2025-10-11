@@ -11,14 +11,22 @@ mod util;
 pub use self::{ctx::*, lex::Tok};
 
 fn main() {
-    let source = "fn main() -> u8 { 123 }";
+    let source = "fn main() -> u8 { 42 }";
     let ctx = Ctx::new();
 
     let toks = lex::Lexer::new(&ctx, source);
     let program = ast::parse(toks);
     let tir = tir::lower(&ctx, &program);
+    let mut ir = ir::lower(&ctx, &tir);
 
-    dbg!(tir);
+    // WARN: hack
+    ir.tys = ctx.tys;
+
+    let ink_ctx = inkwell::context::Context::create();
+    let llvm = llvm::Llvm::new(&ink_ctx, &ir);
+    let result = llvm.run("func_FunctionId(Key(0))");
+
+    dbg!(result);
 }
 
 #[cfg(test)]

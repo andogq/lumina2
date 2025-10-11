@@ -7,7 +7,7 @@ use crate::{
 
 #[derive(Clone, Debug, Default)]
 pub struct Program {
-    functions: Functions,
+    pub functions: Functions,
 }
 
 indexed_vec!(pub key FunctionId);
@@ -15,10 +15,10 @@ indexed_vec!(pub Functions<FunctionId, Function>);
 
 #[derive(Clone, Debug)]
 pub struct Function {
-    bindings: Bindings,
-    params: Vec<Param>,
-    ret: Ty,
-    block: Block,
+    pub bindings: Bindings,
+    pub params: Vec<Param>,
+    pub ret: Ty,
+    pub block: Block,
 }
 
 indexed_vec!(pub key BindingId);
@@ -32,21 +32,21 @@ impl Bindings {
 
 #[derive(Clone, Debug)]
 pub struct Binding {
-    ident: Ident,
-    ty: Ty,
+    pub ident: Ident,
+    pub ty: Ty,
 }
 
 #[derive(Clone, Debug)]
 pub struct Param {
-    ident: Ident,
-    binding: BindingId,
+    pub ident: Ident,
+    pub binding: BindingId,
 }
 
 #[derive(Clone, Debug)]
 pub struct Block {
-    ty: Ty,
-    statements: Vec<Statement>,
-    yield_statement: bool,
+    pub ty: Ty,
+    pub statements: Vec<Statement>,
+    pub yield_statement: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -57,8 +57,8 @@ pub enum Statement {
 
 #[derive(Clone, Debug)]
 pub struct Expr {
-    ty: Ty,
-    kind: ExprKind,
+    pub ty: Ty,
+    pub kind: ExprKind,
 }
 
 #[derive(Clone, Debug)]
@@ -122,11 +122,11 @@ pub fn lower(ctx: &Ctx, ast: &ast::Program) -> Program {
         let ret = ast_function
             .ret
             .map(|ret| ctx.ty_names[&ret])
-            .unwrap_or_else(|| {
-                todo!("return unit type");
-            });
+            .unwrap_or_else(|| ctx.tys.find_or_insert(TyInfo::Unit));
 
         let block = lower_block(ctx, &mut bindings, &ast_function.body);
+
+        assert_eq!(ret, block.ty);
 
         program.functions.insert(Function {
             bindings,
