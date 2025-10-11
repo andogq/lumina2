@@ -1,5 +1,7 @@
 mod ty;
 
+use std::collections::HashMap;
+
 use crate::{
     Ctx, Ident,
     ast::{self, BinOp, UnOp},
@@ -95,7 +97,7 @@ pub enum ExprKind {
         op: UnOp,
         rhs: Box<Expr>,
     },
-    Variable(Binding),
+    Variable(BindingId),
 }
 
 #[derive(Clone, Debug)]
@@ -345,6 +347,16 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
             otherwise,
         } => todo!(),
         ast::Expr::Call => todo!(),
-        ast::Expr::Variable(ident) => todo!(),
+        ast::Expr::Variable(ident) => {
+            let (id, binding) = bindings
+                .iter_keys()
+                .find(|(_, binding)| binding.ident == *ident)
+                .expect("ident to exist");
+
+            Expr {
+                ty: binding.ty.clone(),
+                kind: ExprKind::Variable(id),
+            }
+        }
     }
 }

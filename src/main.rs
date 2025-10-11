@@ -45,6 +45,14 @@ mod test {
         fn basic_expression() {
             assert_eq!(run("fn main() -> u8 { 1 + 2 }"), 3);
         }
+
+        #[test]
+        fn variables() {
+            assert_eq!(
+                run("fn main() -> u8 { let a = 1; let b = 123; a + b }"),
+                124
+            );
+        }
     }
 
     mod ir {

@@ -81,7 +81,10 @@ impl FunctionBuilder {
 fn lower_block(builder: &mut FunctionBuilder, block: &tir::Block, result_value: Local) {
     for statement in &block.statements {
         match statement {
-            tir::Statement::Declaration { binding, value } => todo!(),
+            tir::Statement::Declaration { binding, value } => {
+                let local = builder.bindings[binding];
+                lower_expr(builder, value, local);
+            }
             tir::Statement::Expr { expr, semicolon } => {
                 lower_expr(
                     builder,
@@ -156,6 +159,15 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Loc
             });
         }
         tir::ExprKind::UnOp { op, rhs } => todo!(),
-        tir::ExprKind::Variable(binding) => todo!(),
+        tir::ExprKind::Variable(binding) => builder.push_statement(Statement::Assign {
+            place: Place {
+                local: result_value,
+                projection: Vec::new(),
+            },
+            rvalue: RValue::Use(Operand::Place(Place {
+                local: builder.bindings[&binding],
+                projection: Vec::new(),
+            })),
+        }),
     }
 }
