@@ -34,9 +34,9 @@ pub fn lower(ctx: &Ctx, tir: &tir::Program) -> IrCtx {
 #[derive(Clone)]
 struct FunctionBuilder {
     body: Body,
+    current_block: BasicBlock,
     bindings: HashMap<BindingId, Local>,
     ret_value: Local,
-    statements: Vec<Statement>,
 }
 
 impl FunctionBuilder {
@@ -46,29 +46,48 @@ impl FunctionBuilder {
         let bindings = bindings
             .map(|(id, binding)| (id, body.local_decls.insert(LocalDecl { ty: binding.ty })))
             .collect();
+        let current_block = body.basic_blocks.insert(BasicBlockData {
+            statements: Vec::new(),
+            terminator: Terminator::Unreachable,
+        });
 
         Self {
             body,
             ret_value,
             bindings,
-            statements: Vec::new(),
+            current_block,
         }
     }
 
     fn build(self) -> Body {
-        assert!(self.statements.is_empty());
         self.body
     }
 
+    fn new_block(&mut self) -> BasicBlock {
+        self.body.basic_blocks.insert(BasicBlockData {
+            statements: Vec::new(),
+            terminator: Terminator::Unreachable,
+        })
+    }
+
+    fn set_current_block(&mut self, current_block: BasicBlock) {
+        self.current_block = current_block;
+    }
+
+    fn current_block(&self) -> BasicBlock {
+        self.current_block
+    }
+
     fn push_statement(&mut self, statement: Statement) {
-        self.statements.push(statement);
+        self.body.basic_blocks[self.current_block]
+            .statements
+            .push(statement);
     }
 
     fn terminate(&mut self, terminator: Terminator) {
-        self.body.basic_blocks.insert(BasicBlockData {
-            statements: std::mem::take(&mut self.statements),
-            terminator,
-        });
+        let current_terminator = &mut self.body.basic_blocks[self.current_block].terminator;
+        assert_eq!(*current_terminator, Terminator::Unreachable);
+        *current_terminator = terminator;
     }
 
     fn create_temporary(&mut self, ty: Ty) -> Local {
@@ -115,7 +134,35 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Loc
             condition,
             block,
             otherwise,
-        } => todo!(),
+        } => {
+            let condition_temp = builder.create_temporary(Ty::Boolean);
+            lower_expr(builder, condition, condition_temp);
+
+            let target_block = builder.new_block();
+            let otherwise_block = otherwise.as_ref().map(|_| builder.new_block());
+            let final_block = builder.new_block();
+
+            builder.terminate(Terminator::SwitchInt {
+                discriminator: Operand::Place(Place {
+                    local: condition_temp,
+                    projection: Vec::new(),
+                }),
+                targets: vec![(Constant::Boolean(true), target_block)],
+                otherwise: otherwise_block.unwrap_or(final_block),
+            });
+
+            builder.set_current_block(target_block);
+            lower_block(builder, block, result_value);
+            builder.terminate(Terminator::Goto(final_block));
+
+            if let (Some(otherwise), Some(otherwise_block)) = (otherwise, otherwise_block) {
+                builder.set_current_block(otherwise_block);
+                lower_block(builder, otherwise, result_value);
+                builder.terminate(Terminator::Goto(final_block));
+            }
+
+            builder.set_current_block(final_block);
+        }
         tir::ExprKind::Field { expr, field } => todo!(),
         tir::ExprKind::Index { expr, index } => todo!(),
         tir::ExprKind::Block(block) => todo!(),

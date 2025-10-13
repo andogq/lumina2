@@ -217,6 +217,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                             )
                             .unwrap();
                     }
+                    Terminator::Unreachable => panic!("unreachable terminator encountered"),
                 }
             }
         }

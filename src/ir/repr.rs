@@ -83,6 +83,7 @@ pub enum Terminator {
         targets: Vec<(Constant, BasicBlock)>,
         otherwise: BasicBlock,
     },
+    Unreachable,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

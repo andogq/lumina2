@@ -61,6 +61,19 @@ mod test {
                 1
             );
         }
+
+        #[test]
+        fn if_statement() {
+            assert_eq!(run("fn main() -> u8 { if true { 123 } else { 99 } }"), 123);
+        }
+
+        #[test]
+        fn if_variable() {
+            assert_eq!(
+                run("fn main() -> u8 { let a = if true { 123 } else { 44 }; let b = a + 10; b }"),
+                133
+            );
+        }
     }
 
     mod ir {

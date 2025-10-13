@@ -251,11 +251,7 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
             otherwise,
         } => {
             let condition = lower_expr(ctx, bindings, condition);
-            assert_eq!(
-                condition.ty,
-                // TODO: Boolean
-                Ty::U8
-            );
+            assert_eq!(condition.ty, Ty::Boolean);
 
             let block = lower_block(ctx, bindings, block);
 
@@ -302,17 +298,12 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
                     | BinOp::BitOr,
                     rhs @ (Ty::U8 | Ty::I8),
                 ) if lhs == rhs => lhs.clone(),
-                // TODO: Boolean
-                (lhs @ Ty::U8, BinOp::LogicAnd | BinOp::LogicOr, Ty::U8) => lhs.clone(),
+                (Ty::Boolean, BinOp::LogicAnd | BinOp::LogicOr, Ty::Boolean) => Ty::Boolean,
                 (
                     lhs @ (Ty::U8 | Ty::I8),
                     BinOp::Eq | BinOp::Ne | BinOp::Gt | BinOp::Ge | BinOp::Lt | BinOp::Le,
                     rhs @ (Ty::U8 | Ty::I8),
-                ) if lhs == rhs =>
-                // TODO: Boolean
-                {
-                    Ty::U8
-                }
+                ) if lhs == rhs => Ty::Boolean,
 
                 (lhs, op, rhs) => panic!("cannot apply bin: {lhs:?} {op} {rhs:?}"),
             };
