@@ -74,6 +74,11 @@ mod test {
                 133
             );
         }
+
+        #[test]
+        fn reassignment() {
+            assert_eq!(run("fn main() -> u8 { let a = 1; a = 2; a }"), 2);
+        }
     }
 
     mod ir {

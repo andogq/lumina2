@@ -118,7 +118,20 @@ fn lower_block(builder: &mut FunctionBuilder, block: &tir::Block, result_value: 
 
 fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Local) {
     match &expr.kind {
-        tir::ExprKind::Assignment { binding, value } => todo!(),
+        tir::ExprKind::Assignment { binding, value } => {
+            let place = expr_to_place(builder, binding);
+
+            let value_temp = builder.create_temporary(value.ty.clone());
+            lower_expr(builder, &value, value_temp);
+
+            builder.push_statement(Statement::Assign {
+                place,
+                rvalue: RValue::Use(Operand::Place(Place {
+                    local: value_temp,
+                    projection: Vec::new(),
+                })),
+            });
+        }
         tir::ExprKind::Literal(literal) => builder.push_statement(Statement::Assign {
             place: Place {
                 local: result_value,
@@ -213,9 +226,19 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Loc
                 projection: Vec::new(),
             },
             rvalue: RValue::Use(Operand::Place(Place {
-                local: builder.bindings[&binding],
+                local: builder.bindings[binding],
                 projection: Vec::new(),
             })),
         }),
+    }
+}
+
+fn expr_to_place(builder: &mut FunctionBuilder, expr: &tir::Expr) -> Place {
+    match &expr.kind {
+        tir::ExprKind::Variable(binding_id) => Place {
+            local: builder.bindings[binding_id],
+            projection: Vec::new(),
+        },
+        expr => panic!("invalid lhs: {expr:?}"),
     }
 }
