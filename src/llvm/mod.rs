@@ -70,14 +70,14 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                     id,
                     (
                         self.module
-                            .add_function(format!("func_{id:?}").as_str(), ret, None),
+                            .add_function(&self.ir.idents.get(function.name), ret, None),
                         function,
                     ),
                 )
             })
             .collect::<HashMap<_, _>>();
 
-        for (function_id, (function, ir)) in &functions {
+        for (function, ir) in functions.values() {
             let entry_bb = self.ctx.append_basic_block(*function, "entry");
             let builder = self.ctx.create_builder();
             builder.position_at_end(entry_bb);
@@ -359,6 +359,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                 // Operands must be of the same type.
                 assert_eq!(lhs_ty, rhs_ty);
 
+                // Output type is dependent on operator.
                 let ty = match op {
                     BinOp::Add
                     | BinOp::Sub

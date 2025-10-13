@@ -48,7 +48,7 @@ macro_rules! ir_function {
         let ctx = $ctx;
 
         #[allow(unused_mut)]
-        let mut body = $crate::ir::repr::Body::default();
+        let mut body = $crate::ir::repr::Function::default();
 
         $(ir_function!(@section(ctx, body) $($section)*);)*
 
@@ -66,17 +66,18 @@ mod test {
     #![allow(clippy::just_underscores_and_digits)]
 
     use crate::{
+        Idents,
         ir::{
             ctx::IrCtx,
             repr::{
-                BasicBlockData, BinOp, Body, Constant, Local, LocalDecl, Operand, Place,
+                BasicBlockData, BinOp, Constant, Function, Local, LocalDecl, Operand, Place,
                 Projection, RValue, Statement, Terminator,
             },
         },
         tir::Ty,
     };
 
-    fn assert_body(body: &Body, locals: &[LocalDecl], basic_blocks: &[BasicBlockData]) {
+    fn assert_body(body: &Function, locals: &[LocalDecl], basic_blocks: &[BasicBlockData]) {
         assert_eq!(body.local_decls.iter().cloned().collect::<Vec<_>>(), locals);
         assert_eq!(
             body.basic_blocks.iter().cloned().collect::<Vec<_>>(),
@@ -84,16 +85,24 @@ mod test {
         );
     }
 
+    fn create_ctx() -> IrCtx {
+        IrCtx::new({
+            let idents = Idents::default();
+            idents.intern("main".to_string());
+            idents
+        })
+    }
+
     #[test]
     fn it_works() {
-        let mut ctx = IrCtx::default();
+        let mut ctx = create_ctx();
         let program = ir_function! {[&mut ctx]};
         assert_body(&ctx.functions[program], &[], &[]);
     }
 
     #[test]
     fn local_decls() {
-        let mut ctx = IrCtx::default();
+        let mut ctx = create_ctx();
         let program = ir_function! {
             [&mut ctx]
             let _0: u8;
@@ -114,7 +123,7 @@ mod test {
 
     #[test]
     fn basic_blocks() {
-        let mut ctx = IrCtx::default();
+        let mut ctx = create_ctx();
         let program = ir_function! {
             [&mut ctx]
             bb0: {
@@ -144,7 +153,7 @@ mod test {
 
     #[test]
     fn everything() {
-        let mut ctx = IrCtx::default();
+        let mut ctx = create_ctx();
 
         let program = ir_function! {
             [&mut ctx]

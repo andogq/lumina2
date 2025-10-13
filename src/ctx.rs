@@ -33,6 +33,10 @@ pub struct Idents {
 }
 
 impl Idents {
+    pub fn get(&self, ident: Ident) -> String {
+        self.inner.borrow().get(ident).unwrap().to_string()
+    }
+
     pub fn intern(&self, value: String) -> Ident {
         if let Some(key) = self
             .inner

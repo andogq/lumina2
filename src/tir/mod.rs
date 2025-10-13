@@ -13,6 +13,7 @@ pub use self::ty::Ty;
 #[derive(Clone, Debug, Default)]
 pub struct Program {
     pub functions: Functions,
+    pub function_bindings: HashMap<Ident, FunctionId>,
 }
 
 indexed_vec!(pub key FunctionId);
@@ -20,6 +21,7 @@ indexed_vec!(pub Functions<FunctionId, Function>);
 
 #[derive(Clone, Debug)]
 pub struct Function {
+    pub name: Ident,
     pub bindings: Bindings,
     pub params: Vec<Param>,
     pub ret: Ty,
@@ -134,12 +136,16 @@ pub fn lower(ctx: &Ctx, ast: &ast::Program) -> Program {
 
         assert_eq!(ret, block.ty);
 
-        program.functions.insert(Function {
+        let function_id = program.functions.insert(Function {
+            name: ast_function.name,
             bindings,
             params,
             ret,
             block,
         });
+        program
+            .function_bindings
+            .insert(ast_function.name, function_id);
     }
 
     program

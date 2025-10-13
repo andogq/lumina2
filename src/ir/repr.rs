@@ -2,11 +2,12 @@
 
 use std::fmt::Display;
 
-use crate::{indexed_vec, tir::Ty};
+use crate::{Ident, indexed_vec, tir::Ty};
 
 /// Representation of a function.
-#[derive(Clone, Debug, Default)]
-pub struct Body {
+#[derive(Clone, Debug)]
+pub struct Function {
+    pub name: Ident,
     /// All basic blocks that build this function.
     pub basic_blocks: BasicBlocks,
     /// Local declarations used within this function.
@@ -14,6 +15,23 @@ pub struct Body {
     /// Number of arguments passed to this function. These will be populated in the first `1..n`
     /// locals.
     pub arg_count: usize,
+}
+
+impl Function {
+    pub fn new(name: Ident) -> Self {
+        Self {
+            name,
+            basic_blocks: Default::default(),
+            local_decls: Default::default(),
+            arg_count: Default::default(),
+        }
+    }
+}
+
+impl Default for Function {
+    fn default() -> Self {
+        Self::new(Ident::zero())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

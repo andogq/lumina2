@@ -20,7 +20,7 @@ fn run(source: &str) -> u8 {
 
     let ink_ctx = inkwell::context::Context::create();
     let llvm = llvm::Llvm::new(&ink_ctx, &ir);
-    llvm.run("func_FunctionId(Key(0))")
+    llvm.run("main")
 }
 
 fn main() {
@@ -97,7 +97,11 @@ mod test {
             ($name:ident => [$expected:expr] $($program:tt)*) => {
                 #[test]
                 fn $name() {
-                    let mut ctx = IrCtx::default();
+                    let mut ctx = IrCtx::new({
+                        let idents = Idents::default();
+                        idents.intern("main".to_string());
+                        idents
+                    });
                     ir_function! {
                         [&mut ctx]
                         $($program)*
@@ -108,7 +112,7 @@ mod test {
                     let llvm_output = {
                         let llvm_ctx = inkwell::context::Context::create();
                         let backend = llvm::Llvm::new(&llvm_ctx, &ctx);
-                        backend.run("func_FunctionId(Key(0))")
+                        backend.run("main")
                     };
                     assert_eq!(expected, llvm_output);
                 }

@@ -1,16 +1,17 @@
 use std::collections::HashMap;
 
 use crate::{
-    Ctx, ast,
+    Ctx, Ident, ast,
     ir::{ctx::IrCtx, repr::*},
     tir::{self, BindingId, Ty},
 };
 
 pub fn lower(ctx: &Ctx, tir: &tir::Program) -> IrCtx {
-    let mut ir = IrCtx::default();
+    let mut ir = IrCtx::new(ctx.idents.clone());
 
     for (id, function) in tir.functions.iter_keys() {
         let mut builder = FunctionBuilder::new(
+            function.name,
             function
                 .bindings
                 .iter_keys()
@@ -33,15 +34,19 @@ pub fn lower(ctx: &Ctx, tir: &tir::Program) -> IrCtx {
 
 #[derive(Clone)]
 struct FunctionBuilder {
-    body: Body,
+    body: Function,
     current_block: BasicBlock,
     bindings: HashMap<BindingId, Local>,
     ret_value: Local,
 }
 
 impl FunctionBuilder {
-    fn new(bindings: impl Iterator<Item = (BindingId, tir::Binding)>, ret_ty: Ty) -> Self {
-        let mut body = Body::default();
+    fn new(
+        name: Ident,
+        bindings: impl Iterator<Item = (BindingId, tir::Binding)>,
+        ret_ty: Ty,
+    ) -> Self {
+        let mut body = Function::new(name);
         let ret_value = body.local_decls.insert(LocalDecl { ty: ret_ty });
         let bindings = bindings
             .map(|(id, binding)| (id, body.local_decls.insert(LocalDecl { ty: binding.ty })))
@@ -59,7 +64,7 @@ impl FunctionBuilder {
         }
     }
 
-    fn build(self) -> Body {
+    fn build(self) -> Function {
         self.body
     }
 
