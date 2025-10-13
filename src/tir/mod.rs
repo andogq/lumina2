@@ -73,10 +73,10 @@ pub enum ExprKind {
         value: Box<Expr>,
     },
     Literal(Literal),
-    If {
-        condition: Box<Expr>,
-        block: Block,
-        otherwise: Option<Block>,
+    Switch {
+        discriminator: Box<Expr>,
+        targets: Vec<(Literal, Block)>,
+        otherwise: Block,
     },
     Field {
         expr: Box<Expr>,
@@ -259,17 +259,21 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
                 let otherwise = lower_block(ctx, bindings, otherwise);
                 // Both branches should return the same type.
                 assert_eq!(otherwise.ty, block.ty);
-                Some(otherwise)
+                otherwise
             } else {
                 assert_eq!(block.ty, Ty::Unit);
-                None
+                Block {
+                    ty: Ty::Unit,
+                    statements: vec![],
+                    yield_statement: true,
+                }
             };
 
             Expr {
                 ty: block.ty.clone(),
-                kind: ExprKind::If {
-                    condition: Box::new(condition),
-                    block,
+                kind: ExprKind::Switch {
+                    discriminator: Box::new(condition),
+                    targets: vec![(Literal::Boolean(true), block)],
                     otherwise,
                 },
             }

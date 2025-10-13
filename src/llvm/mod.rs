@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap};
 
 use inkwell::{
-    AddressSpace,
+    AddressSpace, IntPredicate,
     builder::Builder,
     context::Context as InkContext,
     execution_engine::JitFunction,
@@ -283,7 +283,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                         }
                         _ => {
                             ptr = builder
-                                .build_load(self.get_ty(&ty), ptr, "deref")
+                                .build_load(self.get_ty(ty), ptr, "deref")
                                 .unwrap()
                                 .into_pointer_value()
                         }
@@ -306,12 +306,12 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                         panic!("can only index using u8");
                     };
                     let index = builder
-                        .build_load(self.get_ty(&local_ty), local_ptrs[local], "load index")
+                        .build_load(self.get_ty(local_ty), local_ptrs[local], "load index")
                         .unwrap()
                         .into_int_value();
 
                     ptr = unsafe {
-                        builder.build_in_bounds_gep(self.get_ty(&inner_ty), ptr, &[index], "index")
+                        builder.build_in_bounds_gep(self.get_ty(inner_ty), ptr, &[index], "index")
                     }
                     .unwrap();
                     ty = inner_ty;
@@ -359,7 +359,22 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                 // Operands must be of the same type.
                 assert_eq!(lhs_ty, rhs_ty);
 
-                let ty = lhs_ty;
+                let ty = match op {
+                    BinOp::Add
+                    | BinOp::Sub
+                    | BinOp::Mul
+                    | BinOp::Div
+                    | BinOp::BitAnd
+                    | BinOp::BitOr => lhs_ty,
+                    BinOp::LogicalAnd
+                    | BinOp::LogicalOr
+                    | BinOp::Eq
+                    | BinOp::Ne
+                    | BinOp::Gt
+                    | BinOp::Lt
+                    | BinOp::Ge
+                    | BinOp::Le => Ty::Boolean,
+                };
                 assert_eq!(place_ty, ty);
 
                 let value = match op {
@@ -374,6 +389,54 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                             .build_int_signed_div(lhs, rhs, "signed div")
                             .unwrap(),
                         _ => panic!("invalid div type"),
+                    },
+                    BinOp::LogicalAnd | BinOp::BitAnd => {
+                        // NOTE: LLVM booleans are 1 bit integers, so these operations are
+                        // identical.
+                        builder.build_and(lhs, rhs, "and").unwrap()
+                    }
+                    BinOp::LogicalOr | BinOp::BitOr => builder.build_or(lhs, rhs, "or").unwrap(),
+                    BinOp::Eq => builder
+                        .build_int_compare(IntPredicate::EQ, lhs, rhs, "eq")
+                        .unwrap(),
+                    BinOp::Ne => builder
+                        .build_int_compare(IntPredicate::NE, lhs, rhs, "ne")
+                        .unwrap(),
+                    BinOp::Gt => match ty {
+                        Ty::U8 => builder
+                            .build_int_compare(IntPredicate::UGT, lhs, rhs, "gt")
+                            .unwrap(),
+                        Ty::I8 => builder
+                            .build_int_compare(IntPredicate::SGT, lhs, rhs, "gt")
+                            .unwrap(),
+                        _ => panic!("invalid int type"),
+                    },
+                    BinOp::Ge => match ty {
+                        Ty::U8 => builder
+                            .build_int_compare(IntPredicate::UGE, lhs, rhs, "gt")
+                            .unwrap(),
+                        Ty::I8 => builder
+                            .build_int_compare(IntPredicate::SGE, lhs, rhs, "gt")
+                            .unwrap(),
+                        _ => panic!("invalid int type"),
+                    },
+                    BinOp::Lt => match ty {
+                        Ty::U8 => builder
+                            .build_int_compare(IntPredicate::ULT, lhs, rhs, "gt")
+                            .unwrap(),
+                        Ty::I8 => builder
+                            .build_int_compare(IntPredicate::SLT, lhs, rhs, "gt")
+                            .unwrap(),
+                        _ => panic!("invalid int type"),
+                    },
+                    BinOp::Le => match ty {
+                        Ty::U8 => builder
+                            .build_int_compare(IntPredicate::ULE, lhs, rhs, "gt")
+                            .unwrap(),
+                        Ty::I8 => builder
+                            .build_int_compare(IntPredicate::SLE, lhs, rhs, "gt")
+                            .unwrap(),
+                        _ => panic!("invalid int type"),
                     },
                 };
 

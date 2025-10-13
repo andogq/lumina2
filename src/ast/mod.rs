@@ -492,6 +492,66 @@ fn parse_expr(toks: &mut Lexer<'_, '_, impl Iterator<Item = (Tok, Span)>>) -> Ex
                         },
                     }
                 }
+                Tok::EqEq => {
+                    expr = Expr::BinOp {
+                        lhs: Box::new(expr),
+                        op: BinOp::Eq,
+                        rhs: {
+                            let precedence = Precedence::of(&toks.expect(Tok::EqEq));
+                            Box::new(parse_with_precedence(toks, precedence))
+                        },
+                    }
+                }
+                Tok::BangEq => {
+                    expr = Expr::BinOp {
+                        lhs: Box::new(expr),
+                        op: BinOp::Ne,
+                        rhs: {
+                            let precedence = Precedence::of(&toks.expect(Tok::BangEq));
+                            Box::new(parse_with_precedence(toks, precedence))
+                        },
+                    }
+                }
+                Tok::LAngle => {
+                    expr = Expr::BinOp {
+                        lhs: Box::new(expr),
+                        op: BinOp::Lt,
+                        rhs: {
+                            let precedence = Precedence::of(&toks.expect(Tok::LAngle));
+                            Box::new(parse_with_precedence(toks, precedence))
+                        },
+                    }
+                }
+                Tok::RAngle => {
+                    expr = Expr::BinOp {
+                        lhs: Box::new(expr),
+                        op: BinOp::Gt,
+                        rhs: {
+                            let precedence = Precedence::of(&toks.expect(Tok::RAngle));
+                            Box::new(parse_with_precedence(toks, precedence))
+                        },
+                    }
+                }
+                Tok::LtEq => {
+                    expr = Expr::BinOp {
+                        lhs: Box::new(expr),
+                        op: BinOp::Le,
+                        rhs: {
+                            let precedence = Precedence::of(&toks.expect(Tok::LtEq));
+                            Box::new(parse_with_precedence(toks, precedence))
+                        },
+                    }
+                }
+                Tok::GtEq => {
+                    expr = Expr::BinOp {
+                        lhs: Box::new(expr),
+                        op: BinOp::Ge,
+                        rhs: {
+                            let precedence = Precedence::of(&toks.expect(Tok::GtEq));
+                            Box::new(parse_with_precedence(toks, precedence))
+                        },
+                    }
+                }
 
                 Tok::Eq => {
                     expr = Expr::Assignment {
@@ -516,7 +576,7 @@ fn parse_expr(toks: &mut Lexer<'_, '_, impl Iterator<Item = (Tok, Span)>>) -> Ex
                 Tok::LParen => {
                     todo!("call parsing")
                 }
-                _ => todo!(),
+                tok => todo!("unknown tok: {:?}", tok),
             }
         }
 

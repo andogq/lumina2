@@ -79,6 +79,14 @@ mod test {
         fn reassignment() {
             assert_eq!(run("fn main() -> u8 { let a = 1; a = 2; a }"), 2);
         }
+
+        #[test]
+        fn conditional_reassignment() {
+            assert_eq!(
+                run("fn main() -> u8 { let a = 1; if a == 1 { a = 2; }; a }"),
+                2
+            );
+        }
     }
 
     mod ir {

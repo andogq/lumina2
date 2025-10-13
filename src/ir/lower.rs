@@ -122,7 +122,7 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Loc
             let place = expr_to_place(builder, binding);
 
             let value_temp = builder.create_temporary(value.ty.clone());
-            lower_expr(builder, &value, value_temp);
+            lower_expr(builder, value, value_temp);
 
             builder.push_statement(Statement::Assign {
                 place,
@@ -143,36 +143,51 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Loc
                 tir::Literal::Boolean(bool) => Constant::Boolean(*bool),
             })),
         }),
-        tir::ExprKind::If {
-            condition,
-            block,
+        tir::ExprKind::Switch {
+            discriminator,
+            targets,
             otherwise,
         } => {
-            let condition_temp = builder.create_temporary(Ty::Boolean);
-            lower_expr(builder, condition, condition_temp);
+            let discriminator_temp = builder.create_temporary(discriminator.ty.clone());
+            lower_expr(builder, discriminator, discriminator_temp);
 
-            let target_block = builder.new_block();
-            let otherwise_block = otherwise.as_ref().map(|_| builder.new_block());
+            let current_block = builder.current_block();
+
             let final_block = builder.new_block();
 
-            builder.terminate(Terminator::SwitchInt {
-                discriminator: Operand::Place(Place {
-                    local: condition_temp,
-                    projection: Vec::new(),
-                }),
-                targets: vec![(Constant::Boolean(true), target_block)],
-                otherwise: otherwise_block.unwrap_or(final_block),
-            });
+            let targets = targets
+                .iter()
+                .map(|(target, block)| {
+                    let ir_block = builder.new_block();
 
-            builder.set_current_block(target_block);
-            lower_block(builder, block, result_value);
+                    builder.set_current_block(ir_block);
+                    lower_block(builder, block, result_value);
+                    builder.terminate(Terminator::Goto(final_block));
+
+                    let target = match target {
+                        tir::Literal::I8(i8) => Constant::I8(*i8),
+                        tir::Literal::U8(u8) => Constant::U8(*u8),
+                        tir::Literal::Boolean(bool) => Constant::Boolean(*bool),
+                    };
+
+                    (target, ir_block)
+                })
+                .collect();
+
+            let otherwise_block = builder.new_block();
+            builder.set_current_block(otherwise_block);
             builder.terminate(Terminator::Goto(final_block));
 
-            if let (Some(otherwise), Some(otherwise_block)) = (otherwise, otherwise_block) {
-                builder.set_current_block(otherwise_block);
-                lower_block(builder, otherwise, result_value);
-                builder.terminate(Terminator::Goto(final_block));
-            }
+            // Return back to the original block, to insert the terminator.
+            builder.set_current_block(current_block);
+            builder.terminate(Terminator::SwitchInt {
+                discriminator: Operand::Place(Place {
+                    local: discriminator_temp,
+                    projection: Vec::new(),
+                }),
+                targets,
+                otherwise: otherwise_block,
+            });
 
             builder.set_current_block(final_block);
         }
@@ -197,16 +212,16 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Loc
                         ast::BinOp::Minus => BinOp::Sub,
                         ast::BinOp::Multiply => BinOp::Mul,
                         ast::BinOp::Divide => BinOp::Div,
-                        ast::BinOp::LogicAnd => todo!(),
-                        ast::BinOp::LogicOr => todo!(),
-                        ast::BinOp::BitAnd => todo!(),
-                        ast::BinOp::BitOr => todo!(),
-                        ast::BinOp::Eq => todo!(),
-                        ast::BinOp::Ne => todo!(),
-                        ast::BinOp::Gt => todo!(),
-                        ast::BinOp::Ge => todo!(),
-                        ast::BinOp::Lt => todo!(),
-                        ast::BinOp::Le => todo!(),
+                        ast::BinOp::LogicAnd => BinOp::LogicalAnd,
+                        ast::BinOp::LogicOr => BinOp::LogicalOr,
+                        ast::BinOp::BitAnd => BinOp::BitAnd,
+                        ast::BinOp::BitOr => BinOp::BitOr,
+                        ast::BinOp::Eq => BinOp::Eq,
+                        ast::BinOp::Ne => BinOp::Ne,
+                        ast::BinOp::Gt => BinOp::Gt,
+                        ast::BinOp::Ge => BinOp::Ge,
+                        ast::BinOp::Lt => BinOp::Lt,
+                        ast::BinOp::Le => BinOp::Le,
                     },
                     lhs: Operand::Place(Place {
                         local: lhs_temp,
