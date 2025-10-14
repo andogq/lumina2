@@ -97,6 +97,11 @@ mod test {
         fn conditional_return() {
             assert_eq!(run("fn main() -> u8 { if true { return 2; }; 1 }"), 2);
         }
+
+        #[test]
+        fn reference() {
+            assert_eq!(run("fn main() -> u8 { let a = 123; let b = &a; *b }"), 123);
+        }
     }
 
     mod ir {

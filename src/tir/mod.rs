@@ -346,6 +346,7 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, expr: &ast::Expr)
             let ty = match (op, &rhs.ty) {
                 (UnOp::Deref, Ty::Ref(inner)) => *inner.clone(),
                 (UnOp::Minus, rhs @ Ty::I8) => rhs.clone(),
+                (UnOp::Ref, rhs) => Ty::Ref(Box::new(rhs.clone())),
                 (op, rhs) => panic!("cannot apply unary: {op} {rhs:?}"),
             };
 

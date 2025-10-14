@@ -240,6 +240,7 @@ impl Display for BinOp {
 
 #[derive(Clone, Debug)]
 pub enum UnOp {
+    Ref,
     Deref,
     Minus,
 }
@@ -247,6 +248,7 @@ pub enum UnOp {
 impl Display for UnOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            UnOp::Ref => write!(f, "&"),
             UnOp::Deref => write!(f, "*"),
             UnOp::Minus => write!(f, "-"),
         }
@@ -368,6 +370,22 @@ fn parse_expr(toks: &mut Lexer<'_, '_, impl Iterator<Item = (Tok, Span)>>) -> Ex
 
                 Expr::UnOp {
                     op: UnOp::Minus,
+                    rhs: Box::new(parse_with_precedence(toks, Precedence::Prefix)),
+                }
+            }
+
+            Tok::Amp => {
+                toks.expect(Tok::Amp);
+
+                Expr::UnOp {
+                    op: UnOp::Ref,
+                    rhs: Box::new(parse_with_precedence(toks, Precedence::Prefix)),
+                }
+            }
+            Tok::Asterisk => {
+                toks.expect(Tok::Asterisk);
+                Expr::UnOp {
+                    op: UnOp::Deref,
                     rhs: Box::new(parse_with_precedence(toks, Precedence::Prefix)),
                 }
             }

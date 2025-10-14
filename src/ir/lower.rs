@@ -252,7 +252,35 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Loc
                 },
             });
         }
-        tir::ExprKind::UnOp { op, rhs } => todo!(),
+        tir::ExprKind::UnOp { op, rhs } => {
+            let rhs_temp = builder.create_temporary(rhs.ty.clone());
+
+            lower_expr(builder, rhs, rhs_temp);
+
+            builder.push_statement(Statement::Assign {
+                place: Place {
+                    local: result_value,
+                    projection: Vec::new(),
+                },
+                rvalue: match op {
+                    ast::UnOp::Ref => RValue::Ref(Place {
+                        local: rhs_temp,
+                        projection: Vec::new(),
+                    }),
+                    ast::UnOp::Deref => RValue::Use(Operand::Place(Place {
+                        local: rhs_temp,
+                        projection: vec![Projection::Deref],
+                    })),
+                    ast::UnOp::Minus => RValue::UnaryOp {
+                        op: UnOp::Neg,
+                        rhs: Operand::Place(Place {
+                            local: rhs_temp,
+                            projection: Vec::new(),
+                        }),
+                    },
+                },
+            });
+        }
         tir::ExprKind::Variable(binding) => builder.push_statement(Statement::Assign {
             place: Place {
                 local: result_value,
