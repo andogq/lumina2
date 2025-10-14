@@ -209,6 +209,7 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Pla
 
             let otherwise_block = builder.new_block();
             builder.set_current_block(otherwise_block);
+            lower_block(builder, otherwise, result_value);
             builder.terminate(Terminator::Goto(final_block));
 
             // Return back to the original block, to insert the terminator.
