@@ -60,6 +60,7 @@ pub struct Block {
 pub enum Statement {
     Declaration { binding: BindingId, value: Expr },
     Expr { expr: Expr, semicolon: bool },
+    Return(Expr),
 }
 
 #[derive(Clone, Debug)]
@@ -132,7 +133,7 @@ pub fn lower(ctx: &Ctx, ast: &ast::Program) -> Program {
             .map(|ret| ctx.ty_names[&ret].clone())
             .unwrap_or(Ty::Unit);
 
-        let block = lower_block(ctx, &mut bindings, &ast_function.body);
+        let block = lower_block(ctx, &mut bindings, &ret, &ast_function.body);
 
         assert_eq!(ret, block.ty);
 
@@ -151,11 +152,11 @@ pub fn lower(ctx: &Ctx, ast: &ast::Program) -> Program {
     program
 }
 
-fn lower_block(ctx: &Ctx, bindings: &mut Bindings, block: &ast::Block) -> Block {
+fn lower_block(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, block: &ast::Block) -> Block {
     let statements = block
         .statements
         .iter()
-        .map(|statement| lower_statement(ctx, bindings, statement))
+        .map(|statement| lower_statement(ctx, bindings, ret_ty, statement))
         .collect::<Vec<_>>();
 
     assert!(
@@ -174,6 +175,7 @@ fn lower_block(ctx: &Ctx, bindings: &mut Bindings, block: &ast::Block) -> Block 
         .last()
         .and_then(|statement| match statement {
             Statement::Expr { expr, semicolon } if !*semicolon => Some((true, expr.ty.clone())),
+            Statement::Return(_) => Some((false, Ty::Unreachable)),
             _ => None,
         })
         .unwrap_or((false, Ty::Unit));
@@ -185,14 +187,19 @@ fn lower_block(ctx: &Ctx, bindings: &mut Bindings, block: &ast::Block) -> Block 
     }
 }
 
-fn lower_statement(ctx: &Ctx, bindings: &mut Bindings, statement: &ast::Statement) -> Statement {
+fn lower_statement(
+    ctx: &Ctx,
+    bindings: &mut Bindings,
+    ret_ty: &Ty,
+    statement: &ast::Statement,
+) -> Statement {
     match statement {
         ast::Statement::Declaration {
             binding,
             ty_annotation,
             value,
         } => {
-            let value = lower_expr(ctx, bindings, value);
+            let value = lower_expr(ctx, bindings, ret_ty, value);
             let ty = match ty_annotation {
                 Some(ty_annotation) => {
                     let ty = ctx.ty_names[ty_annotation].clone();
@@ -215,18 +222,24 @@ fn lower_statement(ctx: &Ctx, bindings: &mut Bindings, statement: &ast::Statemen
                 value,
             }
         }
+        ast::Statement::Return(expr) => {
+            let expr = lower_expr(ctx, bindings, ret_ty, expr);
+            // Ensure that the expression's type matches the function's return type.
+            assert_eq!(expr.ty, *ret_ty);
+            Statement::Return(expr)
+        }
         ast::Statement::Expr { expr, semicolon } => Statement::Expr {
-            expr: lower_expr(ctx, bindings, expr),
+            expr: lower_expr(ctx, bindings, ret_ty, expr),
             semicolon: *semicolon,
         },
     }
 }
 
-fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
+fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, expr: &ast::Expr) -> Expr {
     match expr {
         ast::Expr::Assignment { binding, value } => {
-            let binding = lower_expr(ctx, bindings, binding);
-            let value = lower_expr(ctx, bindings, value);
+            let binding = lower_expr(ctx, bindings, ret_ty, binding);
+            let value = lower_expr(ctx, bindings, ret_ty, value);
 
             // TODO: Should these types be equivalent?
             assert_eq!(binding.ty, value.ty);
@@ -256,13 +269,13 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
             block,
             otherwise,
         } => {
-            let condition = lower_expr(ctx, bindings, condition);
+            let condition = lower_expr(ctx, bindings, ret_ty, condition);
             assert_eq!(condition.ty, Ty::Boolean);
 
-            let block = lower_block(ctx, bindings, block);
+            let block = lower_block(ctx, bindings, ret_ty, block);
 
             let otherwise = if let Some(otherwise) = otherwise {
-                let otherwise = lower_block(ctx, bindings, otherwise);
+                let otherwise = lower_block(ctx, bindings, ret_ty, otherwise);
                 // Both branches should return the same type.
                 assert_eq!(otherwise.ty, block.ty);
                 otherwise
@@ -287,15 +300,15 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
         ast::Expr::Field { expr, field } => todo!(),
         ast::Expr::Index { expr, index } => todo!(),
         ast::Expr::Block(block) => {
-            let block = lower_block(ctx, bindings, block);
+            let block = lower_block(ctx, bindings, ret_ty, block);
             Expr {
                 ty: block.ty.clone(),
                 kind: ExprKind::Block(block),
             }
         }
         ast::Expr::BinOp { lhs, op, rhs } => {
-            let lhs = lower_expr(ctx, bindings, lhs);
-            let rhs = lower_expr(ctx, bindings, rhs);
+            let lhs = lower_expr(ctx, bindings, ret_ty, lhs);
+            let rhs = lower_expr(ctx, bindings, ret_ty, rhs);
 
             let ty = match (&lhs.ty, op, &rhs.ty) {
                 (
@@ -328,7 +341,7 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, expr: &ast::Expr) -> Expr {
             }
         }
         ast::Expr::UnOp { op, rhs } => {
-            let rhs = lower_expr(ctx, bindings, rhs);
+            let rhs = lower_expr(ctx, bindings, ret_ty, rhs);
 
             let ty = match (op, &rhs.ty) {
                 (UnOp::Deref, Ty::Ref(inner)) => *inner.clone(),

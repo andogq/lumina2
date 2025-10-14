@@ -23,8 +23,10 @@ pub fn lower(ctx: &Ctx, tir: &tir::Program) -> IrCtx {
 
         lower_block(&mut builder, &function.block, ret_value);
 
-        // TODO: Check when to do this.
-        builder.terminate(Terminator::Return);
+        // Account for blocks which already end with an explicit 'return'.
+        if builder.body.basic_blocks[builder.current_block].terminator != Terminator::Return {
+            builder.terminate(Terminator::Return);
+        }
 
         ir.functions.insert(builder.build());
     }
@@ -109,6 +111,11 @@ fn lower_block(builder: &mut FunctionBuilder, block: &tir::Block, result_value: 
                 let local = builder.bindings[binding];
                 lower_expr(builder, value, local);
             }
+            tir::Statement::Return(expr) => {
+                // Lower the expression into the return position.
+                lower_expr(builder, expr, builder.ret_value);
+                builder.terminate(Terminator::Return);
+            }
             tir::Statement::Expr { expr, semicolon } => {
                 lower_expr(
                     builder,
@@ -167,7 +174,13 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Loc
 
                     builder.set_current_block(ir_block);
                     lower_block(builder, block, result_value);
-                    builder.terminate(Terminator::Goto(final_block));
+                    // HACK: Only update the terminator if it's not a return statement.
+                    if !matches!(
+                        builder.body.basic_blocks[builder.current_block].terminator,
+                        Terminator::Return
+                    ) {
+                        builder.terminate(Terminator::Goto(final_block));
+                    }
 
                     let target = match target {
                         tir::Literal::I8(i8) => Constant::I8(*i8),

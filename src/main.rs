@@ -87,6 +87,16 @@ mod test {
                 2
             );
         }
+
+        #[test]
+        fn explicit_return() {
+            assert_eq!(run("fn main() -> u8 { return 1; }"), 1);
+        }
+
+        #[test]
+        fn conditional_return() {
+            assert_eq!(run("fn main() -> u8 { if true { return 2; }; 1 }"), 2);
+        }
     }
 
     mod ir {

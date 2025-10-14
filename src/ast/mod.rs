@@ -64,6 +64,7 @@ pub enum Statement {
         expr: Expr,
         semicolon: bool,
     },
+    Return(Expr),
 }
 
 impl Display for Statement {
@@ -92,6 +93,9 @@ impl Display for Statement {
                 }
 
                 Ok(())
+            }
+            Statement::Return(expr) => {
+                write!(f, "return {expr};")
             }
         }
     }
@@ -301,27 +305,40 @@ fn parse_block(toks: &mut Lexer<'_, '_, impl Iterator<Item = (Tok, Span)>>) -> B
     toks.expect(Tok::LBrace);
 
     while !matches!(toks.peek().unwrap().0, Tok::RBrace) {
-        if toks.try_expect(Tok::Let) {
-            let binding = toks.ident();
+        match toks.peek().unwrap().0 {
+            Tok::Let => {
+                toks.expect(Tok::Let);
 
-            let ty_annotation = toks.try_expect(Tok::Colon).then(|| toks.ident());
+                let binding = toks.ident();
 
-            toks.expect(Tok::Eq);
+                let ty_annotation = toks.try_expect(Tok::Colon).then(|| toks.ident());
 
-            let value = parse_expr(toks);
+                toks.expect(Tok::Eq);
 
-            toks.expect(Tok::SemiColon);
+                let value = parse_expr(toks);
 
-            block.statements.push(Statement::Declaration {
-                binding,
-                ty_annotation,
-                value,
-            });
-        } else {
-            let expr = parse_expr(toks);
-            let semicolon = toks.try_expect(Tok::SemiColon);
+                toks.expect(Tok::SemiColon);
 
-            block.statements.push(Statement::Expr { expr, semicolon });
+                block.statements.push(Statement::Declaration {
+                    binding,
+                    ty_annotation,
+                    value,
+                });
+            }
+            Tok::Return => {
+                toks.expect(Tok::Return);
+
+                let expr = parse_expr(toks);
+                toks.expect(Tok::SemiColon);
+
+                block.statements.push(Statement::Return(expr));
+            }
+            _ => {
+                let expr = parse_expr(toks);
+                let semicolon = toks.try_expect(Tok::SemiColon);
+
+                block.statements.push(Statement::Expr { expr, semicolon });
+            }
         }
     }
 
