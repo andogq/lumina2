@@ -18,6 +18,8 @@ fn run(source: &str) -> u8 {
     let tir = tir::lower(&ctx, &program);
     let ir = ir::lower(&ctx, &tir);
 
+    dbg!(&ir.functions[tir::FunctionId::zero()]);
+
     let ink_ctx = inkwell::context::Context::create();
     let llvm = llvm::Llvm::new(&ink_ctx, &ir);
     llvm.run("main")
@@ -101,6 +103,24 @@ mod test {
         #[test]
         fn reference() {
             assert_eq!(run("fn main() -> u8 { let a = 123; let b = &a; *b }"), 123);
+        }
+
+        #[test]
+        fn assign_to_reference() {
+            assert_eq!(
+                run("fn main() -> u8 { let a = 123; let b = &a; *b = 44; a }"),
+                44
+            );
+        }
+
+        #[test]
+        fn so_many_refs() {
+            assert_eq!(
+                run(
+                    "fn main() -> u8 { let a = 123; let b = 111; let a_ref = &a; let b_ref = &b; *a_ref = *b_ref; a }"
+                ),
+                111
+            );
         }
     }
 
