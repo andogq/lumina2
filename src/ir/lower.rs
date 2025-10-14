@@ -153,24 +153,7 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Pla
     match &expr.kind {
         tir::ExprKind::Assignment { binding, value } => {
             let place = expr_to_place(builder, binding);
-
-            let value_temp = builder.create_temporary(value.ty.clone());
-            lower_expr(
-                builder,
-                value,
-                Place {
-                    local: value_temp,
-                    projection: Vec::new(),
-                },
-            );
-
-            builder.push_statement(Statement::Assign {
-                place,
-                rvalue: RValue::Use(Operand::Place(Place {
-                    local: value_temp,
-                    projection: Vec::new(),
-                })),
-            });
+            lower_expr(builder, value, place);
         }
         tir::ExprKind::Literal(literal) => builder.push_statement(Statement::Assign {
             place: result_value,
