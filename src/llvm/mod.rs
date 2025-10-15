@@ -8,7 +8,7 @@ use inkwell::{
     intrinsics::Intrinsic,
     module::Module,
     types::{BasicType, BasicTypeEnum},
-    values::{BasicMetadataValueEnum, BasicValueEnum, PointerValue},
+    values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, PointerValue},
 };
 
 use crate::{
@@ -19,7 +19,7 @@ use crate::{
             Projection, RValue, Statement, Terminator, UnOp,
         },
     },
-    tir::Ty,
+    tir::{FunctionId, Ty},
 };
 
 pub struct Llvm<'ink, 'ir> {
@@ -76,6 +76,10 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                 )
             })
             .collect::<HashMap<_, _>>();
+        let function_map = functions
+            .iter()
+            .map(|(id, (value, _))| (id.clone(), value.clone()))
+            .collect::<HashMap<_, _>>();
 
         for (function, ir) in functions.values() {
             let entry_bb = self.ctx.append_basic_block(*function, "entry");
@@ -129,6 +133,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                                 rvalue,
                                 place_ptr,
                                 place_ty,
+                                &function_map,
                                 &ir.local_decls,
                                 &local_ptrs,
                             );
@@ -186,6 +191,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                                 self.get_operand(
                                     &builder,
                                     discriminator,
+                                    &function_map,
                                     &ir.local_decls,
                                     &local_ptrs,
                                 )
@@ -209,6 +215,9 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                                                     .get_ty(&Ty::Boolean)
                                                     .into_int_type()
                                                     .const_int(if *bool { 1 } else { 0 }, false),
+                                                Constant::FnItem(..) => panic!(
+                                                    "cannot use function item as switch target"
+                                                ),
                                             },
                                             basic_blocks[bb],
                                         )
@@ -245,6 +254,16 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
             Ty::Slice(ty) => panic!("cannot have type for slice, as it's unsized"),
             Ty::Unit => todo!("unit type"),
             Ty::Unreachable => panic!("no type for unreachable"),
+            Ty::Fn(..) => panic!("cannot create simple ty for fn"),
+            // Ty::Fn(args, ret) => self
+            //     .get_ty(&ret)
+            //     .fn_type(
+            //         &args
+            //             .iter()
+            //             .map(|arg| self.get_ty(arg).into())
+            //             .collect::<Vec<_>>(),
+            //         false,
+            //     )
         };
 
         self.tys.borrow_mut().insert(ty.clone(), ty_info);
@@ -329,12 +348,13 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
         rvalue: &RValue,
         place_ptr: PointerValue<'ink>,
         place_ty: Ty,
+        functions: &HashMap<FunctionId, FunctionValue<'ink>>,
         locals: &Locals,
         local_ptrs: &HashMap<Local, PointerValue<'ink>>,
     ) {
         match rvalue {
             RValue::Use(operand) => {
-                let (value, ty) = self.get_operand(builder, operand, locals, local_ptrs);
+                let (value, ty) = self.get_operand(builder, operand, functions, locals, local_ptrs);
                 assert_eq!(place_ty, ty);
                 builder.build_store(place_ptr, value).unwrap();
             }
@@ -346,13 +366,13 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
             }
             RValue::BinaryOp { op, lhs, rhs } => {
                 let (BasicValueEnum::IntValue(lhs), lhs_ty) =
-                    self.get_operand(builder, lhs, locals, local_ptrs)
+                    self.get_operand(builder, lhs, functions, locals, local_ptrs)
                 else {
                     panic!("expected integer lhs");
                 };
 
                 let (BasicValueEnum::IntValue(rhs), rhs_ty) =
-                    self.get_operand(builder, rhs, locals, local_ptrs)
+                    self.get_operand(builder, rhs, functions, locals, local_ptrs)
                 else {
                     panic!("expected integer rhs");
                 };
@@ -445,7 +465,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                 builder.build_store(place_ptr, value).unwrap();
             }
             RValue::UnaryOp { op, rhs } => {
-                let (rhs, rhs_ty) = self.get_operand(builder, rhs, locals, local_ptrs);
+                let (rhs, rhs_ty) = self.get_operand(builder, rhs, functions, locals, local_ptrs);
 
                 match op {
                     UnOp::Not => {
@@ -495,7 +515,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
 
                 let values = values
                     .iter()
-                    .map(|value| self.get_operand(builder, value, locals, local_ptrs))
+                    .map(|value| self.get_operand(builder, value, functions, locals, local_ptrs))
                     .collect::<Vec<_>>();
 
                 let pointee_ty = values[0].1.clone();
@@ -517,7 +537,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                 }
             }
             RValue::Cast { kind, op, ty } => {
-                let (op, op_ty) = self.get_operand(builder, op, locals, local_ptrs);
+                let (op, op_ty) = self.get_operand(builder, op, functions, locals, local_ptrs);
                 match kind {
                     CastKind::PointerCoercion(PointerCoercion::Unsize) => {
                         let Ty::Ref(place_inner_ty) = place_ty else {
@@ -580,6 +600,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
         &self,
         builder: &Builder<'ink>,
         operand: &Operand,
+        functions: &HashMap<FunctionId, FunctionValue<'ink>>,
         locals: &Locals,
         local_ptrs: &HashMap<Local, PointerValue<'ink>>,
     ) -> (BasicValueEnum<'ink>, Ty) {
@@ -623,6 +644,9 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                             .into(),
                         ty,
                     )
+                }
+                Constant::FnItem(fn_id) => {
+                    todo!()
                 }
             },
         }

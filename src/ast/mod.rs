@@ -137,7 +137,10 @@ pub enum Expr {
         arms: Vec<(Literal, Box<Expr>)>,
         otherwise: Box<Expr>,
     },
-    Call,
+    Call {
+        callee: Box<Expr>,
+        args: Vec<Expr>,
+    },
     Variable(Ident),
 }
 
@@ -178,7 +181,15 @@ impl Display for Expr {
 
                 Ok(())
             }
-            Expr::Call => todo!(),
+            Expr::Call { callee, args } => {
+                write!(f, "{callee}(")?;
+                for arg in args {
+                    write!(f, "{arg}, ")?;
+                }
+                write!(f, ")")?;
+
+                Ok(())
+            }
             Expr::Variable(ident) => write!(f, "{ident}"),
         }
     }
@@ -609,7 +620,22 @@ fn parse_expr(toks: &mut Lexer<'_, '_, impl Iterator<Item = (Tok, Span)>>) -> Ex
                 }
 
                 Tok::LParen => {
-                    todo!("call parsing")
+                    toks.expect(Tok::LParen);
+
+                    expr = Expr::Call {
+                        callee: Box::new(expr),
+                        // TODO: Fix this.
+                        args: std::iter::from_fn(|| {
+                            if toks.peek().unwrap().0 == Tok::RParen {
+                                return None;
+                            }
+
+                            Some(parse_with_precedence(toks, Precedence::Call))
+                        })
+                        .collect(),
+                    };
+
+                    toks.expect(Tok::RParen);
                 }
                 tok => todo!("unknown tok: {:?}", tok),
             }

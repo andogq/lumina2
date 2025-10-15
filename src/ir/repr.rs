@@ -2,7 +2,10 @@
 
 use std::fmt::Display;
 
-use crate::{Ident, indexed_vec, tir::Ty};
+use crate::{
+    Ident, indexed_vec,
+    tir::{FunctionId, Ty},
+};
 
 /// Representation of a function.
 #[derive(Clone, Debug)]
@@ -202,6 +205,7 @@ pub enum Constant {
     U8(u8),
     I8(i8),
     Boolean(bool),
+    FnItem(FunctionId),
 }
 impl From<u8> for Constant {
     fn from(value: u8) -> Self {

@@ -6,6 +6,7 @@ use crate::{
     Ctx, Ident,
     ast::{self, BinOp, UnOp},
     indexed_vec,
+    util::indexed_vec::Key,
 };
 
 pub use self::ty::Ty;
@@ -101,6 +102,10 @@ pub enum ExprKind {
         rhs: Box<Expr>,
     },
     Variable(BindingId),
+    Call {
+        callee: Box<Expr>,
+        args: Vec<Expr>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -108,10 +113,40 @@ pub enum Literal {
     I8(i8),
     U8(u8),
     Boolean(bool),
+    Fn(FunctionId),
 }
 
 pub fn lower(ctx: &Ctx, ast: &ast::Program) -> Program {
     let mut program = Program::default();
+
+    let fn_bindings = ast
+        .functions
+        .iter()
+        .enumerate()
+        .map(|(id, func)| {
+            // HACK: Mega hack
+            let id = FunctionId(Key::of(id));
+
+            (
+                func.name,
+                (
+                    id,
+                    Ty::Fn(
+                        func.params
+                            .iter()
+                            .map(|(_, ty)| ctx.ty_names[ty].clone())
+                            .collect(),
+                        Box::new(
+                            func.ret
+                                .as_ref()
+                                .map(|ty| ctx.ty_names[ty].clone())
+                                .unwrap_or(Ty::Unit),
+                        ),
+                    ),
+                ),
+            )
+        })
+        .collect::<HashMap<_, _>>();
 
     for ast_function in &ast.functions {
         let mut bindings = Bindings::default();
@@ -133,7 +168,7 @@ pub fn lower(ctx: &Ctx, ast: &ast::Program) -> Program {
             .map(|ret| ctx.ty_names[&ret].clone())
             .unwrap_or(Ty::Unit);
 
-        let block = lower_block(ctx, &mut bindings, &ret, &ast_function.body);
+        let block = lower_block(ctx, &fn_bindings, &mut bindings, &ret, &ast_function.body);
 
         assert_eq!(ret, block.ty);
 
@@ -152,7 +187,13 @@ pub fn lower(ctx: &Ctx, ast: &ast::Program) -> Program {
     program
 }
 
-fn lower_block(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, block: &ast::Block) -> Block {
+fn lower_block(
+    ctx: &Ctx,
+    fn_bindings: &HashMap<Ident, (FunctionId, Ty)>,
+    bindings: &mut Bindings,
+    ret_ty: &Ty,
+    block: &ast::Block,
+) -> Block {
     assert!(
         !block
             .statements
@@ -172,7 +213,7 @@ fn lower_block(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, block: &ast::Blo
     let statements = block
         .statements
         .iter()
-        .map(|statement| lower_statement(ctx, bindings, ret_ty, statement))
+        .map(|statement| lower_statement(ctx, fn_bindings, bindings, ret_ty, statement))
         .collect::<Vec<_>>();
 
     assert!(
@@ -205,6 +246,7 @@ fn lower_block(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, block: &ast::Blo
 
 fn lower_statement(
     ctx: &Ctx,
+    fn_bindings: &HashMap<Ident, (FunctionId, Ty)>,
     bindings: &mut Bindings,
     ret_ty: &Ty,
     statement: &ast::Statement,
@@ -215,7 +257,7 @@ fn lower_statement(
             ty_annotation,
             value,
         } => {
-            let value = lower_expr(ctx, bindings, ret_ty, value);
+            let value = lower_expr(ctx, fn_bindings, bindings, ret_ty, value);
             let ty = match ty_annotation {
                 Some(ty_annotation) => {
                     let ty = ctx.ty_names[ty_annotation].clone();
@@ -239,23 +281,29 @@ fn lower_statement(
             }
         }
         ast::Statement::Return(expr) => {
-            let expr = lower_expr(ctx, bindings, ret_ty, expr);
+            let expr = lower_expr(ctx, fn_bindings, bindings, ret_ty, expr);
             // Ensure that the expression's type matches the function's return type.
             assert_eq!(expr.ty, *ret_ty);
             Statement::Return(expr)
         }
         ast::Statement::Expr { expr, semicolon } => Statement::Expr {
-            expr: lower_expr(ctx, bindings, ret_ty, expr),
+            expr: lower_expr(ctx, fn_bindings, bindings, ret_ty, expr),
             semicolon: *semicolon,
         },
     }
 }
 
-fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, expr: &ast::Expr) -> Expr {
+fn lower_expr(
+    ctx: &Ctx,
+    fn_bindings: &HashMap<Ident, (FunctionId, Ty)>,
+    bindings: &mut Bindings,
+    ret_ty: &Ty,
+    expr: &ast::Expr,
+) -> Expr {
     match expr {
         ast::Expr::Assignment { binding, value } => {
-            let binding = lower_expr(ctx, bindings, ret_ty, binding);
-            let value = lower_expr(ctx, bindings, ret_ty, value);
+            let binding = lower_expr(ctx, fn_bindings, bindings, ret_ty, binding);
+            let value = lower_expr(ctx, fn_bindings, bindings, ret_ty, value);
 
             // TODO: Should these types be equivalent?
             assert_eq!(binding.ty, value.ty);
@@ -285,13 +333,13 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, expr: &ast::Expr)
             block,
             otherwise,
         } => {
-            let condition = lower_expr(ctx, bindings, ret_ty, condition);
+            let condition = lower_expr(ctx, fn_bindings, bindings, ret_ty, condition);
             assert_eq!(condition.ty, Ty::Boolean);
 
-            let block = lower_block(ctx, bindings, ret_ty, block);
+            let block = lower_block(ctx, fn_bindings, bindings, ret_ty, block);
 
             let otherwise = if let Some(otherwise) = otherwise {
-                let otherwise = lower_block(ctx, bindings, ret_ty, otherwise);
+                let otherwise = lower_block(ctx, fn_bindings, bindings, ret_ty, otherwise);
                 // Both branches should return the same type.
                 assert_eq!(otherwise.ty, block.ty);
                 otherwise
@@ -316,15 +364,15 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, expr: &ast::Expr)
         ast::Expr::Field { expr, field } => todo!(),
         ast::Expr::Index { expr, index } => todo!(),
         ast::Expr::Block(block) => {
-            let block = lower_block(ctx, bindings, ret_ty, block);
+            let block = lower_block(ctx, fn_bindings, bindings, ret_ty, block);
             Expr {
                 ty: block.ty.clone(),
                 kind: ExprKind::Block(block),
             }
         }
         ast::Expr::BinOp { lhs, op, rhs } => {
-            let lhs = lower_expr(ctx, bindings, ret_ty, lhs);
-            let rhs = lower_expr(ctx, bindings, ret_ty, rhs);
+            let lhs = lower_expr(ctx, fn_bindings, bindings, ret_ty, lhs);
+            let rhs = lower_expr(ctx, fn_bindings, bindings, ret_ty, rhs);
 
             let ty = match (&lhs.ty, op, &rhs.ty) {
                 (
@@ -357,7 +405,7 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, expr: &ast::Expr)
             }
         }
         ast::Expr::UnOp { op, rhs } => {
-            let rhs = lower_expr(ctx, bindings, ret_ty, rhs);
+            let rhs = lower_expr(ctx, fn_bindings, bindings, ret_ty, rhs);
 
             let ty = match (op, &rhs.ty) {
                 (UnOp::Deref, Ty::Ref(inner)) => *inner.clone(),
@@ -379,16 +427,48 @@ fn lower_expr(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, expr: &ast::Expr)
             arms,
             otherwise,
         } => todo!(),
-        ast::Expr::Call => todo!(),
-        ast::Expr::Variable(ident) => {
-            let (id, binding) = bindings
-                .iter_keys()
-                .find(|(_, binding)| binding.ident == *ident)
-                .expect("ident to exist: {ident}");
+        ast::Expr::Call { callee, args } => {
+            let callee = lower_expr(ctx, fn_bindings, bindings, ret_ty, callee);
+            let args = args
+                .iter()
+                .map(|arg| lower_expr(ctx, fn_bindings, bindings, ret_ty, arg))
+                .collect::<Vec<_>>();
+
+            let Ty::Fn(fn_arg_tys, fn_ret_ty) = &callee.ty else {
+                panic!("expected callee to be function, but found: {:?}", callee.ty);
+            };
+
+            assert!(
+                args.iter()
+                    .zip(fn_arg_tys.iter())
+                    .all(|(arg, param)| arg.ty == *param),
+                "function arguments must match signature"
+            );
 
             Expr {
-                ty: binding.ty.clone(),
-                kind: ExprKind::Variable(id),
+                ty: *fn_ret_ty.clone(),
+                kind: ExprKind::Call {
+                    callee: Box::new(callee),
+                    args,
+                },
+            }
+        }
+        ast::Expr::Variable(ident) => {
+            if let Some((id, binding)) = bindings
+                .iter_keys()
+                .find(|(_, binding)| binding.ident == *ident)
+            {
+                Expr {
+                    ty: binding.ty.clone(),
+                    kind: ExprKind::Variable(id),
+                }
+            } else if let Some((id, ty)) = fn_bindings.get(ident) {
+                Expr {
+                    ty: ty.clone(),
+                    kind: ExprKind::Literal(Literal::Fn(id.clone())),
+                }
+            } else {
+                panic!("unknown bindings: {ident}");
             }
         }
     }

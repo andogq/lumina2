@@ -8,6 +8,7 @@ pub enum Ty {
     Ref(Box<Ty>),
     Slice(Box<Ty>),
     Array(Box<Ty>, usize),
+    Fn(Vec<Ty>, Box<Ty>),
 }
 
 impl std::hash::Hash for Ty {

@@ -122,6 +122,14 @@ mod test {
                 111
             );
         }
+
+        #[test]
+        fn fns() {
+            assert_eq!(
+                run("fn cool_fn() -> u8 { return 123; } fn main() -> u8 { cool_fn() }"),
+                123
+            );
+        }
     }
 
     mod ir {

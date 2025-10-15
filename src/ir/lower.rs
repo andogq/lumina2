@@ -161,6 +161,7 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Pla
                 tir::Literal::I8(i8) => Constant::I8(*i8),
                 tir::Literal::U8(u8) => Constant::U8(*u8),
                 tir::Literal::Boolean(bool) => Constant::Boolean(*bool),
+                tir::Literal::Fn(fn_id) => Constant::FnItem(*fn_id),
             })),
         }),
         tir::ExprKind::Switch {
@@ -201,6 +202,7 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Pla
                         tir::Literal::I8(i8) => Constant::I8(*i8),
                         tir::Literal::U8(u8) => Constant::U8(*u8),
                         tir::Literal::Boolean(bool) => Constant::Boolean(*bool),
+                        tir::Literal::Fn(..) => panic!("cannot use function as target of switch"),
                     };
 
                     (target, ir_block)
@@ -318,6 +320,33 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Pla
                 projection: Vec::new(),
             })),
         }),
+        tir::ExprKind::Call { callee, args } => {
+            let func_temp = Place {
+                local: builder.create_temporary(callee.ty.clone()),
+                projection: Vec::new(),
+            };
+            lower_expr(builder, callee, func_temp.clone());
+            let args = args
+                .iter()
+                .map(|arg| {
+                    let tmp = Place {
+                        local: builder.create_temporary(arg.ty.clone()),
+                        projection: Vec::new(),
+                    };
+                    lower_expr(builder, expr, tmp.clone());
+                    Operand::Place(tmp)
+                })
+                .collect();
+
+            let next_bb = builder.new_block();
+            builder.terminate(Terminator::Call {
+                func: Operand::Place(func_temp),
+                args,
+                destination: result_value,
+                target: next_bb,
+            });
+            builder.set_current_block(next_bb);
+        }
     }
 }
 
