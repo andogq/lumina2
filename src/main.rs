@@ -85,7 +85,7 @@ mod test {
         #[test]
         fn conditional_reassignment() {
             assert_eq!(
-                run("fn main() -> u8 { let a = 1; if a == 1 { a = 2; }; a }"),
+                run("fn main() -> u8 { let a = 1; if a == 1 { a = 2; } a }"),
                 2
             );
         }
@@ -97,7 +97,7 @@ mod test {
 
         #[test]
         fn conditional_return() {
-            assert_eq!(run("fn main() -> u8 { if true { return 2; }; 1 }"), 2);
+            assert_eq!(run("fn main() -> u8 { if true { return 2; } 1 }"), 2);
         }
 
         #[test]

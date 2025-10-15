@@ -153,6 +153,22 @@ pub fn lower(ctx: &Ctx, ast: &ast::Program) -> Program {
 }
 
 fn lower_block(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, block: &ast::Block) -> Block {
+    assert!(
+        !block
+            .statements
+            .iter()
+            .take(block.statements.len() - 1)
+            .filter_map(|statement| match statement {
+                ast::Statement::Expr {
+                    expr,
+                    semicolon: false,
+                } => Some(expr),
+                _ => None,
+            })
+            .any(|expr| !matches!(expr, ast::Expr::Block(_) | ast::Expr::If { .. })),
+        "only last statement, or block-like expressions (if, block, etc) can omit semicolon"
+    );
+
     let statements = block
         .statements
         .iter()
@@ -164,11 +180,11 @@ fn lower_block(ctx: &Ctx, bindings: &mut Bindings, ret_ty: &Ty, block: &ast::Blo
             .iter()
             .take(statements.len() - 1)
             .filter_map(|statement| match statement {
-                Statement::Expr { semicolon, .. } => Some(semicolon),
+                Statement::Expr { expr, .. } => Some(expr),
                 _ => None,
             })
-            .all(|semicolon| *semicolon),
-        "only final expression can omit semicolon"
+            .all(|expr| expr.ty == Ty::Unit),
+        "all expression statements except the last must resolve to unit type"
     );
 
     let (yield_statement, ty) = statements
