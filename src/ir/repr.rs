@@ -206,6 +206,7 @@ pub enum Constant {
     I8(i8),
     Boolean(bool),
     FnItem(FunctionId),
+    Unit,
 }
 impl From<u8> for Constant {
     fn from(value: u8) -> Self {

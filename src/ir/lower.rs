@@ -19,16 +19,15 @@ pub fn lower(ctx: &Ctx, tir: &tir::Program) -> IrCtx {
             function.ret.clone(),
         );
 
-        let ret_value = builder.ret_value;
-
-        lower_block(
-            &mut builder,
-            &function.block,
-            Place {
-                local: ret_value,
+        let ret_value = lower_block(&mut builder, &function.block);
+        // TODO: No clue if this should be done
+        builder.push_statement(Statement::Assign {
+            place: Place {
+                local: builder.ret_value,
                 projection: Vec::new(),
             },
-        );
+            rvalue: RValue::Use(ret_value),
+        });
 
         // Account for blocks which already end with an explicit 'return'.
         if builder.body.basic_blocks[builder.current_block].terminator != Terminator::Return {
@@ -93,6 +92,15 @@ impl FunctionBuilder {
     }
 
     fn push_statement(&mut self, statement: Statement) {
+        if let Statement::Assign {
+            rvalue: RValue::Use(Operand::Constant(Constant::Unit)),
+            ..
+        } = statement
+        {
+            println!("WARN: assigning unit to statement");
+            return;
+        }
+
         self.body.basic_blocks[self.current_block]
             .statements
             .push(statement);
@@ -111,77 +119,74 @@ impl FunctionBuilder {
     }
 }
 
-fn lower_block(builder: &mut FunctionBuilder, block: &tir::Block, result_value: Place) {
+fn lower_block(builder: &mut FunctionBuilder, block: &tir::Block) -> Operand {
+    let mut last_value = Operand::Constant(Constant::Unit);
     for statement in &block.statements {
+        last_value = Operand::Constant(Constant::Unit);
         match statement {
             tir::Statement::Declaration { binding, value } => {
                 let local = builder.bindings[binding];
-                lower_expr(
-                    builder,
-                    value,
-                    Place {
+                let value = lower_expr(builder, value);
+                builder.push_statement(Statement::Assign {
+                    place: Place {
                         local,
                         projection: Vec::new(),
                     },
-                );
+                    rvalue: RValue::Use(value),
+                });
             }
             tir::Statement::Return(expr) => {
                 // Lower the expression into the return position.
-                lower_expr(
-                    builder,
-                    expr,
-                    Place {
+                let value = lower_expr(builder, expr);
+                builder.push_statement(Statement::Assign {
+                    place: Place {
                         local: builder.ret_value,
                         projection: Vec::new(),
                     },
-                );
+                    rvalue: RValue::Use(value),
+                });
                 builder.terminate(Terminator::Return);
             }
             tir::Statement::Expr { expr, semicolon } => {
-                lower_expr(
-                    builder,
-                    expr,
-                    // TODO: This should only use the result value if it's the last statement.
-                    result_value.clone(),
-                );
+                last_value = lower_expr(builder, expr);
             }
         }
     }
+    last_value
 }
 
-fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Place) {
+fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr) -> Operand {
     match &expr.kind {
         tir::ExprKind::Assignment { binding, value } => {
             let place = expr_to_place(builder, binding);
-            lower_expr(builder, value, place);
+            let value = lower_expr(builder, value);
+
+            builder.push_statement(Statement::Assign {
+                place,
+                rvalue: RValue::Use(value),
+            });
+
+            Operand::Constant(Constant::Unit)
         }
-        tir::ExprKind::Literal(literal) => builder.push_statement(Statement::Assign {
-            place: result_value,
-            rvalue: RValue::Use(Operand::Constant(match literal {
-                tir::Literal::I8(i8) => Constant::I8(*i8),
-                tir::Literal::U8(u8) => Constant::U8(*u8),
-                tir::Literal::Boolean(bool) => Constant::Boolean(*bool),
-                tir::Literal::Fn(fn_id) => Constant::FnItem(*fn_id),
-            })),
+        tir::ExprKind::Literal(literal) => Operand::Constant(match literal {
+            tir::Literal::I8(i8) => Constant::I8(*i8),
+            tir::Literal::U8(u8) => Constant::U8(*u8),
+            tir::Literal::Boolean(bool) => Constant::Boolean(*bool),
+            tir::Literal::Fn(fn_id) => Constant::FnItem(*fn_id),
         }),
         tir::ExprKind::Switch {
             discriminator,
             targets,
             otherwise,
         } => {
-            let discriminator_temp = builder.create_temporary(discriminator.ty.clone());
-            lower_expr(
-                builder,
-                discriminator,
-                Place {
-                    local: discriminator_temp,
-                    projection: Vec::new(),
-                },
-            );
+            let discriminator = lower_expr(builder, discriminator);
 
             let current_block = builder.current_block();
 
             let final_block = builder.new_block();
+
+            let merge_local =
+                (expr.ty != Ty::Unit).then(|| builder.create_temporary(expr.ty.clone()));
 
             let targets = targets
                 .iter()
@@ -189,7 +194,16 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Pla
                     let ir_block = builder.new_block();
 
                     builder.set_current_block(ir_block);
-                    lower_block(builder, block, result_value.clone());
+                    let result = lower_block(builder, block);
+                    if let Some(merge_local) = merge_local {
+                        builder.push_statement(Statement::Assign {
+                            place: Place {
+                                local: merge_local,
+                                projection: Vec::new(),
+                            },
+                            rvalue: RValue::Use(result),
+                        });
+                    }
                     // HACK: Only update the terminator if it's not a return statement.
                     if !matches!(
                         builder.body.basic_blocks[builder.current_block].terminator,
@@ -211,48 +225,51 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Pla
 
             let otherwise_block = builder.new_block();
             builder.set_current_block(otherwise_block);
-            lower_block(builder, otherwise, result_value);
+            let otherwise_value = lower_block(builder, otherwise);
+            if let Some(merge_local) = merge_local {
+                builder.push_statement(Statement::Assign {
+                    place: Place {
+                        local: merge_local,
+                        projection: Vec::new(),
+                    },
+                    rvalue: RValue::Use(otherwise_value),
+                });
+            }
             builder.terminate(Terminator::Goto(final_block));
 
             // Return back to the original block, to insert the terminator.
             builder.set_current_block(current_block);
             builder.terminate(Terminator::SwitchInt {
-                discriminator: Operand::Place(Place {
-                    local: discriminator_temp,
-                    projection: Vec::new(),
-                }),
+                discriminator,
                 targets,
                 otherwise: otherwise_block,
             });
 
             builder.set_current_block(final_block);
+
+            if let Some(merge_local) = merge_local {
+                Operand::Place(Place {
+                    local: merge_local,
+                    projection: Vec::new(),
+                })
+            } else {
+                Operand::Constant(Constant::Unit)
+            }
         }
         tir::ExprKind::Field { expr, field } => todo!(),
         tir::ExprKind::Index { expr, index } => todo!(),
         tir::ExprKind::Block(block) => todo!(),
         tir::ExprKind::BinOp { lhs, op, rhs } => {
-            let lhs_temp = builder.create_temporary(lhs.ty.clone());
-            let rhs_temp = builder.create_temporary(rhs.ty.clone());
+            let lhs = lower_expr(builder, lhs);
+            let rhs = lower_expr(builder, rhs);
 
-            lower_expr(
-                builder,
-                lhs,
-                Place {
-                    local: lhs_temp,
-                    projection: Vec::new(),
-                },
-            );
-            lower_expr(
-                builder,
-                rhs,
-                Place {
-                    local: rhs_temp,
-                    projection: Vec::new(),
-                },
-            );
+            let result_value = Place {
+                local: builder.create_temporary(expr.ty.clone()),
+                projection: Vec::new(),
+            };
 
             builder.push_statement(Statement::Assign {
-                place: result_value,
+                place: result_value.clone(),
                 rvalue: RValue::BinaryOp {
                     op: match op {
                         ast::BinOp::Plus => BinOp::Add,
@@ -270,20 +287,21 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Pla
                         ast::BinOp::Lt => BinOp::Lt,
                         ast::BinOp::Le => BinOp::Le,
                     },
-                    lhs: Operand::Place(Place {
-                        local: lhs_temp,
-                        projection: Vec::new(),
-                    }),
-                    rhs: Operand::Place(Place {
-                        local: rhs_temp,
-                        projection: Vec::new(),
-                    }),
+                    lhs,
+                    rhs,
                 },
             });
+
+            Operand::Place(result_value)
         }
         tir::ExprKind::UnOp { op, rhs } => {
+            let result_value = Place {
+                local: builder.create_temporary(expr.ty.clone()),
+                projection: Vec::new(),
+            };
+
             let statement = Statement::Assign {
-                place: result_value,
+                place: result_value.clone(),
                 rvalue: match op {
                     ast::UnOp::Ref => RValue::Ref(expr_to_place(builder, rhs)),
                     ast::UnOp::Deref => {
@@ -292,60 +310,37 @@ fn lower_expr(builder: &mut FunctionBuilder, expr: &tir::Expr, result_value: Pla
                         RValue::Use(Operand::Place(rhs))
                     }
                     ast::UnOp::Minus => {
-                        let rhs_temp = builder.create_temporary(rhs.ty.clone());
-                        lower_expr(
-                            builder,
-                            rhs,
-                            Place {
-                                local: rhs_temp,
-                                projection: Vec::new(),
-                            },
-                        );
-                        RValue::UnaryOp {
-                            op: UnOp::Neg,
-                            rhs: Operand::Place(Place {
-                                local: rhs_temp,
-                                projection: Vec::new(),
-                            }),
-                        }
+                        let rhs = lower_expr(builder, rhs);
+                        RValue::UnaryOp { op: UnOp::Neg, rhs }
                     }
                 },
             };
             builder.push_statement(statement);
+
+            Operand::Place(result_value)
         }
-        tir::ExprKind::Variable(binding) => builder.push_statement(Statement::Assign {
-            place: result_value,
-            rvalue: RValue::Use(Operand::Place(Place {
-                local: builder.bindings[binding],
-                projection: Vec::new(),
-            })),
+        tir::ExprKind::Variable(binding) => Operand::Place(Place {
+            local: builder.bindings[binding],
+            projection: Vec::new(),
         }),
         tir::ExprKind::Call { callee, args } => {
-            let func_temp = Place {
-                local: builder.create_temporary(callee.ty.clone()),
+            let func = lower_expr(builder, callee);
+            let args = args.iter().map(|arg| lower_expr(builder, arg)).collect();
+
+            let result_value = Place {
+                local: builder.create_temporary(expr.ty.clone()),
                 projection: Vec::new(),
             };
-            lower_expr(builder, callee, func_temp.clone());
-            let args = args
-                .iter()
-                .map(|arg| {
-                    let tmp = Place {
-                        local: builder.create_temporary(arg.ty.clone()),
-                        projection: Vec::new(),
-                    };
-                    lower_expr(builder, expr, tmp.clone());
-                    Operand::Place(tmp)
-                })
-                .collect();
 
             let next_bb = builder.new_block();
             builder.terminate(Terminator::Call {
-                func: Operand::Place(func_temp),
+                func,
                 args,
-                destination: result_value,
+                destination: result_value.clone(),
                 target: next_bb,
             });
             builder.set_current_block(next_bb);
+            Operand::Place(result_value)
         }
     }
 }

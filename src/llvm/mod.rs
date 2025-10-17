@@ -8,7 +8,9 @@ use inkwell::{
     intrinsics::Intrinsic,
     module::Module,
     types::{BasicType, BasicTypeEnum},
-    values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, PointerValue},
+    values::{
+        AnyValue, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, PointerValue,
+    },
 };
 
 use crate::{
@@ -78,7 +80,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
             .collect::<HashMap<_, _>>();
         let function_map = functions
             .iter()
-            .map(|(id, (value, _))| (id.clone(), value.clone()))
+            .map(|(id, (value, _))| (*id, *value))
             .collect::<HashMap<_, _>>();
 
         for (function, ir) in functions.values() {
@@ -143,7 +145,7 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                             self.build_intrinsic(
                                 &builder,
                                 "llvm.lifetime.end",
-                                &[ptr.get_type().into()],
+                                &[self.ctx.ptr_type(AddressSpace::default()).into()],
                                 &[ptr.into()],
                             );
                         }
@@ -165,7 +167,45 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                         args,
                         destination,
                         target,
-                    } => todo!(),
+                    } => {
+                        let func = self.get_operand_as_fn(func, &function_map);
+                        let args = args
+                            .iter()
+                            .map(|arg| {
+                                self.get_operand(
+                                    &builder,
+                                    arg,
+                                    &function_map,
+                                    &ir.local_decls,
+                                    &local_ptrs,
+                                )
+                                .0
+                                .into()
+                            })
+                            .collect::<Vec<_>>();
+                        let ret_value = builder
+                            .build_call(func, &args, "call")
+                            .unwrap()
+                            .try_as_basic_value()
+                            .unwrap_left();
+                        builder
+                            .build_unconditional_branch(basic_blocks[target])
+                            .unwrap();
+
+                        builder.position_at_end(basic_blocks[target]);
+                        builder
+                            .build_store(
+                                self.resolve_place(
+                                    &builder,
+                                    destination,
+                                    &ir.local_decls,
+                                    &local_ptrs,
+                                )
+                                .0,
+                                ret_value,
+                            )
+                            .unwrap();
+                    }
                     Terminator::Goto(basic_block) => {
                         builder
                             .build_unconditional_branch(basic_blocks[basic_block])
@@ -218,6 +258,9 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                                                 Constant::FnItem(..) => panic!(
                                                     "cannot use function item as switch target"
                                                 ),
+                                                Constant::Unit => {
+                                                    panic!("cannot use unit as switch target")
+                                                }
                                             },
                                             basic_blocks[bb],
                                         )
@@ -229,6 +272,9 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                     Terminator::Unreachable => panic!("unreachable terminator encountered"),
                 }
             }
+
+            dbg!(function.verify(true));
+            println!("{}", function.print_to_string().to_string());
         }
     }
 
@@ -645,10 +691,24 @@ impl<'ink, 'ir> Llvm<'ink, 'ir> {
                         ty,
                     )
                 }
-                Constant::FnItem(fn_id) => {
+                Constant::FnItem(..) => {
+                    panic!("cannot get regular operand as fn")
+                }
+                Constant::Unit => {
                     todo!()
                 }
             },
+        }
+    }
+
+    fn get_operand_as_fn(
+        &self,
+        operand: &Operand,
+        functions: &HashMap<FunctionId, FunctionValue<'ink>>,
+    ) -> FunctionValue<'ink> {
+        match operand {
+            Operand::Constant(Constant::FnItem(fn_id)) => functions[fn_id],
+            _ => unimplemented!(),
         }
     }
 
