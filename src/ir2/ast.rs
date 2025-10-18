@@ -1,0 +1,157 @@
+use crate::ir2::cst::{BinaryOp, UnaryOp};
+
+pub use self::{block::*, expr::*, function::*, statement::*, string_pool::*};
+
+pub struct Ast {
+    pub items: Vec<Item>,
+
+    pub blocks: Vec<Block>,
+    pub expressions: Vec<Expr>,
+
+    pub strings: StringPool,
+}
+
+pub enum Item {
+    FunctionDeclaration(FunctionDeclaration),
+}
+
+mod function {
+    use super::*;
+
+    pub struct FunctionDeclaration {
+        pub name: StringId,
+        pub params: Vec<FunctionParameter>,
+        pub return_ty: Option<StringId>,
+        pub body: BlockId,
+    }
+
+    pub struct FunctionParameter {
+        pub name: StringId,
+        pub ty: StringId,
+    }
+}
+
+mod block {
+    use super::*;
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct BlockId(usize);
+
+    pub struct Block {
+        pub statements: Vec<Statement>,
+        pub expression: Option<ExprId>,
+    }
+}
+
+mod statement {
+    use super::*;
+
+    pub enum Statement {
+        Let(LetStatement),
+        Return(ReturnStatement),
+        Expr(ExprStatement),
+    }
+
+    pub struct LetStatement {
+        pub variable: StringId,
+        pub value: ExprId,
+    }
+
+    pub struct ReturnStatement {
+        pub expr: ExprId,
+    }
+
+    pub struct ExprStatement {
+        pub expr: ExprId,
+    }
+}
+
+mod expr {
+    use super::*;
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct ExprId(usize);
+
+    pub enum Expr {
+        Assign(Assign),
+        Binary(Binary),
+        Unary(Unary),
+        If(If),
+        Literal(Literal),
+        Call(Call),
+        Variable(Variable),
+    }
+
+    pub struct Assign {
+        pub variable: StringId,
+        pub value: ExprId,
+    }
+
+    pub struct Binary {
+        pub lhs: ExprId,
+        pub op: BinaryOp,
+        pub rhs: ExprId,
+    }
+
+    pub struct Unary {
+        pub op: UnaryOp,
+        pub value: ExprId,
+    }
+
+    pub struct If {
+        pub conditions: Vec<(ExprId, BlockId)>,
+        pub otherwise: Option<BlockId>,
+    }
+
+    pub enum Literal {
+        Integer(usize),
+        Boolean(bool),
+    }
+
+    pub struct Call {
+        pub callee: ExprId,
+        pub arguments: Vec<ExprId>,
+    }
+
+    pub struct Variable {
+        pub variable: StringId,
+    }
+}
+
+mod string_pool {
+    use std::collections::HashMap;
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct StringId(usize);
+
+    pub struct StringPool {
+        lookup: HashMap<String, StringId>,
+        strings: Vec<String>,
+    }
+
+    impl StringPool {
+        pub fn new() -> Self {
+            Self {
+                lookup: HashMap::new(),
+                strings: Vec::new(),
+            }
+        }
+
+        pub fn intern(&mut self, s: impl ToString) -> StringId {
+            let s = s.to_string();
+
+            if let Some(id) = self.lookup.get(&s) {
+                return *id;
+            }
+
+            let id = StringId(self.strings.len());
+            self.strings.push(s.clone());
+            self.lookup.insert(s, id);
+            id
+        }
+
+        pub fn get(&self, index: StringId) -> &str {
+            &self.strings[index.0]
+        }
+    }
+}

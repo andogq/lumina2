@@ -3,6 +3,7 @@
 mod ast;
 mod ctx;
 mod ir;
+mod ir2;
 mod lex;
 mod llvm;
 mod tir;
