@@ -1,96 +1,135 @@
-use std::fmt::{Display, Formatter};
+macro_rules! toks {
+    (@inner { $($items:tt)* } $variant:ident, $($rest:tt)*) => {
+        toks!(
+            @inner
+            { $($items)* $variant => stringify!($variant), }
+            $($rest)*
+        );
+    };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Tok {
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
-    LBracket,
-    RBracket,
-    LAngle,
-    RAngle,
+    (@inner { $($items:tt)* } $variant:ident => $fmt:expr, $($rest:tt)*) => {
+        toks!(
+            @inner
+            { $($items)* $variant => $fmt, }
+            $($rest)*
+        );
+    };
 
-    Eq,
-    Plus,
-    Minus,
-    Asterisk,
-    Slash,
-    Amp,
-    Bar,
-    Colon,
-    SemiColon,
-    Comma,
+    (@inner { $($items:tt)* } $variant:ident($inner:ty), $($rest:tt)*) => {
+        toks!(
+            @inner
+            { $($items)* $variant($inner, tmp) => tmp, }
+            $($rest)*
+        );
+    };
 
-    EqEq,
-    BangEq,
-    GtEq,
-    LtEq,
-    AmpAmp,
-    BarBar,
+    (@inner { $($variant:ident $(($inner:ty, $binding:ident))? => $fmt:expr,)* }) => {
+        #[derive(Clone, Debug, PartialEq, Eq)]
+        pub enum Tok {
+            $($variant $(($inner))?,)*
+        }
 
-    ThinArrow,
+        impl ::std::fmt::Display for Tok {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                match self {
+                    $(Self::$variant $(($binding))? => ::std::write!(f, "{}", $fmt),)*
+                }
+            }
+        }
 
-    True,
-    False,
+        $(
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            pub struct $variant$((pub $inner))?;
 
-    Fn,
-    Let,
-    Return,
-    If,
-    Else,
+            impl ::std::convert::From<$variant> for Tok {
+                fn from(#[allow(unused)] value: $variant) -> Self {
+                    toks!(@from_impl value => $variant $(($inner))?)
+                }
+            }
 
-    Eof,
+            impl ::std::convert::TryFrom<Tok> for $variant {
+                type Error = Tok;
+
+                fn try_from(value: Tok) -> ::std::result::Result<Self, Self::Error> {
+                    toks!(@try_from_impl value => $variant $(($inner))?)
+                }
+            }
+        )*
+    };
+
+    (@from_impl $value:ident => $variant:ident($inner:ty)) => {
+        Self::$variant($value.0)
+    };
+
+    (@from_impl $value:ident => $variant:ident) => {
+        Self::$variant
+    };
+
+    (@try_from_impl $value:ident => $variant:ident($inner:ty)) => {
+        match $value {
+            Tok::$variant(inner) => ::std::result::Result::Ok($variant(inner)),
+            tok => ::std::result::Result::Err(tok),
+        }
+    };
+
+    (@try_from_impl $value:ident => $variant:ident) => {
+        match $value {
+            Tok::$variant => ::std::result::Result::Ok($variant),
+            tok => ::std::result::Result::Err(tok),
+        }
+    };
+
+    ($($inner:tt)*) => {
+        toks!(
+            @inner
+            {}
+            $($inner)*
+        );
+    };
+}
+
+toks! {
+    LParen => "(",
+    RParen => ")",
+    LBrace => "{{",
+    RBrace => "}}",
+    LBracket => "[",
+    RBracket => "]",
+    LAngle => "<",
+    RAngle => ">",
+
+    Eq => "=",
+    Plus => "+",
+    Minus => "-",
+    Asterisk => "*",
+    Slash => "/",
+    Amp => "&",
+    Bar => "|",
+    Colon => ":",
+    SemiColon => ";",
+    Comma => ",",
+    Bang => "!",
+
+    EqEq => "==",
+    BangEq => "!=",
+    GtEq => ">=",
+    LtEq => "<=",
+    AmpAmp => "&&",
+    BarBar => "||",
+
+    ThinArrow => "->",
+
+    True => "true",
+    False => "false",
+
+    Fn => "fn",
+    Let => "let",
+    Return => "return",
+    If => "if",
+    Else => "else",
+
+    Eof => "<Eof>",
 
     Ident(String),
     IntLit(usize),
-}
-
-impl Display for Tok {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Tok::LParen => write!(f, "("),
-            Tok::RParen => write!(f, ")"),
-            Tok::LBrace => write!(f, "{{"),
-            Tok::RBrace => write!(f, "}}"),
-            Tok::LBracket => write!(f, "["),
-            Tok::RBracket => write!(f, "]"),
-            Tok::LAngle => write!(f, "<"),
-            Tok::RAngle => write!(f, ">"),
-
-            Tok::Eq => write!(f, "="),
-            Tok::Plus => write!(f, "+"),
-            Tok::Minus => write!(f, "-"),
-            Tok::Asterisk => write!(f, "*"),
-            Tok::Slash => write!(f, "/"),
-            Tok::Amp => write!(f, "&"),
-            Tok::Bar => write!(f, "|"),
-            Tok::Colon => write!(f, ":"),
-            Tok::SemiColon => write!(f, ";"),
-            Tok::Comma => write!(f, ","),
-
-            Tok::EqEq => write!(f, "=="),
-            Tok::BangEq => write!(f, "!="),
-            Tok::GtEq => write!(f, ">="),
-            Tok::LtEq => write!(f, "<="),
-            Tok::AmpAmp => write!(f, "&&"),
-            Tok::BarBar => write!(f, "||"),
-
-            Tok::ThinArrow => write!(f, "->"),
-
-            Tok::True => write!(f, "true"),
-            Tok::False => write!(f, "false"),
-
-            Tok::Fn => write!(f, "fn"),
-            Tok::Let => write!(f, "let"),
-            Tok::Return => write!(f, "return"),
-            Tok::If => write!(f, "if"),
-            Tok::Else => write!(f, "else"),
-
-            Tok::Ident(ident) => write!(f, "{ident}"),
-            Tok::IntLit(lit) => write!(f, "{lit}"),
-
-            Tok::Eof => write!(f, "<Eof>"),
-        }
-    }
 }

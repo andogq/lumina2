@@ -9,7 +9,7 @@ use crate::{Ctx, Ident};
 
 pub use self::tok::Tok;
 
-mod tok;
+pub mod tok;
 
 pub struct Lexer<'ctx, 'src, I>
 where
