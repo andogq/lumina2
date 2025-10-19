@@ -1,4 +1,4 @@
-mod ast;
-mod cst;
-mod hir;
-mod mir;
+pub mod ast;
+pub mod cst;
+pub mod hir;
+pub mod mir;

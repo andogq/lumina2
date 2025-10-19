@@ -9,6 +9,7 @@ use crate::{Ctx, Ident};
 
 pub use self::tok::Tok;
 
+pub mod lex2;
 pub mod tok;
 
 pub struct Lexer<'ctx, 'src, I>
@@ -245,12 +246,12 @@ impl<'src> TokenIter<'src> {
                     Tok::Comma
                 }
 
-                // [
+                // (
                 (State::Ready, Some('(')) => {
                     self.step_char();
                     Tok::LParen
                 }
-                // ]
+                // )
                 (State::Ready, Some(')')) => {
                     self.step_char();
                     Tok::RParen

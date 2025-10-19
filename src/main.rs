@@ -6,6 +6,7 @@ mod ir;
 mod ir2;
 mod lex;
 mod llvm;
+mod stages;
 mod tir;
 mod util;
 

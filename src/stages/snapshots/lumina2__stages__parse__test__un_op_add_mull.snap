@@ -1,0 +1,52 @@
+---
+source: src/stages/parse.rs
+expression: 123 + -321 * 999
+---
+Binary(
+    Binary {
+        lhs: Literal(
+            Integer(
+                IntegerLiteral(
+                    IntLit(
+                        123,
+                    ),
+                ),
+            ),
+        ),
+        op: Plus(
+            Plus,
+        ),
+        rhs: Binary(
+            Binary {
+                lhs: Unary(
+                    Unary {
+                        op: Negative(
+                            Minus,
+                        ),
+                        value: Literal(
+                            Integer(
+                                IntegerLiteral(
+                                    IntLit(
+                                        321,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    },
+                ),
+                op: Multiply(
+                    Asterisk,
+                ),
+                rhs: Literal(
+                    Integer(
+                        IntegerLiteral(
+                            IntLit(
+                                999,
+                            ),
+                        ),
+                    ),
+                ),
+            },
+        ),
+    },
+)

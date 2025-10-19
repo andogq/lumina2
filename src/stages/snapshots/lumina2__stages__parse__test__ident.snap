@@ -1,0 +1,11 @@
+---
+source: src/stages/parse.rs
+expression: some_ident
+---
+Variable(
+    Variable {
+        variable: Ident(
+            "some_ident",
+        ),
+    },
+)

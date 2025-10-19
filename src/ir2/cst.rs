@@ -1,14 +1,27 @@
-use crate::lex::{Tok, tok};
+use crate::lex::tok;
 
 pub use self::{expr::*, function::*, statement::*, util::*};
 
 /// Root node, representing a program.
+#[derive(Clone, Debug)]
 pub struct Program {
     /// All items contained within this program.
     pub items: Vec<Item>,
 }
 
+impl Program {
+    pub fn new() -> Self {
+        Self { items: Vec::new() }
+    }
+
+    pub fn add_function_declaration(&mut self, function_declaration: FunctionDeclaration) {
+        self.items
+            .push(Item::FunctionDeclaration(function_declaration))
+    }
+}
+
 /// A node which may appear at the top-level of a program.
+#[derive(Clone, Debug)]
 pub enum Item {
     FunctionDeclaration(FunctionDeclaration),
 }
@@ -23,6 +36,7 @@ mod function {
     ///     // Statements...
     /// }
     /// ```
+    #[derive(Clone, Debug)]
     pub struct FunctionDeclaration {
         pub tok_fn: tok::Fn,
         /// Name of the function.
@@ -41,6 +55,7 @@ mod function {
     /// ```
     /// param: ty
     /// ```
+    #[derive(Clone, Debug)]
     pub struct FunctionParameter {
         /// Name of the parameter.
         pub name: tok::Ident,
@@ -54,6 +69,7 @@ mod function {
     /// ```
     /// -> ty
     /// ```
+    #[derive(Clone, Debug)]
     pub struct FunctionReturnType {
         pub tok_thin_arrow: tok::ThinArrow,
         /// Return type.
@@ -62,6 +78,7 @@ mod function {
 }
 
 /// Block, containing a collection of [`Statement`]s.
+#[derive(Clone, Debug)]
 pub struct Block {
     pub tok_l_brace: tok::LBrace,
     /// Collection of statements.
@@ -73,6 +90,7 @@ mod statement {
     use super::*;
 
     /// A statement present within a [`Block`].
+    #[derive(Clone, Debug)]
     pub enum Statement {
         Let(LetStatement),
         Return(ReturnStatement),
@@ -80,6 +98,7 @@ mod statement {
     }
 
     /// A `let` statement creates a new binding (`name`), and assigns `value` to it.
+    #[derive(Clone, Debug)]
     pub struct LetStatement {
         pub tok_let: tok::Let,
         /// Name of the variable.
@@ -91,6 +110,7 @@ mod statement {
     }
 
     /// A `return` statement returns `value`.
+    #[derive(Clone, Debug)]
     pub struct ReturnStatement {
         pub tok_return: tok::Return,
         /// Value that is being returned.
@@ -99,11 +119,28 @@ mod statement {
     }
 
     /// An in-place expression, followed by an optional semicolon.
+    #[derive(Clone, Debug)]
     pub struct ExprStatement {
         /// Expression.
         pub expr: Expr,
         /// Can be optionally terminated by semicolon.
         pub tok_semicolon: Option<tok::SemiColon>,
+    }
+
+    impl From<LetStatement> for Statement {
+        fn from(value: LetStatement) -> Self {
+            Self::Let(value)
+        }
+    }
+    impl From<ReturnStatement> for Statement {
+        fn from(value: ReturnStatement) -> Self {
+            Self::Return(value)
+        }
+    }
+    impl From<ExprStatement> for Statement {
+        fn from(value: ExprStatement) -> Self {
+            Self::Expr(value)
+        }
     }
 }
 
@@ -111,6 +148,7 @@ mod expr {
     use super::*;
 
     /// All possible expressions.
+    #[derive(Clone, Debug)]
     pub enum Expr {
         Assign(Assign),
         Binary(Binary),
@@ -119,6 +157,7 @@ mod expr {
         Literal(Literal),
         Paren(Paren),
         Call(Call),
+        Block(Block),
         Variable(Variable),
     }
 
@@ -127,15 +166,17 @@ mod expr {
     /// ```
     /// some_var = 1 + 2
     /// ```
+    #[derive(Clone, Debug)]
     pub struct Assign {
         /// Variable being assigned to.
-        pub variable: tok::Ident,
+        pub assignee: Box<Expr>,
         pub tok_eq: tok::Eq,
         /// Value of the assignment.
         pub value: Box<Expr>,
     }
 
     /// Binary operation.
+    #[derive(Clone, Debug)]
     pub struct Binary {
         /// Left hand side of the operation.
         pub lhs: Box<Expr>,
@@ -146,6 +187,7 @@ mod expr {
     }
 
     /// All possible binary operations.
+    #[derive(Clone, Debug)]
     pub enum BinaryOp {
         Plus(tok::Plus),
         Minus(tok::Minus),
@@ -167,6 +209,7 @@ mod expr {
     }
 
     /// Unary operation.
+    #[derive(Clone, Debug)]
     pub struct Unary {
         /// Unary operation.
         pub op: UnaryOp,
@@ -175,6 +218,7 @@ mod expr {
     }
 
     /// All possible unary operations.
+    #[derive(Clone, Debug)]
     pub enum UnaryOp {
         Not(tok::Bang),
         Negative(tok::Minus),
@@ -183,6 +227,7 @@ mod expr {
     }
 
     /// An `if` statement
+    #[derive(Clone, Debug)]
     pub struct If {
         pub tok_if: tok::If,
         /// Condition that is being checked.
@@ -194,6 +239,7 @@ mod expr {
     }
 
     /// Optional trailing section of an `if` statement.
+    #[derive(Clone, Debug)]
     pub struct IfTrailer {
         pub tok_else: tok::Else,
         /// Can be followed by `if` with another condition, or a final block.
@@ -201,12 +247,25 @@ mod expr {
     }
 
     /// A nested [`If`] statement, or a [`Block`]. Used to terminate in [`IfTrailer`].
+    #[derive(Clone, Debug)]
     pub enum IfOrBlock {
         If(Box<If>),
         Block(Block),
     }
 
+    impl From<If> for IfOrBlock {
+        fn from(value: If) -> Self {
+            Self::If(Box::new(value))
+        }
+    }
+    impl From<Block> for IfOrBlock {
+        fn from(value: Block) -> Self {
+            Self::Block(value)
+        }
+    }
+
     /// Any kind of literal.
+    #[derive(Clone, Debug)]
     pub enum Literal {
         /// An integer.
         Integer(IntegerLiteral),
@@ -215,15 +274,30 @@ mod expr {
     }
 
     /// An integer literal.
-    pub struct IntegerLiteral(tok::IntLit);
+    #[derive(Clone, Debug)]
+    pub struct IntegerLiteral(pub tok::IntLit);
 
     /// A boolean literal.
+    #[derive(Clone, Debug)]
     pub enum BooleanLiteral {
         True(tok::True),
         False(tok::False),
     }
 
+    impl From<IntegerLiteral> for Literal {
+        fn from(value: IntegerLiteral) -> Self {
+            Self::Integer(value)
+        }
+    }
+
+    impl From<BooleanLiteral> for Literal {
+        fn from(value: BooleanLiteral) -> Self {
+            Self::Boolean(value)
+        }
+    }
+
     /// An [`Expr`] wrapped in parentheses.
+    #[derive(Clone, Debug)]
     pub struct Paren {
         pub tok_l_paren: tok::LParen,
         /// Inner expression.
@@ -232,6 +306,7 @@ mod expr {
     }
 
     /// Call expression.
+    #[derive(Clone, Debug)]
     pub struct Call {
         /// Callee of the function.
         pub callee: Box<Expr>,
@@ -242,16 +317,107 @@ mod expr {
     }
 
     /// Variable reference.
+    #[derive(Clone, Debug)]
     pub struct Variable {
         /// Variable binding.
         pub variable: tok::Ident,
+    }
+
+    impl From<Assign> for Expr {
+        fn from(value: Assign) -> Self {
+            Self::Assign(value)
+        }
+    }
+    impl From<Binary> for Expr {
+        fn from(value: Binary) -> Self {
+            Self::Binary(value)
+        }
+    }
+    impl From<Unary> for Expr {
+        fn from(value: Unary) -> Self {
+            Self::Unary(value)
+        }
+    }
+    impl From<If> for Expr {
+        fn from(value: If) -> Self {
+            Self::If(value)
+        }
+    }
+    impl From<Literal> for Expr {
+        fn from(value: Literal) -> Self {
+            Self::Literal(value)
+        }
+    }
+    impl From<Paren> for Expr {
+        fn from(value: Paren) -> Self {
+            Self::Paren(value)
+        }
+    }
+    impl From<Call> for Expr {
+        fn from(value: Call) -> Self {
+            Self::Call(value)
+        }
+    }
+    impl From<Block> for Expr {
+        fn from(value: Block) -> Self {
+            Self::Block(value)
+        }
+    }
+    impl From<Variable> for Expr {
+        fn from(value: Variable) -> Self {
+            Self::Variable(value)
+        }
     }
 }
 
 mod util {
     /// A punctuated list, with optional trailing punctuation.
+    #[derive(Clone, Debug)]
     pub struct PunctuatedList<T, P> {
         pub items: Vec<T>,
         pub punctuation: Vec<P>,
+    }
+
+    impl<T, P> PunctuatedList<T, P> {
+        /// Create an empty punctuated list.
+        pub fn new() -> Self {
+            Self {
+                items: Vec::new(),
+                punctuation: Vec::new(),
+            }
+        }
+
+        /// Add an item to the list. Will return an error if not expecting an item.
+        pub fn add_item(&mut self, item: T) -> Result<(), PunctuatedListError> {
+            if !self.expecting_item() {
+                return Err(PunctuatedListError::ExpectedPunctuation);
+            }
+
+            self.items.push(item);
+
+            Ok(())
+        }
+
+        /// Add a punctuation to the list. Will return an error if not expecting a punctuation.
+        pub fn add_punctuation(&mut self, punctuation: P) -> Result<(), PunctuatedListError> {
+            if self.expecting_item() {
+                return Err(PunctuatedListError::ExpectedItem);
+            }
+
+            self.punctuation.push(punctuation);
+
+            Ok(())
+        }
+
+        /// Determine if ready for an item.
+        fn expecting_item(&self) -> bool {
+            self.items.len() == self.punctuation.len()
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    pub enum PunctuatedListError {
+        ExpectedItem,
+        ExpectedPunctuation,
     }
 }

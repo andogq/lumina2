@@ -1,0 +1,20 @@
+---
+source: src/stages/parse.rs
+expression: "-123"
+---
+Unary(
+    Unary {
+        op: Negative(
+            Minus,
+        ),
+        value: Literal(
+            Integer(
+                IntegerLiteral(
+                    IntLit(
+                        123,
+                    ),
+                ),
+            ),
+        ),
+    },
+)
