@@ -239,6 +239,16 @@ mod test {
     }
 
     #[rstest]
+    #[case("assign_simple", "a = 1 + 2")]
+    fn lower_assign(
+        #[case] name: &str,
+        mut builder: AstBuilder<'static>,
+        #[case] source: &'static str,
+    ) {
+        assert_debug_snapshot!(name, builder.lower_assign(&parse_expr(source)), source);
+    }
+
+    #[rstest]
     #[case("binary_arithmetic", "1 + 2")]
     #[case("binary_logical", "true && false")]
     #[case("binary_binary", "5 & 2")]
