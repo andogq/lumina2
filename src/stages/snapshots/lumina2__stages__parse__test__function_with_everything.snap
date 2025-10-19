@@ -1,0 +1,102 @@
+---
+source: src/stages/parse.rs
+expression: "fn some_func(a: u32, b: bool) -> bool { let a = 1; 1 + 2; }"
+---
+FunctionDeclaration {
+    tok_fn: Fn,
+    name: Ident(
+        "some_func",
+    ),
+    tok_lparen: LParen,
+    params: PunctuatedList {
+        items: [
+            FunctionParameter {
+                name: Ident(
+                    "a",
+                ),
+                tok_colon: Colon,
+                ty: Ident(
+                    "u32",
+                ),
+            },
+            FunctionParameter {
+                name: Ident(
+                    "b",
+                ),
+                tok_colon: Colon,
+                ty: Ident(
+                    "bool",
+                ),
+            },
+        ],
+        punctuation: [
+            Comma,
+        ],
+    },
+    tok_rparan: RParen,
+    return_ty: Some(
+        FunctionReturnType {
+            tok_thin_arrow: ThinArrow,
+            ty: Ident(
+                "bool",
+            ),
+        },
+    ),
+    body: Block {
+        tok_l_brace: LBrace,
+        statements: [
+            Let(
+                LetStatement {
+                    tok_let: Let,
+                    variable: Ident(
+                        "a",
+                    ),
+                    tok_eq: Eq,
+                    value: Literal(
+                        Integer(
+                            IntegerLiteral(
+                                IntLit(
+                                    1,
+                                ),
+                            ),
+                        ),
+                    ),
+                    tok_semicolon: SemiColon,
+                },
+            ),
+            Expr(
+                ExprStatement {
+                    expr: Binary(
+                        Binary {
+                            lhs: Literal(
+                                Integer(
+                                    IntegerLiteral(
+                                        IntLit(
+                                            1,
+                                        ),
+                                    ),
+                                ),
+                            ),
+                            op: Plus(
+                                Plus,
+                            ),
+                            rhs: Literal(
+                                Integer(
+                                    IntegerLiteral(
+                                        IntLit(
+                                            2,
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        },
+                    ),
+                    tok_semicolon: Some(
+                        SemiColon,
+                    ),
+                },
+            ),
+        ],
+        tok_r_brace: RBrace,
+    },
+}

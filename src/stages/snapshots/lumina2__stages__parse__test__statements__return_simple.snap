@@ -1,0 +1,17 @@
+---
+source: src/stages/parse.rs
+expression: return 1;
+---
+ReturnStatement {
+    tok_return: Return,
+    value: Literal(
+        Integer(
+            IntegerLiteral(
+                IntLit(
+                    1,
+                ),
+            ),
+        ),
+    ),
+    tok_semicolon: SemiColon,
+}

@@ -235,7 +235,7 @@ impl<'src> Lexer<'src> {
 
             char if char.is_alphabetic() || char == '_' => {
                 let ident =
-                    std::iter::from_fn(|| self.chars.next_if(|c| c.is_alphabetic() || *c == '_'))
+                    std::iter::from_fn(|| self.chars.next_if(|c| c.is_alphanumeric() || *c == '_'))
                         .collect::<String>();
 
                 match ident.as_str() {
@@ -301,6 +301,7 @@ mod test {
     #[case("return", &[Tok::Return, Tok::Eof])]
     #[case("if", &[Tok::If, Tok::Eof])]
     #[case("some_ident", &[Tok::Ident("some_ident".to_string()), Tok::Eof])]
+    #[case("u32", &[Tok::Ident("u32".to_string()), Tok::Eof])]
     #[case("123", &[Tok::IntLit(123), Tok::Eof])]
     fn single_token(#[case] source: &str, #[case] toks: &[Tok]) {
         assert_eq!(Lexer::new(source).collect(), toks);

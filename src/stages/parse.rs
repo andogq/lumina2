@@ -550,6 +550,77 @@ mod test {
         }
     }
 
+    #[rstest]
+    #[case("block_empty", "{ }")]
+    #[case("block_expr", "{ 1 }")]
+    #[case("block_statements", "{ let a = 1; let b = 1; }")]
+    #[case("block_statements_and_expr", "{ let a = 1; let b = 1; 1 }")]
+    fn block(#[case] name: &str, #[case] source: &str) {
+        test_with_lexer(source, |lexer| {
+            let block = cst::Block::parse(lexer);
+            assert_debug_snapshot!(name, block, source);
+        });
+    }
+
+    mod statements {
+        use super::*;
+
+        #[rstest]
+        #[case("let_simple", "let a = 1;")]
+        fn let_statement(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let let_statement = cst::LetStatement::parse(lexer);
+                assert_debug_snapshot!(name, let_statement, source);
+            });
+        }
+
+        #[rstest]
+        #[case("return_simple", "return 1;")]
+        fn return_statement(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let return_statement = cst::ReturnStatement::parse(lexer);
+                assert_debug_snapshot!(name, return_statement, source);
+            });
+        }
+
+        #[rstest]
+        #[case("expr_no_semicolon", "1")]
+        #[case("expr_semicolon", "1;")]
+        fn expr_statement(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let expr_statement = cst::ExprStatement::parse(lexer);
+                assert_debug_snapshot!(name, expr_statement, source);
+            });
+        }
+
+        #[rstest]
+        #[case("statements_let", "let a = 1;")]
+        #[case("statements_return", "return 1;")]
+        #[case("statements_expr", "1")]
+        fn statements(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let statement = cst::Statement::parse(lexer);
+                assert_debug_snapshot!(name, statement, source);
+            });
+        }
+    }
+
+    #[rstest]
+    #[case("function_basic", "fn some_func() {}")]
+    #[case("function_with_params", "fn some_func(a: u32, b: bool) {}")]
+    #[case("function_with_return", "fn some_func() -> u32 {}")]
+    #[case("function_with_body", "fn some_func() { let a = 1; 1 + 2; }")]
+    #[case(
+        "function_with_everything",
+        "fn some_func(a: u32, b: bool) -> bool { let a = 1; 1 + 2; }"
+    )]
+    fn function(#[case] name: &str, #[case] source: &str) {
+        test_with_lexer(source, |lexer| {
+            let statement = cst::FunctionDeclaration::parse(lexer);
+            assert_debug_snapshot!(name, statement, source);
+        });
+    }
+
     mod util {
         use super::*;
 

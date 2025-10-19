@@ -1,0 +1,23 @@
+---
+source: src/stages/parse.rs
+expression: let a = 1;
+---
+Let(
+    LetStatement {
+        tok_let: Let,
+        variable: Ident(
+            "a",
+        ),
+        tok_eq: Eq,
+        value: Literal(
+            Integer(
+                IntegerLiteral(
+                    IntLit(
+                        1,
+                    ),
+                ),
+            ),
+        ),
+        tok_semicolon: SemiColon,
+    },
+)

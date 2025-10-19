@@ -1,0 +1,22 @@
+---
+source: src/stages/parse.rs
+expression: "fn some_func() {}"
+---
+FunctionDeclaration {
+    tok_fn: Fn,
+    name: Ident(
+        "some_func",
+    ),
+    tok_lparen: LParen,
+    params: PunctuatedList {
+        items: [],
+        punctuation: [],
+    },
+    tok_rparan: RParen,
+    return_ty: None,
+    body: Block {
+        tok_l_brace: LBrace,
+        statements: [],
+        tok_r_brace: RBrace,
+    },
+}
