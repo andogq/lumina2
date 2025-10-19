@@ -3,20 +3,30 @@ use crate::{
     lex::tok,
 };
 
-struct AstBuilder(Ast);
+struct AstBuilder<'cst> {
+    cst: &'cst cst::Program,
+    ast: Ast,
+}
 
-impl AstBuilder {
-    pub fn new() -> Self {
-        Self(Ast {
-            function_declarations: Vec::new(),
-            blocks: Vec::new(),
-            expressions: Vec::new(),
-            strings: StringPool::new(),
-        })
+impl<'cst> AstBuilder<'cst> {
+    pub fn new(cst: &'cst cst::Program) -> Self {
+        Self {
+            cst,
+            ast: Ast {
+                function_declarations: Vec::new(),
+                blocks: Vec::new(),
+                expressions: Vec::new(),
+                strings: StringPool::new(),
+            },
+        }
     }
 
-    pub fn build(self) -> Ast {
-        self.0
+    pub fn build(mut self) -> Ast {
+        for item in &self.cst.items {
+            self.lower_item(item);
+        }
+
+        self.ast
     }
 
     fn lower_item(&mut self, item: &cst::Item) {
@@ -44,7 +54,7 @@ impl AstBuilder {
                 .map(|ty| self.intern(&ty.ty)),
             body: self.lower_block(&function_declaration.body),
         };
-        self.0.function_declarations.push(function_declaration);
+        self.ast.function_declarations.push(function_declaration);
     }
 
     fn lower_block(&mut self, block: &cst::Block) -> BlockId {
@@ -80,8 +90,8 @@ impl AstBuilder {
             }
         }
 
-        let id = BlockId::new(self.0.blocks.len());
-        self.0.blocks.push(Block {
+        let id = BlockId::new(self.ast.blocks.len());
+        self.ast.blocks.push(Block {
             statements,
             expression,
         });
@@ -156,22 +166,16 @@ impl AstBuilder {
             }),
         };
 
-        let id = ExprId::new(self.0.expressions.len());
-        self.0.expressions.push(expr);
+        let id = ExprId::new(self.ast.expressions.len());
+        self.ast.expressions.push(expr);
         id
     }
 
     fn intern(&mut self, ident: &tok::Ident) -> StringId {
-        self.0.strings.intern(&ident.0)
+        self.ast.strings.intern(&ident.0)
     }
 }
 
 pub fn build_ast(cst: &cst::Program) -> Ast {
-    let mut ast_builder = AstBuilder::new();
-
-    for item in &cst.items {
-        ast_builder.lower_item(item);
-    }
-
-    ast_builder.build()
+    AstBuilder::new(cst).build()
 }
