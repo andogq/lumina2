@@ -152,6 +152,47 @@ mod expr {
     pub struct Variable {
         pub variable: StringId,
     }
+
+    impl From<Assign> for Expr {
+        fn from(value: Assign) -> Self {
+            Self::Assign(value)
+        }
+    }
+    impl From<Binary> for Expr {
+        fn from(value: Binary) -> Self {
+            Self::Binary(value)
+        }
+    }
+    impl From<Unary> for Expr {
+        fn from(value: Unary) -> Self {
+            Self::Unary(value)
+        }
+    }
+    impl From<If> for Expr {
+        fn from(value: If) -> Self {
+            Self::If(value)
+        }
+    }
+    impl From<Literal> for Expr {
+        fn from(value: Literal) -> Self {
+            Self::Literal(value)
+        }
+    }
+    impl From<Call> for Expr {
+        fn from(value: Call) -> Self {
+            Self::Call(value)
+        }
+    }
+    impl From<BlockId> for Expr {
+        fn from(value: BlockId) -> Self {
+            Self::Block(value)
+        }
+    }
+    impl From<Variable> for Expr {
+        fn from(value: Variable) -> Self {
+            Self::Variable(value)
+        }
+    }
 }
 
 mod string_pool {

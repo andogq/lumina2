@@ -100,75 +100,97 @@ impl<'cst> AstBuilder<'cst> {
 
     fn lower_expr(&mut self, expr: &cst::Expr) -> ExprId {
         let expr = match expr {
-            cst::Expr::Assign(assign) => Expr::Assign(Assign {
-                variable: self.lower_expr(&assign.assignee),
-                value: self.lower_expr(&assign.value),
-            }),
-            cst::Expr::Binary(binary) => Expr::Binary(Binary {
-                lhs: self.lower_expr(&binary.lhs),
-                op: binary.op.clone(),
-                rhs: self.lower_expr(&binary.rhs),
-            }),
-            cst::Expr::Unary(unary) => Expr::Unary(Unary {
-                op: unary.op.clone(),
-                value: self.lower_expr(&unary.value),
-            }),
-            cst::Expr::If(if_expr) => {
-                let mut conditions = Vec::new();
-
-                let otherwise = {
-                    let mut if_expr = if_expr;
-                    loop {
-                        conditions.push((
-                            self.lower_expr(&if_expr.condition),
-                            self.lower_block(&if_expr.then),
-                        ));
-
-                        let Some(trailer) = &if_expr.trailer else {
-                            break None;
-                        };
-                        match &trailer.if_or_block {
-                            cst::IfOrBlock::If(inner) => if_expr = inner,
-                            cst::IfOrBlock::Block(block) => {
-                                break Some(block);
-                            }
-                        }
-                    }
-                };
-
-                let otherwise = otherwise.map(|block| self.lower_block(block));
-
-                Expr::If(If {
-                    conditions,
-                    otherwise,
-                })
-            }
-            cst::Expr::Literal(literal) => Expr::Literal(match literal {
-                cst::Literal::Integer(integer_literal) => {
-                    Literal::Integer(integer_literal.as_usize())
-                }
-                cst::Literal::Boolean(boolean_literal) => {
-                    Literal::Boolean(boolean_literal.as_bool())
-                }
-            }),
+            cst::Expr::Assign(assign) => self.lower_assign(assign).into(),
+            cst::Expr::Binary(binary) => self.lower_binary(binary).into(),
+            cst::Expr::Unary(unary) => self.lower_unary(unary).into(),
+            cst::Expr::If(if_expr) => self.lower_if(if_expr).into(),
+            cst::Expr::Literal(literal) => self.lower_literal(literal).into(),
             cst::Expr::Paren(paren) => return self.lower_expr(&paren.expr),
-            cst::Expr::Call(call) => Expr::Call(Call {
-                callee: self.lower_expr(&call.callee),
-                arguments: call
-                    .arguments
-                    .iter_items()
-                    .map(|arg| self.lower_expr(arg))
-                    .collect(),
-            }),
-            cst::Expr::Block(block) => Expr::Block(self.lower_block(block)),
-            cst::Expr::Variable(variable) => Expr::Variable(Variable {
-                variable: self.intern(&variable.variable),
-            }),
+            cst::Expr::Call(call) => self.lower_call(call).into(),
+            cst::Expr::Block(block) => self.lower_block(block).into(),
+            cst::Expr::Variable(variable) => self.lower_variable(variable).into(),
         };
 
         let id = ExprId::new(self.ast.expressions.len());
         self.ast.expressions.push(expr);
         id
+    }
+
+    fn lower_assign(&mut self, assign: &cst::Assign) -> Assign {
+        Assign {
+            variable: self.lower_expr(&assign.assignee),
+            value: self.lower_expr(&assign.value),
+        }
+    }
+
+    fn lower_binary(&mut self, binary: &cst::Binary) -> Binary {
+        Binary {
+            lhs: self.lower_expr(&binary.lhs),
+            op: binary.op.clone(),
+            rhs: self.lower_expr(&binary.rhs),
+        }
+    }
+
+    fn lower_unary(&mut self, unary: &cst::Unary) -> Unary {
+        Unary {
+            op: unary.op.clone(),
+            value: self.lower_expr(&unary.value),
+        }
+    }
+
+    fn lower_if(&mut self, if_expr: &cst::If) -> If {
+        let mut conditions = Vec::new();
+
+        let otherwise = {
+            let mut if_expr = if_expr;
+            loop {
+                conditions.push((
+                    self.lower_expr(&if_expr.condition),
+                    self.lower_block(&if_expr.then),
+                ));
+
+                let Some(trailer) = &if_expr.trailer else {
+                    break None;
+                };
+                match &trailer.if_or_block {
+                    cst::IfOrBlock::If(inner) => if_expr = inner,
+                    cst::IfOrBlock::Block(block) => {
+                        break Some(block);
+                    }
+                }
+            }
+        };
+
+        let otherwise = otherwise.map(|block| self.lower_block(block));
+
+        If {
+            conditions,
+            otherwise,
+        }
+    }
+
+    fn lower_literal(&mut self, literal: &cst::Literal) -> Literal {
+        match literal {
+            cst::Literal::Integer(integer_literal) => Literal::Integer(integer_literal.as_usize()),
+            cst::Literal::Boolean(boolean_literal) => Literal::Boolean(boolean_literal.as_bool()),
+        }
+    }
+
+    fn lower_call(&mut self, call: &cst::Call) -> Call {
+        Call {
+            callee: self.lower_expr(&call.callee),
+            arguments: call
+                .arguments
+                .iter_items()
+                .map(|arg| self.lower_expr(arg))
+                .collect(),
+        }
+    }
+
+    fn lower_variable(&mut self, variable: &cst::Variable) -> Variable {
+        Variable {
+            variable: self.intern(&variable.variable),
+        }
     }
 
     fn intern(&mut self, ident: &tok::Ident) -> StringId {
