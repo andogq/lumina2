@@ -11,6 +11,16 @@ pub struct Ast {
     pub strings: StringPool,
 }
 
+impl Ast {
+    pub fn get_block(&self, block: BlockId) -> &Block {
+        &self.blocks[block.0]
+    }
+
+    pub fn get_expr(&self, expr: ExprId) -> &Expr {
+        &self.expressions[expr.0]
+    }
+}
+
 mod function {
     use super::*;
 
@@ -31,7 +41,7 @@ mod block {
     use super::*;
 
     #[derive(Clone, Copy, Debug)]
-    pub struct BlockId(usize);
+    pub struct BlockId(pub(super) usize);
 
     impl BlockId {
         pub fn new(id: usize) -> Self {
@@ -88,7 +98,7 @@ mod expr {
     use super::*;
 
     #[derive(Clone, Copy, Debug)]
-    pub struct ExprId(usize);
+    pub struct ExprId(pub(super) usize);
 
     impl ExprId {
         pub fn new(id: usize) -> Self {
@@ -131,6 +141,7 @@ mod expr {
     pub enum Literal {
         Integer(usize),
         Boolean(bool),
+        Unit,
     }
 
     pub struct Call {
@@ -146,7 +157,7 @@ mod expr {
 mod string_pool {
     use std::collections::HashMap;
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct StringId(usize);
 
     pub struct StringPool {

@@ -1,21 +1,21 @@
-use std::collections::HashMap;
-
-use crate::{
-    ir2::ast::{StringId, StringPool},
-    tir::BindingId,
-};
+use crate::ir2::ast::StringId;
 
 pub use self::{bindings::*, block::*, expr::*, functions::*, statement::*, type_refs::*};
 
 pub struct Hir {
-    pub functions: Functions,
-
+    pub functions: Vec<Function>,
     pub blocks: Vec<Block>,
     pub exprs: Vec<Expr>,
+}
 
-    pub bindings: Bindings,
-    pub strings: StringPool,
-    pub type_refs: TypeRefs,
+impl Hir {
+    pub fn get_expr(&self, expr: ExprId) -> &Expr {
+        &self.exprs[expr.0]
+    }
+
+    pub fn get_block(&self, block: BlockId) -> &Block {
+        &self.blocks[block.0]
+    }
 }
 
 mod functions {
@@ -23,14 +23,15 @@ mod functions {
 
     pub struct Function {
         pub parameters: Vec<(BindingId, TypeRefId)>,
+        pub entry: BlockId,
     }
 
     #[derive(Clone, Copy, Debug)]
     pub struct FunctionId(usize);
-
-    pub struct Functions {
-        lookup: HashMap<BindingId, FunctionId>,
-        functions: Vec<Function>,
+    impl FunctionId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
     }
 }
 
@@ -38,11 +39,16 @@ mod block {
     use super::*;
 
     #[derive(Clone, Copy, Debug)]
-    pub struct BlockId(usize);
+    pub struct BlockId(pub(super) usize);
+    impl BlockId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
+    }
 
     pub struct Block {
-        statements: Vec<Statement>,
-        expr: Option<ExprId>,
+        pub statements: Vec<Statement>,
+        pub expr: ExprId,
     }
 }
 
@@ -75,7 +81,12 @@ mod expr {
     use super::*;
 
     #[derive(Clone, Copy, Debug)]
-    pub struct ExprId(usize);
+    pub struct ExprId(pub(super) usize);
+    impl ExprId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
+    }
 
     pub enum Expr {
         Assign(Assign),
@@ -84,11 +95,12 @@ mod expr {
         Switch(Switch),
         Literal(Literal),
         Call(Call),
+        Block(BlockId),
         Variable(Variable),
     }
 
     pub struct Assign {
-        pub variable: BindingId,
+        pub variable: ExprId,
         pub value: ExprId,
     }
 
@@ -112,6 +124,7 @@ mod expr {
     pub enum Literal {
         Integer(usize),
         Boolean(bool),
+        Unit,
     }
 
     pub struct Call {
@@ -127,17 +140,17 @@ mod expr {
 mod type_refs {
     use super::*;
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct TypeRefId(usize);
-
-    pub struct TypeRefs {
-        lookup: HashMap<StringId, TypeRefId>,
-        types: Vec<TypeRef>,
+    impl TypeRefId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
     }
 
     pub struct TypeRef {
-        name: StringId,
-        ty: Option<Type>,
+        pub name: StringId,
+        pub ty: Option<Type>,
     }
 
     pub enum Type {
@@ -149,13 +162,11 @@ mod type_refs {
 }
 
 mod bindings {
-    use super::*;
-
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct BindingId(usize);
-
-    pub struct Bindings {
-        lookup: HashMap<StringId, BindingId>,
-        bindings: Vec<StringId>,
+    impl BindingId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
     }
 }
