@@ -10,7 +10,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { items: Vec::new() }
     }
 
@@ -87,6 +87,8 @@ pub struct Block {
 }
 
 mod statement {
+    use crate::enum_conversion;
+
     use super::*;
 
     /// A statement present within a [`Block`].
@@ -127,24 +129,17 @@ mod statement {
         pub tok_semicolon: Option<tok::SemiColon>,
     }
 
-    impl From<LetStatement> for Statement {
-        fn from(value: LetStatement) -> Self {
-            Self::Let(value)
-        }
-    }
-    impl From<ReturnStatement> for Statement {
-        fn from(value: ReturnStatement) -> Self {
-            Self::Return(value)
-        }
-    }
-    impl From<ExprStatement> for Statement {
-        fn from(value: ExprStatement) -> Self {
-            Self::Expr(value)
-        }
+    enum_conversion! {
+        [Statement]
+        Let: LetStatement,
+        Return: ReturnStatement,
+        Expr: ExprStatement,
     }
 }
 
 mod expr {
+    use crate::enum_conversion;
+
     use super::*;
 
     /// All possible expressions.
@@ -299,16 +294,10 @@ mod expr {
         }
     }
 
-    impl From<IntegerLiteral> for Literal {
-        fn from(value: IntegerLiteral) -> Self {
-            Self::Integer(value)
-        }
-    }
-
-    impl From<BooleanLiteral> for Literal {
-        fn from(value: BooleanLiteral) -> Self {
-            Self::Boolean(value)
-        }
+    enum_conversion! {
+        [Literal]
+        Integer: IntegerLiteral,
+        Boolean: BooleanLiteral,
     }
 
     /// An [`Expr`] wrapped in parentheses.
@@ -338,50 +327,17 @@ mod expr {
         pub variable: tok::Ident,
     }
 
-    impl From<Assign> for Expr {
-        fn from(value: Assign) -> Self {
-            Self::Assign(value)
-        }
-    }
-    impl From<Binary> for Expr {
-        fn from(value: Binary) -> Self {
-            Self::Binary(value)
-        }
-    }
-    impl From<Unary> for Expr {
-        fn from(value: Unary) -> Self {
-            Self::Unary(value)
-        }
-    }
-    impl From<If> for Expr {
-        fn from(value: If) -> Self {
-            Self::If(value)
-        }
-    }
-    impl From<Literal> for Expr {
-        fn from(value: Literal) -> Self {
-            Self::Literal(value)
-        }
-    }
-    impl From<Paren> for Expr {
-        fn from(value: Paren) -> Self {
-            Self::Paren(value)
-        }
-    }
-    impl From<Call> for Expr {
-        fn from(value: Call) -> Self {
-            Self::Call(value)
-        }
-    }
-    impl From<Block> for Expr {
-        fn from(value: Block) -> Self {
-            Self::Block(value)
-        }
-    }
-    impl From<Variable> for Expr {
-        fn from(value: Variable) -> Self {
-            Self::Variable(value)
-        }
+    enum_conversion! {
+        [Expr]
+        Assign: Assign,
+        Binary: Binary,
+        Unary: Unary,
+        If: If,
+        Literal: Literal,
+        Paren: Paren,
+        Call: Call,
+        Block: Block,
+        Variable: Variable,
     }
 }
 

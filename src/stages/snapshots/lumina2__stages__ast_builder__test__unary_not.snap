@@ -1,0 +1,12 @@
+---
+source: src/stages/ast_builder.rs
+expression: "!true"
+---
+Unary {
+    op: Not(
+        Bang,
+    ),
+    value: ExprId(
+        0,
+    ),
+}

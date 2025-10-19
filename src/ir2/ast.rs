@@ -2,6 +2,7 @@ use crate::ir2::cst::{BinaryOp, UnaryOp};
 
 pub use self::{block::*, expr::*, function::*, statement::*, string_pool::*};
 
+#[derive(Clone, Debug)]
 pub struct Ast {
     pub function_declarations: Vec<FunctionDeclaration>,
 
@@ -24,6 +25,7 @@ impl Ast {
 mod function {
     use super::*;
 
+    #[derive(Clone, Debug)]
     pub struct FunctionDeclaration {
         pub name: StringId,
         pub params: Vec<FunctionParameter>,
@@ -31,6 +33,7 @@ mod function {
         pub body: BlockId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct FunctionParameter {
         pub name: StringId,
         pub ty: StringId,
@@ -49,6 +52,7 @@ mod block {
         }
     }
 
+    #[derive(Clone, Debug)]
     pub struct Block {
         pub statements: Vec<Statement>,
         pub expression: Option<ExprId>,
@@ -58,21 +62,25 @@ mod block {
 mod statement {
     use super::*;
 
+    #[derive(Clone, Debug)]
     pub enum Statement {
         Let(LetStatement),
         Return(ReturnStatement),
         Expr(ExprStatement),
     }
 
+    #[derive(Clone, Debug)]
     pub struct LetStatement {
         pub variable: StringId,
         pub value: ExprId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct ReturnStatement {
         pub expr: ExprId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct ExprStatement {
         pub expr: ExprId,
     }
@@ -95,6 +103,8 @@ mod statement {
 }
 
 mod expr {
+    use crate::enum_conversion;
+
     use super::*;
 
     #[derive(Clone, Copy, Debug)]
@@ -106,6 +116,7 @@ mod expr {
         }
     }
 
+    #[derive(Clone, Debug)]
     pub enum Expr {
         Assign(Assign),
         Binary(Binary),
@@ -117,81 +128,59 @@ mod expr {
         Variable(Variable),
     }
 
+    #[derive(Clone, Debug)]
     pub struct Assign {
         pub variable: ExprId,
         pub value: ExprId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Binary {
         pub lhs: ExprId,
         pub op: BinaryOp,
         pub rhs: ExprId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Unary {
         pub op: UnaryOp,
         pub value: ExprId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct If {
         pub conditions: Vec<(ExprId, BlockId)>,
         pub otherwise: Option<BlockId>,
     }
 
+    #[derive(Clone, Debug)]
     pub enum Literal {
         Integer(usize),
         Boolean(bool),
         Unit,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Call {
         pub callee: ExprId,
         pub arguments: Vec<ExprId>,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Variable {
         pub variable: StringId,
     }
 
-    impl From<Assign> for Expr {
-        fn from(value: Assign) -> Self {
-            Self::Assign(value)
-        }
-    }
-    impl From<Binary> for Expr {
-        fn from(value: Binary) -> Self {
-            Self::Binary(value)
-        }
-    }
-    impl From<Unary> for Expr {
-        fn from(value: Unary) -> Self {
-            Self::Unary(value)
-        }
-    }
-    impl From<If> for Expr {
-        fn from(value: If) -> Self {
-            Self::If(value)
-        }
-    }
-    impl From<Literal> for Expr {
-        fn from(value: Literal) -> Self {
-            Self::Literal(value)
-        }
-    }
-    impl From<Call> for Expr {
-        fn from(value: Call) -> Self {
-            Self::Call(value)
-        }
-    }
-    impl From<BlockId> for Expr {
-        fn from(value: BlockId) -> Self {
-            Self::Block(value)
-        }
-    }
-    impl From<Variable> for Expr {
-        fn from(value: Variable) -> Self {
-            Self::Variable(value)
-        }
+    enum_conversion! {
+        [Expr]
+        Assign: Assign,
+        Binary: Binary,
+        Unary: Unary,
+        If: If,
+        Literal: Literal,
+        Call: Call,
+        Block: BlockId,
+        Variable: Variable,
     }
 }
 
@@ -201,6 +190,7 @@ mod string_pool {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct StringId(usize);
 
+    #[derive(Clone, Debug)]
     pub struct StringPool {
         lookup: HashMap<String, StringId>,
         strings: Vec<String>,

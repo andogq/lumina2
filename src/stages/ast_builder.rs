@@ -201,3 +201,111 @@ impl<'cst> AstBuilder<'cst> {
 pub fn build_ast(cst: &cst::Program) -> Ast {
     AstBuilder::new(cst).build()
 }
+
+#[cfg(test)]
+mod test {
+    use std::fmt::Debug;
+
+    use crate::{lex::lex2::Lexer, stages::parse::Parse};
+
+    use super::*;
+
+    use insta::*;
+    use rstest::*;
+
+    #[fixture]
+    fn builder() -> AstBuilder<'static> {
+        static CST: cst::Program = cst::Program::new();
+        AstBuilder::new(&CST)
+    }
+
+    fn lexer(source: &'static str) -> Lexer<'static> {
+        Lexer::new(source)
+    }
+
+    fn parse<T>(source: &'static str) -> T
+    where
+        T: Parse,
+    {
+        T::parse(&mut lexer(source))
+    }
+
+    fn parse_expr<T>(source: &'static str) -> T
+    where
+        T: TryFrom<cst::Expr>,
+        T::Error: Debug,
+    {
+        parse::<cst::Expr>(source).try_into().unwrap()
+    }
+
+    #[rstest]
+    #[case("binary_arithmetic", "1 + 2")]
+    #[case("binary_logical", "true && false")]
+    #[case("binary_binary", "5 & 2")]
+    fn lower_binary(
+        #[case] name: &str,
+        mut builder: AstBuilder<'static>,
+        #[case] source: &'static str,
+    ) {
+        assert_debug_snapshot!(name, builder.lower_binary(&parse_expr(source)), source);
+    }
+
+    #[rstest]
+    #[case("unary_minus", "-1")]
+    #[case("unary_not", "!true")]
+    fn lower_unary(
+        #[case] name: &str,
+        mut builder: AstBuilder<'static>,
+        #[case] source: &'static str,
+    ) {
+        assert_debug_snapshot!(name, builder.lower_unary(&parse_expr(source)), source);
+    }
+
+    #[rstest]
+    #[case("if_simple", "if condition { then }")]
+    #[case("if_else", "if condition { then } else { otherwise }")]
+    #[case("if_else_if", "if condition { then } else if thing { then_2 }")]
+    #[case(
+        "if_else_if_else",
+        "if condition { then } else if thing { then_2 } else { otherwise }"
+    )]
+    fn lower_if(
+        #[case] name: &str,
+        mut builder: AstBuilder<'static>,
+        #[case] source: &'static str,
+    ) {
+        assert_debug_snapshot!(name, builder.lower_if(&parse_expr(source)), source);
+    }
+
+    #[rstest]
+    #[case("literal_bool", "true")]
+    #[case("literal_int", "123")]
+    fn lower_literal(
+        #[case] name: &str,
+        mut builder: AstBuilder<'static>,
+        #[case] source: &'static str,
+    ) {
+        assert_debug_snapshot!(name, builder.lower_literal(&parse_expr(source)), source);
+    }
+
+    #[rstest]
+    #[case("call_simple", "some_ident()")]
+    #[case("call_args", "some_ident(1, something, true)")]
+    fn lower_call(
+        #[case] name: &str,
+        mut builder: AstBuilder<'static>,
+        #[case] source: &'static str,
+    ) {
+        assert_debug_snapshot!(name, builder.lower_call(&parse_expr(source)), source);
+    }
+
+    #[rstest]
+    #[case("variable_simple", "some_ident")]
+    fn lower_variable(
+        #[case] name: &str,
+        mut builder: AstBuilder<'static>,
+        #[case] source: &'static str,
+    ) {
+        assert_debug_snapshot!(name, builder.lower_variable(&parse_expr(source)), source);
+    }
+}

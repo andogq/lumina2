@@ -1,0 +1,17 @@
+---
+source: src/stages/ast_builder.rs
+expression: "if condition { then }"
+---
+If {
+    conditions: [
+        (
+            ExprId(
+                0,
+            ),
+            BlockId(
+                0,
+            ),
+        ),
+    ],
+    otherwise: None,
+}

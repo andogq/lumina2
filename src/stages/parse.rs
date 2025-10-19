@@ -135,8 +135,9 @@ mod expr {
     enum Precedence {
         Lowest,
         Assign,
-        Binary,
+        Logical,
         Equality,
+        Binary,
         Sum,
         Multiply,
         Prefix,
@@ -151,10 +152,11 @@ mod expr {
                 Tok::LParen | Tok::LBracket => Self::Call,
                 Tok::Asterisk | Tok::Slash => Self::Multiply,
                 Tok::Plus | Tok::Minus => Self::Sum,
+                Tok::Amp | Tok::Bar => Self::Binary,
                 Tok::EqEq | Tok::BangEq | Tok::GtEq | Tok::LtEq | Tok::LAngle | Tok::RAngle => {
                     Self::Equality
                 }
-                Tok::Amp | Tok::Bar => Self::Binary,
+                Tok::AmpAmp | Tok::BarBar => Self::Logical,
                 Tok::Eq => Self::Assign,
                 _ => Self::Lowest,
             }
@@ -174,7 +176,7 @@ mod expr {
             loop {
                 let tok = lexer.peek();
 
-                if precedence >= Precedence::of(tok) {
+                if precedence > Precedence::of(tok) {
                     break;
                 }
 
@@ -195,7 +197,7 @@ mod expr {
                     | Tok::GtEq => expr = cst::Binary::parse(lexer, expr).into(),
                     Tok::Eq => expr = cst::Assign::parse(lexer, expr).into(),
                     Tok::LParen => expr = cst::Call::parse(lexer, expr).into(),
-                    _ => panic!("unknown tok: {tok}"),
+                    _ => break,
                 }
             }
 
@@ -206,7 +208,9 @@ mod expr {
             match lexer.peek() {
                 Tok::Ident(_) => cst::Variable::parse(lexer).into(),
                 Tok::IntLit(_) | Tok::True | Tok::False => cst::Literal::parse(lexer).into(),
-                Tok::Minus | Tok::Amp | Tok::Asterisk => cst::Unary::parse(lexer).into(),
+                Tok::Minus | Tok::Amp | Tok::Asterisk | Tok::Bang => {
+                    cst::Unary::parse(lexer).into()
+                }
                 Tok::LBrace => cst::Block::parse(lexer).into(),
                 Tok::LParen => cst::Paren::parse(lexer).into(),
                 Tok::If => cst::If::parse(lexer).into(),
@@ -275,7 +279,8 @@ mod expr {
                 | Self::Greater(_)
                 | Self::LessEqual(_)
                 | Self::Less(_) => Precedence::Equality,
-                Self::LogicalAnd(_) | Self::LogicalOr(_) => Precedence::Binary,
+                Self::LogicalAnd(_) | Self::LogicalOr(_) => Precedence::Logical,
+                Self::BinaryAnd(_) | Self::BinaryOr(_) => Precedence::Binary,
                 _ => Precedence::Lowest,
             }
         }
@@ -429,6 +434,7 @@ mod test {
         #[case("expr_un_op", "-123")]
         #[case("expr_un_op_add_mul", "123 + -321 * 999")]
         #[case("expr_assignment", "some_ident = 123 + other_ident")]
+        #[case("expr_logical_and", "true && something")]
         fn expr(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
                 let expr = cst::Expr::parse(lexer);
@@ -454,6 +460,7 @@ mod test {
         #[rstest]
         #[case("binary_variable", "+ b")]
         #[case("binary_literal", "+ 2")]
+        #[case("binary_logical_and", "&& 2")]
         fn binary(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
                 let binary = cst::Binary::parse(

@@ -1,0 +1,25 @@
+---
+source: src/stages/parse.rs
+expression: true && something
+---
+Binary(
+    Binary {
+        lhs: Literal(
+            Boolean(
+                True(
+                    True,
+                ),
+            ),
+        ),
+        op: LogicalAnd(
+            AmpAmp,
+        ),
+        rhs: Variable(
+            Variable {
+                variable: Ident(
+                    "something",
+                ),
+            },
+        ),
+    },
+)

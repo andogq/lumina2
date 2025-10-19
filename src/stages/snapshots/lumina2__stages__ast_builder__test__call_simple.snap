@@ -1,0 +1,10 @@
+---
+source: src/stages/ast_builder.rs
+expression: some_ident()
+---
+Call {
+    callee: ExprId(
+        0,
+    ),
+    arguments: [],
+}

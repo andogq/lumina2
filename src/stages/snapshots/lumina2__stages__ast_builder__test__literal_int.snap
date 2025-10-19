@@ -1,0 +1,7 @@
+---
+source: src/stages/ast_builder.rs
+expression: "123"
+---
+Integer(
+    123,
+)

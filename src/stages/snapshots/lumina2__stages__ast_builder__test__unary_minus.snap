@@ -1,0 +1,12 @@
+---
+source: src/stages/ast_builder.rs
+expression: "-1"
+---
+Unary {
+    op: Negative(
+        Minus,
+    ),
+    value: ExprId(
+        0,
+    ),
+}
