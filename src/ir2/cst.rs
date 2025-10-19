@@ -277,11 +277,26 @@ mod expr {
     #[derive(Clone, Debug)]
     pub struct IntegerLiteral(pub tok::IntLit);
 
+    impl IntegerLiteral {
+        pub fn as_usize(&self) -> usize {
+            self.0.0
+        }
+    }
+
     /// A boolean literal.
     #[derive(Clone, Debug)]
     pub enum BooleanLiteral {
         True(tok::True),
         False(tok::False),
+    }
+
+    impl BooleanLiteral {
+        pub fn as_bool(&self) -> bool {
+            match self {
+                BooleanLiteral::True(_) => true,
+                BooleanLiteral::False(_) => false,
+            }
+        }
     }
 
     impl From<IntegerLiteral> for Literal {
@@ -412,6 +427,10 @@ mod util {
         /// Determine if ready for an item.
         fn expecting_item(&self) -> bool {
             self.items.len() == self.punctuation.len()
+        }
+
+        pub fn iter_items(&self) -> impl Iterator<Item = &T> {
+            self.items.iter()
         }
     }
 

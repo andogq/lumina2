@@ -3,16 +3,12 @@ use crate::ir2::cst::{BinaryOp, UnaryOp};
 pub use self::{block::*, expr::*, function::*, statement::*, string_pool::*};
 
 pub struct Ast {
-    pub items: Vec<Item>,
+    pub function_declarations: Vec<FunctionDeclaration>,
 
     pub blocks: Vec<Block>,
     pub expressions: Vec<Expr>,
 
     pub strings: StringPool,
-}
-
-pub enum Item {
-    FunctionDeclaration(FunctionDeclaration),
 }
 
 mod function {
@@ -36,6 +32,12 @@ mod block {
 
     #[derive(Clone, Copy, Debug)]
     pub struct BlockId(usize);
+
+    impl BlockId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
+    }
 
     pub struct Block {
         pub statements: Vec<Statement>,
@@ -64,6 +66,22 @@ mod statement {
     pub struct ExprStatement {
         pub expr: ExprId,
     }
+
+    impl From<LetStatement> for Statement {
+        fn from(value: LetStatement) -> Self {
+            Self::Let(value)
+        }
+    }
+    impl From<ReturnStatement> for Statement {
+        fn from(value: ReturnStatement) -> Self {
+            Self::Return(value)
+        }
+    }
+    impl From<ExprStatement> for Statement {
+        fn from(value: ExprStatement) -> Self {
+            Self::Expr(value)
+        }
+    }
 }
 
 mod expr {
@@ -72,6 +90,12 @@ mod expr {
     #[derive(Clone, Copy, Debug)]
     pub struct ExprId(usize);
 
+    impl ExprId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
+    }
+
     pub enum Expr {
         Assign(Assign),
         Binary(Binary),
@@ -79,11 +103,12 @@ mod expr {
         If(If),
         Literal(Literal),
         Call(Call),
+        Block(BlockId),
         Variable(Variable),
     }
 
     pub struct Assign {
-        pub variable: StringId,
+        pub variable: ExprId,
         pub value: ExprId,
     }
 
