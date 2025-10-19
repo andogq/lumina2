@@ -1,0 +1,9 @@
+---
+source: src/stages/parse.rs
+expression: "false"
+---
+Boolean(
+    False(
+        False,
+    ),
+)

@@ -1,0 +1,11 @@
+---
+source: src/stages/parse.rs
+expression: "123"
+---
+Integer(
+    IntegerLiteral(
+        IntLit(
+            123,
+        ),
+    ),
+)

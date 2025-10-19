@@ -1,0 +1,23 @@
+---
+source: src/stages/parse.rs
+expression: a + b
+---
+Binary {
+    lhs: Variable(
+        Variable {
+            variable: Ident(
+                "a",
+            ),
+        },
+    ),
+    op: Plus(
+        Plus,
+    ),
+    rhs: Variable(
+        Variable {
+            variable: Ident(
+                "b",
+            ),
+        },
+    ),
+}

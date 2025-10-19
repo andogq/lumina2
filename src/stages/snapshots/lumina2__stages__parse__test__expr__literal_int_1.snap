@@ -1,0 +1,11 @@
+---
+source: src/stages/parse.rs
+expression: "1"
+---
+Integer(
+    IntegerLiteral(
+        IntLit(
+            1,
+        ),
+    ),
+)

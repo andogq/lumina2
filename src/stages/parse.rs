@@ -216,7 +216,7 @@ mod expr {
     }
 
     impl cst::Assign {
-        fn parse(lexer: &mut Lexer<'_>, assignee: cst::Expr) -> Self {
+        pub(super) fn parse(lexer: &mut Lexer<'_>, assignee: cst::Expr) -> Self {
             Self {
                 assignee: Box::new(assignee),
                 tok_eq: lexer.expect().unwrap(),
@@ -226,7 +226,7 @@ mod expr {
     }
 
     impl cst::Binary {
-        fn parse(lexer: &mut Lexer<'_>, lhs: cst::Expr) -> Self {
+        pub(super) fn parse(lexer: &mut Lexer<'_>, lhs: cst::Expr) -> Self {
             let op = cst::BinaryOp::parse(lexer);
             let rhs = cst::Expr::parse_with_precedence(lexer, op.precedence());
 
@@ -348,7 +348,7 @@ mod expr {
     }
 
     impl cst::Call {
-        fn parse(lexer: &mut Lexer<'_>, callee: cst::Expr) -> Self {
+        pub fn parse(lexer: &mut Lexer<'_>, callee: cst::Expr) -> Self {
             Self {
                 callee: Box::new(callee),
                 tok_l_paren: lexer.expect().unwrap(),
@@ -371,6 +371,12 @@ mod expr {
 
 mod util {
     use super::*;
+
+    impl<T: Parse, P: TryFrom<Tok, Error = Tok>> Parse for cst::PunctuatedList<T, P> {
+        fn parse(lexer: &mut Lexer<'_>) -> Self {
+            Self::parse_while(lexer, |tok| !matches!(tok, Tok::Eof))
+        }
+    }
 
     impl<T: Parse, P: TryFrom<Tok, Error = Tok>> cst::PunctuatedList<T, P> {
         /// Parse from the lexer while `check` returns `true`. The check will be run immediately before
@@ -399,25 +405,165 @@ mod util {
 
 #[cfg(test)]
 mod test {
+    use crate::lex::tok;
+
     use super::*;
 
     use insta::*;
     use rstest::*;
 
-    #[rstest]
-    #[case("int_lit", "123")]
-    #[case("ident", "some_ident")]
-    #[case("add", "123 + 321")]
-    #[case("add_mul", "123 + 321 * 999")]
-    #[case("un_op", "-123")]
-    #[case("un_op_add_mull", "123 + -321 * 999")]
-    #[case("assignment", "some_ident = 123 + other_ident")]
-    fn expr(#[case] name: &str, #[case] source: &str) {
+    fn test_with_lexer(source: &str, test: impl FnOnce(&mut Lexer<'_>)) {
         let mut lexer = Lexer::new(source);
-        let expr = cst::Expr::parse(&mut lexer);
+        test(&mut lexer);
+        assert_eq!(lexer.next(), Tok::Eof)
+    }
 
-        assert_eq!(lexer.next(), Tok::Eof);
+    mod expr {
+        use super::*;
 
-        assert_debug_snapshot!(name, expr, source);
+        #[rstest]
+        #[case("expr_int_lit", "123")]
+        #[case("expr_ident", "some_ident")]
+        #[case("expr_add", "123 + 321")]
+        #[case("expr_add_mul", "123 + 321 * 999")]
+        #[case("expr_un_op", "-123")]
+        #[case("expr_un_op_add_mul", "123 + -321 * 999")]
+        #[case("expr_assignment", "some_ident = 123 + other_ident")]
+        fn expr(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let expr = cst::Expr::parse(lexer);
+                assert_debug_snapshot!(name, expr, source);
+            });
+        }
+
+        #[rstest]
+        #[case("assign_simple", "= some_value")]
+        #[case("assign_expression", "= 1 + 2")]
+        fn assign(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let assign = cst::Assign::parse(
+                    lexer,
+                    cst::Expr::Variable(cst::Variable {
+                        variable: tok::Ident("some_ident".to_string()),
+                    }),
+                );
+                assert_debug_snapshot!(name, assign, &format!("some_ident {source}"));
+            });
+        }
+
+        #[rstest]
+        #[case("binary_variable", "+ b")]
+        #[case("binary_literal", "+ 2")]
+        fn binary(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let binary = cst::Binary::parse(
+                    lexer,
+                    cst::Expr::Variable(cst::Variable {
+                        variable: tok::Ident("a".to_string()),
+                    }),
+                );
+                assert_debug_snapshot!(name, binary, &format!("a {source}"));
+            });
+        }
+
+        #[rstest]
+        #[case("unary_variable", "-b")]
+        #[case("unary_literal", "!2")]
+        fn unary(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let unary = cst::Unary::parse(lexer);
+                assert_debug_snapshot!(name, unary, source);
+            });
+        }
+
+        #[rstest]
+        #[case("if_only_if", "if condition { something }")]
+        #[case("if_if_else", "if condition { something } else { something_else }")]
+        #[case(
+            "if_if_else_if",
+            "if condition { something } else if other { something_else }"
+        )]
+        #[case(
+            "if_if_else_if_else",
+            "if condition { something } else if other { something_else } else { final }"
+        )]
+        #[case(
+            "if_if_else_if_else_if_else",
+            "if condition { something } else if other { something_else } else if another { thing } else { final }"
+        )]
+        fn if_expr(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let if_expr = cst::If::parse(lexer);
+                assert_debug_snapshot!(name, if_expr, source);
+            });
+        }
+
+        #[rstest]
+        #[case("literal_true", "true")]
+        #[case("literal_false", "false")]
+        #[case("literal_int_0", "0")]
+        #[case("literal_int_1", "1")]
+        #[case("literal_int_123", "123")]
+        fn literal(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let literal = cst::Literal::parse(lexer);
+                assert_debug_snapshot!(name, literal, source);
+            });
+        }
+
+        #[rstest]
+        #[case("paren_ident", "(some_ident)")]
+        #[case("paren_literal", "(123)")]
+        #[case("paren_double", "((some_ident))")]
+        fn paren(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let paren = cst::Paren::parse(lexer);
+                assert_debug_snapshot!(name, paren, source);
+            });
+        }
+
+        #[rstest]
+        #[case("call_no_args", "()")]
+        #[case("call_single_arg", "(1)")]
+        #[case("call_single_arg_trailing", "(1,)")]
+        #[case("call_multiple_args", "(1, 2, 3)")]
+        #[case("call_multiple_args_trailing", "(1, 2, 3,)")]
+        fn call(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let call = cst::Call::parse(
+                    lexer,
+                    cst::Expr::Variable(cst::Variable {
+                        variable: tok::Ident("a".to_string()),
+                    }),
+                );
+                assert_debug_snapshot!(name, call, &format!("a{source}"));
+            });
+        }
+
+        #[rstest]
+        #[case("variable_simple", "abc")]
+        fn variable(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let variable = cst::Variable::parse(lexer);
+                assert_debug_snapshot!(name, variable, source);
+            });
+        }
+    }
+
+    mod util {
+        use super::*;
+
+        #[rstest]
+        #[case("punctuated_empty", "")]
+        #[case("punctuated_single", "123")]
+        #[case("punctuated_single_trailing", "123,")]
+        #[case("punctuated_multiple", "123,321,456")]
+        #[case("punctuated_multiple_trailing", "123,321,456,")]
+        fn punctuated(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let list = PunctuatedList::<cst::Literal, tok::Comma>::parse(lexer);
+                assert_debug_snapshot!(name, list, source);
+            });
+        }
     }
 }

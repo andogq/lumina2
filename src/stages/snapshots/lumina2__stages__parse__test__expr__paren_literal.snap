@@ -1,0 +1,17 @@
+---
+source: src/stages/parse.rs
+expression: (123)
+---
+Paren {
+    tok_l_paren: LParen,
+    expr: Literal(
+        Integer(
+            IntegerLiteral(
+                IntLit(
+                    123,
+                ),
+            ),
+        ),
+    ),
+    tok_r_paren: RParen,
+}

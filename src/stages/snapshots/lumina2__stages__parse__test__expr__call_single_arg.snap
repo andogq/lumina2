@@ -1,0 +1,29 @@
+---
+source: src/stages/parse.rs
+expression: a(1)
+---
+Call {
+    callee: Variable(
+        Variable {
+            variable: Ident(
+                "a",
+            ),
+        },
+    ),
+    tok_l_paren: LParen,
+    arguments: PunctuatedList {
+        items: [
+            Literal(
+                Integer(
+                    IntegerLiteral(
+                        IntLit(
+                            1,
+                        ),
+                    ),
+                ),
+            ),
+        ],
+        punctuation: [],
+    },
+    tok_r_paren: RParen,
+}

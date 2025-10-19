@@ -244,6 +244,7 @@ impl<'src> Lexer<'src> {
                     "fn" => Tok::Fn,
                     "let" => Tok::Let,
                     "return" => Tok::Return,
+                    "else" => Tok::Else,
                     "if" => Tok::If,
                     _ => Tok::Ident(ident),
                 }
