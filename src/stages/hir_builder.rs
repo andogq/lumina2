@@ -194,14 +194,7 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
             ast::Expr::Unary(unary) => self.lower_unary(unary).into(),
             ast::Expr::If(if_expr) => self.lower_if(if_expr).into(),
             ast::Expr::Literal(literal) => self.lower_literal(literal).into(),
-            ast::Expr::Call(call) => Expr::Call(Call {
-                callee: self.lower_expr(call.callee),
-                arguments: call
-                    .arguments
-                    .iter()
-                    .map(|argument| self.lower_expr(*argument))
-                    .collect(),
-            }),
+            ast::Expr::Call(call) => self.lower_call(call).into(),
             ast::Expr::Block(block) => Expr::Block(self.lower_block(*block)),
             ast::Expr::Variable(variable) => Expr::Variable(Variable {
                 binding: self.scopes.resolve_binding(variable.variable),
@@ -261,11 +254,22 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
     }
 
     fn lower_literal(&mut self, literal: &ast::Literal) -> Literal {
-match literal {
-                ast::Literal::Integer(value) => Literal::Integer(*value),
-                ast::Literal::Boolean(value) => Literal::Boolean(*value),
-                ast::Literal::Unit => Literal::Unit,
-            }
+        match literal {
+            ast::Literal::Integer(value) => Literal::Integer(*value),
+            ast::Literal::Boolean(value) => Literal::Boolean(*value),
+            ast::Literal::Unit => Literal::Unit,
+        }
+    }
+
+    fn lower_call(&mut self, call: &ast::Call) -> Call {
+        Call {
+            callee: self.lower_expr(call.callee),
+            arguments: call
+                .arguments
+                .iter()
+                .map(|argument| self.lower_expr(*argument))
+                .collect(),
+        }
     }
 }
 
@@ -577,6 +581,14 @@ mod test {
         fn lower_literal(mut builder: HirBuilder<'static>, #[case] name: &str, #[case] literal: ast::Literal) {
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_literal(&literal));
+        }
+
+        #[rstest]
+        #[case("call_no_params", ast::Call { callee: ast::ExprId::new(0), arguments: vec![] })]
+        #[case("call_with_params", ast::Call { callee: ast::ExprId::new(0), arguments: vec![ast::ExprId::new(1), ast::ExprId::new(2)] })]
+        fn lower_call(mut builder: HirBuilder<'static>, #[case] name: &str, #[case] call: ast::Call) {
+            let mut builder = BlockBuilder::new(&mut builder);
+            assert_debug_snapshot!(name, builder.lower_call(&call));
         }
     }
 }

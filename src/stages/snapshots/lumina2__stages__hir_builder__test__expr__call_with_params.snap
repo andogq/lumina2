@@ -1,0 +1,17 @@
+---
+source: src/stages/hir_builder.rs
+expression: builder.lower_call(&call)
+---
+Call {
+    callee: ExprId(
+        0,
+    ),
+    arguments: [
+        ExprId(
+            1,
+        ),
+        ExprId(
+            2,
+        ),
+    ],
+}
