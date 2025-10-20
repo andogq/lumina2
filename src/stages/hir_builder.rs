@@ -190,15 +190,8 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
 
         let expr = match expr {
             ast::Expr::Assign(assign) => self.lower_assign(assign).into(),
-            ast::Expr::Binary(binary) => Expr::Binary(Binary {
-                lhs: self.lower_expr(binary.lhs),
-                op: binary.op.clone(),
-                rhs: self.lower_expr(binary.rhs),
-            }),
-            ast::Expr::Unary(unary) => Expr::Unary(Unary {
-                op: unary.op.clone(),
-                value: self.lower_expr(unary.value),
-            }),
+            ast::Expr::Binary(binary) => self.lower_binary(binary).into(),
+            ast::Expr::Unary(unary) => self.lower_unary(unary).into(),
             ast::Expr::If(if_expr) => {
                 let mut expr = if_expr
                     .otherwise
@@ -244,6 +237,21 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
         Assign {
             variable: self.lower_expr(assign.variable),
             value: self.lower_expr(assign.value),
+        }
+    }
+
+    fn lower_binary(&mut self, binary: &ast::Binary) -> Binary {
+        Binary {
+            lhs: self.lower_expr(binary.lhs),
+            op: binary.op.clone(),
+            rhs: self.lower_expr(binary.rhs),
+        }
+    }
+
+    fn lower_unary(&mut self, unary: &ast::Unary) -> Unary {
+        Unary {
+            op: unary.op.clone(),
+            value: self.lower_expr(unary.value),
         }
     }
 }
@@ -380,6 +388,8 @@ impl Scopes {
 mod test {
     use super::*;
 
+    use crate::{ir2::cst, lex::tok};
+
     use insta::*;
     use rstest::*;
 
@@ -482,6 +492,56 @@ mod test {
             let mut builder = BlockBuilder::new(&mut hir_builder);
 
             assert_debug_snapshot!(name, builder.lower_assign(&assign));
+        }
+
+        #[rstest]
+        #[case(
+            "binary_simple",
+            [ast::Expr::Variable(ast::Variable { variable: StringId::new(0) }), ast::Expr::Literal(ast::Literal::Integer(123))],
+            [StringId::new(0)],
+            ast::Binary{ lhs: ast::ExprId::new(0), op: cst::BinaryOp::Plus(tok::Plus), rhs: ast::ExprId::new(1) }
+        )]
+        fn lower_binary(
+            #[case] name: &str,
+            #[case] exprs: impl IntoIterator<Item = ast::Expr>,
+            #[case] bindings: impl IntoIterator<Item = StringId>,
+            #[case] binary: ast::Binary,
+        ) {
+            let mut ast = ast::Ast::new();
+            ast.expressions = exprs.into_iter().collect();
+
+            let mut hir_builder = HirBuilder::new(&ast);
+            for binding in bindings {
+                hir_builder.scopes.declare_binding(binding);
+            }
+            let mut builder = BlockBuilder::new(&mut hir_builder);
+
+            assert_debug_snapshot!(name, builder.lower_binary(&binary));
+        }
+
+        #[rstest]
+        #[case(
+            "unary_simple",
+            [ast::Expr::Variable(ast::Variable { variable: StringId::new(0) }), ast::Expr::Literal(ast::Literal::Integer(123))],
+            [StringId::new(0)],
+            ast::Unary { value: ast::ExprId::new(0), op: cst::UnaryOp::Negative(tok::Minus), }
+        )]
+        fn lower_unary(
+            #[case] name: &str,
+            #[case] exprs: impl IntoIterator<Item = ast::Expr>,
+            #[case] bindings: impl IntoIterator<Item = StringId>,
+            #[case] unary: ast::Unary,
+        ) {
+            let mut ast = ast::Ast::new();
+            ast.expressions = exprs.into_iter().collect();
+
+            let mut hir_builder = HirBuilder::new(&ast);
+            for binding in bindings {
+                hir_builder.scopes.declare_binding(binding);
+            }
+            let mut builder = BlockBuilder::new(&mut hir_builder);
+
+            assert_debug_snapshot!(name, builder.lower_unary(&unary));
         }
     }
 }

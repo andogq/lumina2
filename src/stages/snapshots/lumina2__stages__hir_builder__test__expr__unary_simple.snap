@@ -1,0 +1,12 @@
+---
+source: src/stages/hir_builder.rs
+expression: builder.lower_unary(&unary)
+---
+Unary {
+    op: Negative(
+        Minus,
+    ),
+    value: ExprId(
+        0,
+    ),
+}
