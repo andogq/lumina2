@@ -193,11 +193,7 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
             ast::Expr::Binary(binary) => self.lower_binary(binary).into(),
             ast::Expr::Unary(unary) => self.lower_unary(unary).into(),
             ast::Expr::If(if_expr) => self.lower_if(if_expr).into(),
-            ast::Expr::Literal(literal) => Expr::Literal(match literal {
-                ast::Literal::Integer(value) => Literal::Integer(*value),
-                ast::Literal::Boolean(value) => Literal::Boolean(*value),
-                ast::Literal::Unit => Literal::Unit,
-            }),
+            ast::Expr::Literal(literal) => self.lower_literal(literal).into(),
             ast::Expr::Call(call) => Expr::Call(Call {
                 callee: self.lower_expr(call.callee),
                 arguments: call
@@ -262,6 +258,14 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
         }
 
         switch.expect("if expression with at least one block")
+    }
+
+    fn lower_literal(&mut self, literal: &ast::Literal) -> Literal {
+match literal {
+                ast::Literal::Integer(value) => Literal::Integer(*value),
+                ast::Literal::Boolean(value) => Literal::Boolean(*value),
+                ast::Literal::Unit => Literal::Unit,
+            }
     }
 }
 
@@ -564,6 +568,15 @@ mod test {
         ) {
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_if(&if_expr));
+        }
+
+        #[rstest]
+        #[case("literal_integer", ast::Literal::Integer(123))]
+        #[case("literal_boolean", ast::Literal::Boolean(true))]
+        #[case("literal_unit", ast::Literal::Unit)]
+        fn lower_literal(mut builder: HirBuilder<'static>, #[case] name: &str, #[case] literal: ast::Literal) {
+            let mut builder = BlockBuilder::new(&mut builder);
+            assert_debug_snapshot!(name, builder.lower_literal(&literal));
         }
     }
 }
