@@ -1,0 +1,9 @@
+---
+source: src/stages/hir_builder.rs
+expression: builder.lower_variable(&variable)
+---
+Variable {
+    binding: BindingId(
+        0,
+    ),
+}

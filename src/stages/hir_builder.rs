@@ -196,9 +196,7 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
             ast::Expr::Literal(literal) => self.lower_literal(literal).into(),
             ast::Expr::Call(call) => self.lower_call(call).into(),
             ast::Expr::Block(block) => self.lower_block(*block).into(),
-            ast::Expr::Variable(variable) => Expr::Variable(Variable {
-                binding: self.scopes.resolve_binding(variable.variable),
-            }),
+            ast::Expr::Variable(variable) => self.lower_variable(variable).into(),
         };
 
         self.add_expr(expr)
@@ -269,6 +267,12 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
                 .iter()
                 .map(|argument| self.lower_expr(*argument))
                 .collect(),
+        }
+    }
+
+    fn lower_variable(&mut self, variable: &ast::Variable) -> Variable {
+        Variable {
+            binding: self.scopes.resolve_binding(variable.variable),
         }
     }
 }
@@ -607,6 +611,13 @@ mod test {
         fn lower_call(mut builder: HirBuilder<'static>, #[case] name: &str, #[case] call: ast::Call) {
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_call(&call));
+        }
+
+        #[rstest]
+        #[case("variable_simple", ast::Variable { variable: StringId::new(0) })]
+        fn lower_variable(mut builder: HirBuilder<'static>, #[case] name: &str, #[case] variable: ast::Variable) {
+            let mut builder = BlockBuilder::new(&mut builder);
+            assert_debug_snapshot!(name, builder.lower_variable(&variable));
         }
     }
 }
