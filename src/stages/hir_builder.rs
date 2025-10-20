@@ -9,14 +9,16 @@ use crate::ir2::{
 };
 
 struct HirBuilder<'ast> {
+    /// HIR that is being built.
     hir: Hir,
-
+    /// Reference AST.
     ast: &'ast ast::Ast,
 
+    /// Map of bindings to corresponding functions.
     function_bindings: HashMap<BindingId, FunctionId>,
-
+    /// Scope information.
     scopes: Scopes,
-
+    /// Cached unit expression.
     unit_expression: Option<ExprId>,
 }
 
@@ -43,6 +45,7 @@ impl<'ast> HirBuilder<'ast> {
         self.hir
     }
 
+    /// Helper to push a new scope, run a callback, then pop the scope.
     pub fn with_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         self.scopes.push();
         let value = f(self);
@@ -362,5 +365,76 @@ impl Scopes {
         let type_ref = self.next_type_ref_id();
         self.current_mut().types.insert(ty, type_ref);
         type_ref
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    mod scopes {
+        use super::*;
+
+        #[test]
+        fn declare_and_resolve_binding() {
+            let mut scopes = Scopes::new();
+            let string = StringId::new(0);
+
+            assert_eq!(
+                scopes.declare_binding(string),
+                scopes.resolve_binding(string),
+                "resolved binding must be same as declared",
+            );
+        }
+
+        #[test]
+        fn declare_shadowing() {
+            let mut scopes = Scopes::new();
+            let string = StringId::new(0);
+
+            assert_ne!(
+                scopes.declare_binding(string),
+                scopes.declare_binding(string),
+                "re-declared binding must differ",
+            );
+        }
+
+        #[test]
+        fn scope_modification() {
+            let mut scopes = Scopes::new();
+            let string = StringId::new(0);
+
+            let top_binding = scopes.declare_binding(string);
+            assert_eq!(
+                top_binding,
+                scopes.resolve_binding(string),
+                "binding should resolve to top scope"
+            );
+
+            scopes.push();
+            assert_eq!(
+                top_binding,
+                scopes.resolve_binding(string),
+                "binding should bubble to top scope",
+            );
+
+            let inner_binding = scopes.declare_binding(string);
+            assert_ne!(
+                top_binding, inner_binding,
+                "bindings in different scopes must be different"
+            );
+            assert_eq!(
+                inner_binding,
+                scopes.resolve_binding(string),
+                "binding should resolve to inner scope",
+            );
+
+            scopes.pop();
+            assert_eq!(
+                top_binding,
+                scopes.resolve_binding(string),
+                "binding should bubble to top scope after popping scope",
+            );
+        }
     }
 }

@@ -189,6 +189,11 @@ mod string_pool {
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct StringId(usize);
+    impl StringId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
+    }
 
     #[derive(Clone, Debug)]
     pub struct StringPool {
