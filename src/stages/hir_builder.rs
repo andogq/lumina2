@@ -15,11 +15,7 @@ struct HirBuilder<'ast> {
 
     function_bindings: HashMap<BindingId, FunctionId>,
 
-    global_scope: Scope,
-    scopes: Vec<Scope>,
-
-    next_binding_id: usize,
-    next_type_ref_id: usize,
+    scopes: Scopes,
 
     unit_expression: Option<ExprId>,
 }
@@ -34,10 +30,7 @@ impl<'ast> HirBuilder<'ast> {
             },
             ast,
             function_bindings: HashMap::new(),
-            global_scope: Scope::new(),
-            scopes: Vec::new(),
-            next_binding_id: 0,
-            next_type_ref_id: 0,
+            scopes: Scopes::new(),
             unit_expression: None,
         }
     }
@@ -50,67 +43,17 @@ impl<'ast> HirBuilder<'ast> {
         self.hir
     }
 
-    fn iter_scopes(&self) -> impl Iterator<Item = &Scope> {
-        [&self.global_scope].into_iter().chain(self.scopes.iter())
-    }
-
-    fn current_scope(&mut self) -> &mut Scope {
-        self.scopes.last_mut().unwrap_or(&mut self.global_scope)
-    }
-
-    fn with_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        self.scopes.push(Scope::new());
-
+    pub fn with_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        self.scopes.push();
         let value = f(self);
-
-        assert!(!self.scopes.is_empty());
         self.scopes.pop();
-
         value
-    }
-
-    fn resolve_binding(&self, ident: StringId) -> BindingId {
-        *self
-            .iter_scopes()
-            .find_map(|scope| scope.bindings.get(&ident))
-            .expect("binding declared in scope")
-    }
-
-    fn declare_binding(&mut self, ident: StringId) -> BindingId {
-        let binding = self.new_binding_id();
-        self.current_scope().bindings.insert(ident, binding);
-        binding
-    }
-
-    fn new_binding_id(&mut self) -> BindingId {
-        let id = BindingId::new(self.next_binding_id);
-        self.next_binding_id += 1;
-        id
-    }
-
-    fn resolve_type_ref(&self, id: StringId) -> TypeRefId {
-        *self
-            .iter_scopes()
-            .find_map(|scope| scope.types.get(&id))
-            .expect("type ref declared in scope")
-    }
-
-    fn declare_type_ref(&mut self, id: StringId) -> TypeRefId {
-        let type_ref = self.new_type_ref_id();
-        self.current_scope().types.insert(id, type_ref);
-        type_ref
-    }
-
-    fn new_type_ref_id(&mut self) -> TypeRefId {
-        let id = TypeRefId::new(self.next_type_ref_id);
-        self.next_type_ref_id += 1;
-        id
     }
 
     pub fn lower_function(&mut self, function: &ast::FunctionDeclaration) -> FunctionId {
         let id = FunctionId::new(self.hir.functions.len());
 
-        let binding = self.declare_binding(function.name);
+        let binding = self.scopes.declare_binding(function.name);
         self.function_bindings.insert(binding, id);
 
         let (parameters, entry) = self.with_scope(|builder| {
@@ -119,9 +62,9 @@ impl<'ast> HirBuilder<'ast> {
                 .iter()
                 .map(|param| {
                     (
-                        builder.declare_binding(param.name),
+                        builder.scopes.declare_binding(param.name),
                         // TODO: This won't resolve built-in types.
-                        builder.resolve_type_ref(param.ty),
+                        builder.scopes.resolve_type_ref(param.ty),
                     )
                 })
                 .collect();
@@ -218,9 +161,9 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
     pub fn lower_statement(&mut self, statement: &ast::Statement) {
         match statement {
             ast::Statement::Let(let_statement) => {
-                let binding = self.declare_binding(let_statement.variable);
-                // TODO: Unsure when to create this.
-                let ty = self.new_type_ref_id();
+                let binding = self.scopes.declare_binding(let_statement.variable);
+                // TODO: Unsure when to create this, should optionally be annotated type.
+                let ty = self.scopes.next_type_ref_id();
                 self.add_statement(Statement::Declare(DeclareStatement { binding, ty }));
 
                 let expr = self.lower_expr(let_statement.value);
@@ -288,7 +231,7 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
             }),
             ast::Expr::Block(block) => Expr::Block(self.lower_block(*block)),
             ast::Expr::Variable(variable) => Expr::Variable(Variable {
-                binding: self.resolve_binding(variable.variable),
+                binding: self.scopes.resolve_binding(variable.variable),
             }),
         };
 
@@ -325,5 +268,99 @@ impl Scope {
             bindings: HashMap::new(),
             types: HashMap::new(),
         }
+    }
+}
+
+/// Structure to manage layered scopes.
+struct Scopes {
+    global: Scope,
+    scopes: Vec<Scope>,
+
+    next_binding_id: usize,
+    next_type_ref_id: usize,
+}
+
+impl Scopes {
+    /// Create a new set of scopes.
+    fn new() -> Self {
+        Self {
+            global: Scope::new(),
+            scopes: Vec::new(),
+            next_binding_id: 0,
+            next_type_ref_id: 0,
+        }
+    }
+
+    /// Push a new scope.
+    fn push(&mut self) {
+        self.scopes.push(Scope::new());
+    }
+
+    /// Pop the current scope.
+    fn pop(&mut self) {
+        assert!(!self.scopes.is_empty());
+        self.scopes.pop();
+    }
+
+    /// Create the next [`BindingId`].
+    fn next_binding_id(&mut self) -> BindingId {
+        let id = self.next_binding_id;
+        self.next_binding_id += 1;
+        BindingId::new(id)
+    }
+
+    /// Create the next [`TypeRefId`].
+    fn next_type_ref_id(&mut self) -> TypeRefId {
+        let id = self.next_type_ref_id;
+        self.next_type_ref_id += 1;
+        TypeRefId::new(id)
+    }
+
+    /// Produce an iterator of each scope, starting with the inner-most, and ending with the global
+    /// scope.
+    fn iter(&self) -> impl Iterator<Item = &Scope> {
+        self.scopes.iter().rev().chain([&self.global])
+    }
+
+    /// Return a reference to the current scope.
+    fn current_ref(&self) -> &Scope {
+        self.scopes.last().unwrap_or(&self.global)
+    }
+
+    /// Return a mutable reference to the current scope.
+    fn current_mut(&mut self) -> &mut Scope {
+        self.scopes.last_mut().unwrap_or(&mut self.global)
+    }
+
+    /// Resolve the provided ident into a binding, searching from the inner-most scope outwards. If
+    /// the binding is not found, an error will be thrown.
+    fn resolve_binding(&self, ident: StringId) -> BindingId {
+        *self
+            .iter()
+            .find_map(|scope| scope.bindings.get(&ident))
+            .expect("binding declared in a scope")
+    }
+
+    /// Declare a binding in the current scope.
+    fn declare_binding(&mut self, ident: StringId) -> BindingId {
+        let binding = self.next_binding_id();
+        self.current_mut().bindings.insert(ident, binding);
+        binding
+    }
+
+    /// Resolve the provided ident into a type ref, searching form the inner-most scope outwards.
+    /// If the binding is not found, an error will be thrown.
+    fn resolve_type_ref(&self, ty: StringId) -> TypeRefId {
+        *self
+            .iter()
+            .find_map(|scope| scope.types.get(&ty))
+            .expect("type declared in a scope")
+    }
+
+    /// Declare a type ref in the current scope.
+    fn declare_type_ref(&mut self, ty: StringId) -> TypeRefId {
+        let type_ref = self.next_type_ref_id();
+        self.current_mut().types.insert(ty, type_ref);
+        type_ref
     }
 }
