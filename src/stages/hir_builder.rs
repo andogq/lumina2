@@ -192,25 +192,7 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
             ast::Expr::Assign(assign) => self.lower_assign(assign).into(),
             ast::Expr::Binary(binary) => self.lower_binary(binary).into(),
             ast::Expr::Unary(unary) => self.lower_unary(unary).into(),
-            ast::Expr::If(if_expr) => {
-                let mut expr = if_expr
-                    .otherwise
-                    .map(|otherwise| Expr::Block(self.lower_block(otherwise)));
-
-                for (condition, block) in if_expr.conditions.iter().rev() {
-                    let switch = Expr::Switch(Switch {
-                        discriminator: self.lower_expr(*condition),
-                        branches: vec![(Literal::Boolean(true), self.lower_block(*block))],
-                        default: expr.take().map(|expr| {
-                            let expr = self.add_expr(expr);
-                            self.expr_as_block(expr)
-                        }),
-                    });
-                    expr = Some(switch);
-                }
-
-                expr.expect("if expression with at least one block")
-            }
+            ast::Expr::If(if_expr) => self.lower_if(if_expr).into(),
             ast::Expr::Literal(literal) => Expr::Literal(match literal {
                 ast::Literal::Integer(value) => Literal::Integer(*value),
                 ast::Literal::Boolean(value) => Literal::Boolean(*value),
@@ -253,6 +235,33 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
             op: unary.op.clone(),
             value: self.lower_expr(unary.value),
         }
+    }
+
+    fn lower_if(&mut self, if_expr: &ast::If) -> Switch {
+        // Where the switch will be built.
+        let mut switch: Option<Switch> = None;
+        // Optional default expression to apply to end of switch statements.
+        let mut default = if_expr
+            .otherwise
+            .map(|otherwise| Expr::Block(self.lower_block(otherwise)));
+
+        for (condition, block) in if_expr.conditions.iter().rev() {
+            switch = Some(Switch {
+                discriminator: self.lower_expr(*condition),
+                branches: vec![(Literal::Boolean(true), self.lower_block(*block))],
+                default: 
+                // Try use the default expression.
+                default .take()
+                    // Otherwise continue building the switch statement.
+                    .or_else(|| Some(switch.take()?.into()))
+                    .map(|expr| {
+                        let expr = self.add_expr(expr);
+                        self.expr_as_block(expr)
+                    }),
+            });
+        }
+
+        switch.expect("if expression with at least one block")
     }
 }
 
@@ -463,85 +472,98 @@ mod test {
     mod expr {
         use super::*;
 
+        #[fixture]
+        #[once]
+        fn sample_ast() -> ast::Ast {
+            let mut ast = ast::Ast::new();
+            ast.expressions = vec![
+                ast::Expr::Variable(ast::Variable { variable: StringId::new(0) }),
+                ast::Expr::Variable(ast::Variable { variable: StringId::new(1) }),
+                ast::Expr::Variable(ast::Variable { variable: StringId::new(2) }),
+            ];
+            ast.blocks = vec![
+                ast::Block { statements: Vec::new(), expression: None },
+                ast::Block { statements: Vec::new(), expression: None },
+                ast::Block { statements: Vec::new(), expression: None },
+            ];
+            ast
+        }
+
+        #[fixture]
+        fn builder(sample_ast: &'static ast::Ast) -> HirBuilder<'static> {
+            let mut builder = HirBuilder::new(sample_ast);
+            (0..3).for_each(|i|{
+                builder.scopes.declare_binding(StringId::new(i));
+            });
+            builder
+        }
+
         #[rstest]
         #[case(
             "assign_simple",
-            [ast::Expr::Variable(ast::Variable { variable: StringId::new(0) }), ast::Expr::Literal(ast::Literal::Integer(123))],
-            [StringId::new(0)],
             ast::Assign { variable: ast::ExprId::new(0), value: ast::ExprId::new(1) }
         )]
         #[case(
             "assign_reassign",
-            [ast::Expr::Variable(ast::Variable { variable: StringId::new(0) })],
-            [StringId::new(0)],
             ast::Assign { variable: ast::ExprId::new(0), value: ast::ExprId::new(0) }
         )]
         fn lower_assign(
+            mut builder: HirBuilder<'static>,
             #[case] name: &str,
-            #[case] exprs: impl IntoIterator<Item = ast::Expr>,
-            #[case] bindings: impl IntoIterator<Item = StringId>,
             #[case] assign: ast::Assign,
         ) {
-            let mut ast = ast::Ast::new();
-            ast.expressions = exprs.into_iter().collect();
-
-            let mut hir_builder = HirBuilder::new(&ast);
-            for binding in bindings {
-                hir_builder.scopes.declare_binding(binding);
-            }
-            let mut builder = BlockBuilder::new(&mut hir_builder);
-
+            let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_assign(&assign));
         }
 
         #[rstest]
         #[case(
             "binary_simple",
-            [ast::Expr::Variable(ast::Variable { variable: StringId::new(0) }), ast::Expr::Literal(ast::Literal::Integer(123))],
-            [StringId::new(0)],
             ast::Binary{ lhs: ast::ExprId::new(0), op: cst::BinaryOp::Plus(tok::Plus), rhs: ast::ExprId::new(1) }
         )]
         fn lower_binary(
+            mut builder: HirBuilder<'static>,
             #[case] name: &str,
-            #[case] exprs: impl IntoIterator<Item = ast::Expr>,
-            #[case] bindings: impl IntoIterator<Item = StringId>,
             #[case] binary: ast::Binary,
         ) {
-            let mut ast = ast::Ast::new();
-            ast.expressions = exprs.into_iter().collect();
-
-            let mut hir_builder = HirBuilder::new(&ast);
-            for binding in bindings {
-                hir_builder.scopes.declare_binding(binding);
-            }
-            let mut builder = BlockBuilder::new(&mut hir_builder);
-
+            let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_binary(&binary));
         }
 
         #[rstest]
         #[case(
             "unary_simple",
-            [ast::Expr::Variable(ast::Variable { variable: StringId::new(0) }), ast::Expr::Literal(ast::Literal::Integer(123))],
-            [StringId::new(0)],
-            ast::Unary { value: ast::ExprId::new(0), op: cst::UnaryOp::Negative(tok::Minus), }
+            ast::Unary { value: ast::ExprId::new(0), op: cst::UnaryOp::Negative(tok::Minus) }
         )]
         fn lower_unary(
+            mut builder: HirBuilder<'static>,
             #[case] name: &str,
-            #[case] exprs: impl IntoIterator<Item = ast::Expr>,
-            #[case] bindings: impl IntoIterator<Item = StringId>,
             #[case] unary: ast::Unary,
         ) {
-            let mut ast = ast::Ast::new();
-            ast.expressions = exprs.into_iter().collect();
-
-            let mut hir_builder = HirBuilder::new(&ast);
-            for binding in bindings {
-                hir_builder.scopes.declare_binding(binding);
-            }
-            let mut builder = BlockBuilder::new(&mut hir_builder);
-
+            let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_unary(&unary));
+        }
+
+        #[rstest]
+        #[case(
+            "if_simple",
+            ast::If { conditions: vec![(ast::ExprId::new(0), ast::BlockId::new(0))], otherwise: None }
+        )]
+        #[case(
+            "if_else",
+            ast::If { conditions: vec![(ast::ExprId::new(0), ast::BlockId::new(0))], otherwise: Some(ast::BlockId::new(1)) }
+        )]
+        #[case(
+            "if_else_if",
+            ast::If { conditions: vec![(ast::ExprId::new(0), ast::BlockId::new(0)), (ast::ExprId::new(1), ast::BlockId::new(1))], otherwise: None }
+        )]
+        fn lower_if(
+            mut builder: HirBuilder<'static>,
+            #[case] name: &str,
+            #[case] if_expr: ast::If,
+        ) {
+            let mut builder = BlockBuilder::new(&mut builder);
+            assert_debug_snapshot!(name, builder.lower_if(&if_expr));
         }
     }
 }

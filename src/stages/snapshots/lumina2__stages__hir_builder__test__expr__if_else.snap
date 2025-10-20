@@ -1,0 +1,24 @@
+---
+source: src/stages/hir_builder.rs
+expression: builder.lower_if(&if_expr)
+---
+Switch {
+    discriminator: ExprId(
+        1,
+    ),
+    branches: [
+        (
+            Boolean(
+                true,
+            ),
+            BlockId(
+                1,
+            ),
+        ),
+    ],
+    default: Some(
+        BlockId(
+            0,
+        ),
+    ),
+}
