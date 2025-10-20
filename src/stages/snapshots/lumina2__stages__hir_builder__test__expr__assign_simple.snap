@@ -1,0 +1,12 @@
+---
+source: src/stages/hir_builder.rs
+expression: builder.lower_assign(&assign)
+---
+Assign {
+    variable: ExprId(
+        0,
+    ),
+    value: ExprId(
+        1,
+    ),
+}

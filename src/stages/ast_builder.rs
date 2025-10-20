@@ -12,12 +12,7 @@ impl<'cst> AstBuilder<'cst> {
     pub fn new(cst: &'cst cst::Program) -> Self {
         Self {
             cst,
-            ast: Ast {
-                function_declarations: Vec::new(),
-                blocks: Vec::new(),
-                expressions: Vec::new(),
-                strings: StringPool::new(),
-            },
+            ast: Ast::new(),
         }
     }
 

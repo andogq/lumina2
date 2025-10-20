@@ -8,6 +8,7 @@ use crate::ir2::{
     hir::*,
 };
 
+#[derive(Clone, Debug)]
 struct HirBuilder<'ast> {
     /// HIR that is being built.
     hir: Hir,
@@ -135,6 +136,7 @@ impl<'ast> HirBuilder<'ast> {
     }
 }
 
+#[derive(Debug)]
 struct BlockBuilder<'hir, 'ast> {
     builder: &'hir mut HirBuilder<'ast>,
     statements: Vec<Statement>,
@@ -187,10 +189,7 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
         let expr = self.ast.get_expr(expr);
 
         let expr = match expr {
-            ast::Expr::Assign(assign) => Expr::Assign(Assign {
-                variable: self.lower_expr(assign.variable),
-                value: self.lower_expr(assign.value),
-            }),
+            ast::Expr::Assign(assign) => self.lower_assign(assign).into(),
             ast::Expr::Binary(binary) => Expr::Binary(Binary {
                 lhs: self.lower_expr(binary.lhs),
                 op: binary.op.clone(),
@@ -240,6 +239,13 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
 
         self.add_expr(expr)
     }
+
+    fn lower_assign(&mut self, assign: &ast::Assign) -> Assign {
+        Assign {
+            variable: self.lower_expr(assign.variable),
+            value: self.lower_expr(assign.value),
+        }
+    }
 }
 
 impl<'hir, 'ast> Deref for BlockBuilder<'hir, 'ast> {
@@ -260,6 +266,7 @@ pub fn lower(ast: &ast::Ast) -> Hir {
     HirBuilder::new(ast).build()
 }
 
+#[derive(Clone, Debug)]
 struct Scope {
     bindings: HashMap<StringId, BindingId>,
     types: HashMap<StringId, TypeRefId>,
@@ -275,6 +282,7 @@ impl Scope {
 }
 
 /// Structure to manage layered scopes.
+#[derive(Clone, Debug)]
 struct Scopes {
     global: Scope,
     scopes: Vec<Scope>,
@@ -372,14 +380,24 @@ impl Scopes {
 mod test {
     use super::*;
 
+    use insta::*;
+    use rstest::*;
+
     mod scopes {
         use super::*;
 
-        #[test]
-        fn declare_and_resolve_binding() {
-            let mut scopes = Scopes::new();
-            let string = StringId::new(0);
+        #[fixture]
+        fn scopes() -> Scopes {
+            Scopes::new()
+        }
 
+        #[fixture]
+        fn string() -> StringId {
+            StringId::new(0)
+        }
+
+        #[rstest]
+        fn declare_and_resolve_binding(mut scopes: Scopes, string: StringId) {
             assert_eq!(
                 scopes.declare_binding(string),
                 scopes.resolve_binding(string),
@@ -387,11 +405,8 @@ mod test {
             );
         }
 
-        #[test]
-        fn declare_shadowing() {
-            let mut scopes = Scopes::new();
-            let string = StringId::new(0);
-
+        #[rstest]
+        fn declare_shadowing(mut scopes: Scopes, string: StringId) {
             assert_ne!(
                 scopes.declare_binding(string),
                 scopes.declare_binding(string),
@@ -399,11 +414,8 @@ mod test {
             );
         }
 
-        #[test]
-        fn scope_modification() {
-            let mut scopes = Scopes::new();
-            let string = StringId::new(0);
-
+        #[rstest]
+        fn scope_modification(mut scopes: Scopes, string: StringId) {
             let top_binding = scopes.declare_binding(string);
             assert_eq!(
                 top_binding,
@@ -435,6 +447,41 @@ mod test {
                 scopes.resolve_binding(string),
                 "binding should bubble to top scope after popping scope",
             );
+        }
+    }
+
+    mod expr {
+        use super::*;
+
+        #[rstest]
+        #[case(
+            "assign_simple",
+            [ast::Expr::Variable(ast::Variable { variable: StringId::new(0) }), ast::Expr::Literal(ast::Literal::Integer(123))],
+            [StringId::new(0)],
+            ast::Assign { variable: ast::ExprId::new(0), value: ast::ExprId::new(1) }
+        )]
+        #[case(
+            "assign_reassign",
+            [ast::Expr::Variable(ast::Variable { variable: StringId::new(0) })],
+            [StringId::new(0)],
+            ast::Assign { variable: ast::ExprId::new(0), value: ast::ExprId::new(0) }
+        )]
+        fn lower_assign(
+            #[case] name: &str,
+            #[case] exprs: impl IntoIterator<Item = ast::Expr>,
+            #[case] bindings: impl IntoIterator<Item = StringId>,
+            #[case] assign: ast::Assign,
+        ) {
+            let mut ast = ast::Ast::new();
+            ast.expressions = exprs.into_iter().collect();
+
+            let mut hir_builder = HirBuilder::new(&ast);
+            for binding in bindings {
+                hir_builder.scopes.declare_binding(binding);
+            }
+            let mut builder = BlockBuilder::new(&mut hir_builder);
+
+            assert_debug_snapshot!(name, builder.lower_assign(&assign));
         }
     }
 }

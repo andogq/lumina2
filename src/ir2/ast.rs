@@ -13,6 +13,15 @@ pub struct Ast {
 }
 
 impl Ast {
+    pub fn new() -> Self {
+        Self {
+            function_declarations: Vec::new(),
+            blocks: Vec::new(),
+            expressions: Vec::new(),
+            strings: StringPool::new(),
+        }
+    }
+
     pub fn get_block(&self, block: BlockId) -> &Block {
         &self.blocks[block.0]
     }

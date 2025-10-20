@@ -2,6 +2,7 @@ use crate::ir2::ast::StringId;
 
 pub use self::{bindings::*, block::*, expr::*, functions::*, statement::*, type_refs::*};
 
+#[derive(Clone, Debug)]
 pub struct Hir {
     pub functions: Vec<Function>,
     pub blocks: Vec<Block>,
@@ -21,6 +22,7 @@ impl Hir {
 mod functions {
     use super::*;
 
+    #[derive(Clone, Debug)]
     pub struct Function {
         pub parameters: Vec<(BindingId, TypeRefId)>,
         pub entry: BlockId,
@@ -46,6 +48,7 @@ mod block {
         }
     }
 
+    #[derive(Clone, Debug)]
     pub struct Block {
         pub statements: Vec<Statement>,
         pub expr: ExprId,
@@ -55,28 +58,35 @@ mod block {
 mod statement {
     use super::*;
 
+    #[derive(Clone, Debug)]
     pub enum Statement {
         Declare(DeclareStatement),
         Return(ReturnStatement),
         Expr(ExprStatement),
     }
 
+    #[derive(Clone, Debug)]
     pub struct DeclareStatement {
         pub binding: BindingId,
         pub ty: TypeRefId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct ReturnStatement {
         pub expr: ExprId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct ExprStatement {
         pub expr: ExprId,
     }
 }
 
 mod expr {
-    use crate::ir2::cst::{BinaryOp, UnaryOp};
+    use crate::{
+        enum_conversion,
+        ir2::cst::{BinaryOp, UnaryOp},
+    };
 
     use super::*;
 
@@ -88,6 +98,7 @@ mod expr {
         }
     }
 
+    #[derive(Clone, Debug)]
     pub enum Expr {
         Assign(Assign),
         Binary(Binary),
@@ -99,41 +110,60 @@ mod expr {
         Variable(Variable),
     }
 
+    #[derive(Clone, Debug)]
     pub struct Assign {
         pub variable: ExprId,
         pub value: ExprId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Binary {
         pub lhs: ExprId,
         pub op: BinaryOp,
         pub rhs: ExprId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Unary {
         pub op: UnaryOp,
         pub value: ExprId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Switch {
         pub discriminator: ExprId,
         pub branches: Vec<(Literal, BlockId)>,
         pub default: Option<BlockId>,
     }
 
+    #[derive(Clone, Debug)]
     pub enum Literal {
         Integer(usize),
         Boolean(bool),
         Unit,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Call {
         pub callee: ExprId,
         pub arguments: Vec<ExprId>,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Variable {
         pub binding: BindingId,
+    }
+
+    enum_conversion! {
+        [Expr]
+        Assign: Assign,
+        Binary: Binary,
+        Unary: Unary,
+        Switch: Switch,
+        Literal: Literal,
+        Call: Call,
+        Block: BlockId,
+        Variable: Variable,
     }
 }
 
@@ -148,11 +178,13 @@ mod type_refs {
         }
     }
 
+    #[derive(Clone, Debug)]
     pub struct TypeRef {
         pub name: StringId,
         pub ty: Option<Type>,
     }
 
+    #[derive(Clone, Debug)]
     pub enum Type {
         Unit,
         I8,
