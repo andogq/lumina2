@@ -4,7 +4,7 @@ expression: builder.lower_if(&if_expr)
 ---
 Switch {
     discriminator: ExprId(
-        1,
+        2,
     ),
     branches: [
         (

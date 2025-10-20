@@ -195,7 +195,7 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
             ast::Expr::If(if_expr) => self.lower_if(if_expr).into(),
             ast::Expr::Literal(literal) => self.lower_literal(literal).into(),
             ast::Expr::Call(call) => self.lower_call(call).into(),
-            ast::Expr::Block(block) => Expr::Block(self.lower_block(*block)),
+            ast::Expr::Block(block) => self.lower_block(*block).into(),
             ast::Expr::Variable(variable) => Expr::Variable(Variable {
                 binding: self.scopes.resolve_binding(variable.variable),
             }),
@@ -477,34 +477,52 @@ mod test {
         }
     }
 
+    #[fixture]
+    #[once]
+    fn sample_ast() -> ast::Ast {
+        let mut ast = ast::Ast::new();
+        ast.expressions = vec![
+            ast::Expr::Variable(ast::Variable { variable: StringId::new(0) }),
+            ast::Expr::Variable(ast::Variable { variable: StringId::new(1) }),
+            ast::Expr::Variable(ast::Variable { variable: StringId::new(2) }),
+        ];
+        ast.blocks = vec![
+            // Empty block.
+            ast::Block { statements: vec![], expression: None },
+            // Statement block.
+            ast::Block { statements: vec![ast::Statement::Expr(ast::ExprStatement { expr: ast::ExprId::new(0) })], expression: None },
+            // Expression block.
+            ast::Block { statements: vec![], expression: Some(ast::ExprId::new(0)) },
+            // Everything block.
+            ast::Block { statements: vec![ast::Statement::Expr(ast::ExprStatement { expr: ast::ExprId::new(0) })], expression: Some(ast::ExprId::new(0)) },
+        ];
+        ast
+    }
+
+    #[fixture]
+    fn builder(sample_ast: &'static ast::Ast) -> HirBuilder<'static> {
+        let mut builder = HirBuilder::new(sample_ast);
+        (0..3).for_each(|i|{
+            builder.scopes.declare_binding(StringId::new(i));
+        });
+        builder
+    }
+
+    #[rstest]
+    #[case("block_empty", ast::BlockId::new(0))]
+    #[case("block_statement", ast::BlockId::new(1))]
+    #[case("block_expression", ast::BlockId::new(2))]
+    #[case("block_everything", ast::BlockId::new(3))]
+    fn lower_block(
+        mut builder: HirBuilder<'static>,
+        #[case] name: &str,
+        #[case] block: ast::BlockId,
+    ) {
+        assert_debug_snapshot!(name, builder.lower_block(block));
+    }
+
     mod expr {
         use super::*;
-
-        #[fixture]
-        #[once]
-        fn sample_ast() -> ast::Ast {
-            let mut ast = ast::Ast::new();
-            ast.expressions = vec![
-                ast::Expr::Variable(ast::Variable { variable: StringId::new(0) }),
-                ast::Expr::Variable(ast::Variable { variable: StringId::new(1) }),
-                ast::Expr::Variable(ast::Variable { variable: StringId::new(2) }),
-            ];
-            ast.blocks = vec![
-                ast::Block { statements: Vec::new(), expression: None },
-                ast::Block { statements: Vec::new(), expression: None },
-                ast::Block { statements: Vec::new(), expression: None },
-            ];
-            ast
-        }
-
-        #[fixture]
-        fn builder(sample_ast: &'static ast::Ast) -> HirBuilder<'static> {
-            let mut builder = HirBuilder::new(sample_ast);
-            (0..3).for_each(|i|{
-                builder.scopes.declare_binding(StringId::new(i));
-            });
-            builder
-        }
 
         #[rstest]
         #[case(
