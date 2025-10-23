@@ -1,8 +1,12 @@
+mod visitor;
+
 use std::collections::HashMap;
 
 use crate::ir2::ast::StringId;
 
-pub use self::{bindings::*, block::*, expr::*, functions::*, statement::*, type_refs::*};
+pub use self::{
+    bindings::*, block::*, expr::*, functions::*, statement::*, type_refs::*, visitor::*,
+};
 
 #[derive(Clone, Debug)]
 pub struct Hir {
@@ -200,6 +204,12 @@ mod type_refs {
         I8,
         U8,
         Boolean,
+    }
+
+    impl Type {
+        pub fn is_integer(&self) -> bool {
+            matches!(self, Self::U8 | Self::I8)
+        }
     }
 }
 
