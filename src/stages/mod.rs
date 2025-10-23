@@ -1,3 +1,4 @@
-mod ast_builder;
-mod hir_builder;
-mod parse;
+pub mod ast_builder;
+pub mod hir_builder;
+pub mod parse;
+pub mod ty;

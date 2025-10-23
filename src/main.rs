@@ -10,6 +10,8 @@ mod stages;
 mod tir;
 mod util;
 
+use crate::stages::parse::Parse;
+
 pub use self::{ctx::*, lex::Tok};
 
 fn run(source: &str) -> u8 {
@@ -28,9 +30,15 @@ fn run(source: &str) -> u8 {
 }
 
 fn main() {
-    let result = run("fn main() -> u8 { 42 }");
+    let source = "fn main() -> u8 { let a = 1; let b = 2; a + b }";
 
-    dbg!(result);
+    let mut toks = lex::lex2::Lexer::new(source);
+    let cst = ir2::cst::Program::parse(&mut toks);
+    let ast = stages::ast_builder::build_ast(&cst);
+    let hir = stages::hir_builder::lower(&ast);
+    let solver = stages::ty::build_solver(&hir);
+    let solver = solver.solve();
+    dbg!(solver);
 }
 
 #[cfg(test)]

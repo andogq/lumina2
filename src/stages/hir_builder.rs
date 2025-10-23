@@ -28,6 +28,7 @@ impl<'ast> HirBuilder<'ast> {
         Self {
             hir: Hir {
                 functions: Vec::new(),
+                bindings: HashMap::new(),
                 blocks: Vec::new(),
                 exprs: Vec::new(),
             },
@@ -54,6 +55,16 @@ impl<'ast> HirBuilder<'ast> {
         value
     }
 
+    fn ident_to_type(&self, ident: StringId) -> Type {
+        // HACK: This only handles built-in types.
+        match self.ast.strings.get(ident) {
+            "u8" => Type::U8,
+            "i8" => Type::I8,
+            "bool" => Type::Boolean,
+            ty => panic!("unknown type: {ty}"),
+        }
+    }
+
     pub fn lower_function(&mut self, function: &ast::FunctionDeclaration) -> FunctionId {
         let id = FunctionId::new(self.hir.functions.len());
 
@@ -67,8 +78,7 @@ impl<'ast> HirBuilder<'ast> {
                 .map(|param| {
                     (
                         builder.scopes.declare_binding(param.name),
-                        // TODO: This won't resolve built-in types.
-                        builder.scopes.resolve_type_ref(param.ty),
+                        builder.ident_to_type(param.ty),
                     )
                 })
                 .collect();
@@ -78,7 +88,14 @@ impl<'ast> HirBuilder<'ast> {
             (parameters, entry)
         });
 
-        self.hir.functions.push(Function { parameters, entry });
+        self.hir.functions.push(Function {
+            parameters,
+            return_ty: function
+                .return_ty
+                .map(|ty| self.ident_to_type(ty))
+                .unwrap_or(Type::Unit),
+            entry,
+        });
 
         id
     }
@@ -167,11 +184,13 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
         match statement {
             ast::Statement::Let(let_statement) => {
                 let binding = self.scopes.declare_binding(let_statement.variable);
+                let expr = self.lower_expr(let_statement.value);
+
                 // TODO: Unsure when to create this, should optionally be annotated type.
-                let ty = self.scopes.next_type_ref_id();
+                let ty = DeclarationTy::Inferred(expr);
+                self.hir.bindings.insert(binding, ty.clone());
                 self.add_statement(Statement::Declare(DeclareStatement { binding, ty }));
 
-                let expr = self.lower_expr(let_statement.value);
                 self.add_statement(Statement::Expr(ExprStatement { expr }));
             }
             ast::Statement::Return(return_statement) => {
@@ -236,9 +255,9 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
             switch = Some(Switch {
                 discriminator: self.lower_expr(*condition),
                 branches: vec![(Literal::Boolean(true), self.lower_block(*block))],
-                default: 
                 // Try use the default expression.
-                default .take()
+                default: default
+                    .take()
                     // Otherwise continue building the switch statement.
                     .or_else(|| Some(switch.take()?.into()))
                     .map(|expr| {
@@ -486,19 +505,41 @@ mod test {
     fn sample_ast() -> ast::Ast {
         let mut ast = ast::Ast::new();
         ast.expressions = vec![
-            ast::Expr::Variable(ast::Variable { variable: StringId::new(0) }),
-            ast::Expr::Variable(ast::Variable { variable: StringId::new(1) }),
-            ast::Expr::Variable(ast::Variable { variable: StringId::new(2) }),
+            ast::Expr::Variable(ast::Variable {
+                variable: StringId::new(0),
+            }),
+            ast::Expr::Variable(ast::Variable {
+                variable: StringId::new(1),
+            }),
+            ast::Expr::Variable(ast::Variable {
+                variable: StringId::new(2),
+            }),
         ];
         ast.blocks = vec![
             // Empty block.
-            ast::Block { statements: vec![], expression: None },
+            ast::Block {
+                statements: vec![],
+                expression: None,
+            },
             // Statement block.
-            ast::Block { statements: vec![ast::Statement::Expr(ast::ExprStatement { expr: ast::ExprId::new(0) })], expression: None },
+            ast::Block {
+                statements: vec![ast::Statement::Expr(ast::ExprStatement {
+                    expr: ast::ExprId::new(0),
+                })],
+                expression: None,
+            },
             // Expression block.
-            ast::Block { statements: vec![], expression: Some(ast::ExprId::new(0)) },
+            ast::Block {
+                statements: vec![],
+                expression: Some(ast::ExprId::new(0)),
+            },
             // Everything block.
-            ast::Block { statements: vec![ast::Statement::Expr(ast::ExprStatement { expr: ast::ExprId::new(0) })], expression: Some(ast::ExprId::new(0)) },
+            ast::Block {
+                statements: vec![ast::Statement::Expr(ast::ExprStatement {
+                    expr: ast::ExprId::new(0),
+                })],
+                expression: Some(ast::ExprId::new(0)),
+            },
         ];
         ast
     }
@@ -506,7 +547,7 @@ mod test {
     #[fixture]
     fn builder(sample_ast: &'static ast::Ast) -> HirBuilder<'static> {
         let mut builder = HirBuilder::new(sample_ast);
-        (0..3).for_each(|i|{
+        (0..3).for_each(|i| {
             builder.scopes.declare_binding(StringId::new(i));
         });
         builder
@@ -600,7 +641,11 @@ mod test {
         #[case("literal_integer", ast::Literal::Integer(123))]
         #[case("literal_boolean", ast::Literal::Boolean(true))]
         #[case("literal_unit", ast::Literal::Unit)]
-        fn lower_literal(mut builder: HirBuilder<'static>, #[case] name: &str, #[case] literal: ast::Literal) {
+        fn lower_literal(
+            mut builder: HirBuilder<'static>,
+            #[case] name: &str,
+            #[case] literal: ast::Literal,
+        ) {
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_literal(&literal));
         }
@@ -608,14 +653,22 @@ mod test {
         #[rstest]
         #[case("call_no_params", ast::Call { callee: ast::ExprId::new(0), arguments: vec![] })]
         #[case("call_with_params", ast::Call { callee: ast::ExprId::new(0), arguments: vec![ast::ExprId::new(1), ast::ExprId::new(2)] })]
-        fn lower_call(mut builder: HirBuilder<'static>, #[case] name: &str, #[case] call: ast::Call) {
+        fn lower_call(
+            mut builder: HirBuilder<'static>,
+            #[case] name: &str,
+            #[case] call: ast::Call,
+        ) {
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_call(&call));
         }
 
         #[rstest]
         #[case("variable_simple", ast::Variable { variable: StringId::new(0) })]
-        fn lower_variable(mut builder: HirBuilder<'static>, #[case] name: &str, #[case] variable: ast::Variable) {
+        fn lower_variable(
+            mut builder: HirBuilder<'static>,
+            #[case] name: &str,
+            #[case] variable: ast::Variable,
+        ) {
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_variable(&variable));
         }

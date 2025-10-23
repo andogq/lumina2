@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::ir2::ast::StringId;
 
 pub use self::{bindings::*, block::*, expr::*, functions::*, statement::*, type_refs::*};
@@ -5,6 +7,7 @@ pub use self::{bindings::*, block::*, expr::*, functions::*, statement::*, type_
 #[derive(Clone, Debug)]
 pub struct Hir {
     pub functions: Vec<Function>,
+    pub bindings: HashMap<BindingId, DeclarationTy>,
     pub blocks: Vec<Block>,
     pub exprs: Vec<Expr>,
 }
@@ -24,7 +27,8 @@ mod functions {
 
     #[derive(Clone, Debug)]
     pub struct Function {
-        pub parameters: Vec<(BindingId, TypeRefId)>,
+        pub parameters: Vec<(BindingId, Type)>,
+        pub return_ty: Type,
         pub entry: BlockId,
     }
 
@@ -40,7 +44,7 @@ mod functions {
 mod block {
     use super::*;
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct BlockId(pub(super) usize);
     impl BlockId {
         pub fn new(id: usize) -> Self {
@@ -68,7 +72,13 @@ mod statement {
     #[derive(Clone, Debug)]
     pub struct DeclareStatement {
         pub binding: BindingId,
-        pub ty: TypeRefId,
+        pub ty: DeclarationTy,
+    }
+
+    #[derive(Clone, Debug)]
+    pub enum DeclarationTy {
+        Type(Type),
+        Inferred(ExprId),
     }
 
     #[derive(Clone, Debug)]
@@ -90,7 +100,7 @@ mod expr {
 
     use super::*;
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct ExprId(pub(super) usize);
     impl ExprId {
         pub fn new(id: usize) -> Self {
@@ -184,7 +194,7 @@ mod type_refs {
         pub ty: Option<Type>,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     pub enum Type {
         Unit,
         I8,
