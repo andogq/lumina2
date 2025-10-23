@@ -3,7 +3,7 @@ use crate::{
         cst::{BinaryOp, UnaryOp},
         hir::*,
     },
-    stages::ty2::Constraint,
+    stages::ty::Constraint,
 };
 
 use super::IntegerKind;
@@ -17,6 +17,12 @@ impl ConstraintBuilder {
         Self {
             constraints: Vec::new(),
         }
+    }
+
+    pub fn build(hir: &Hir) -> Vec<Constraint> {
+        let mut builder = ConstraintBuilder::new();
+        hir.visit(&mut builder);
+        builder.constraints
     }
 }
 
@@ -195,5 +201,26 @@ fn constraint_from_literal(literal: &Literal, expr: ExprId) -> Constraint {
         Literal::Integer(_) => Constraint::Integer(expr.into(), IntegerKind::Any),
         Literal::Boolean(_) => Constraint::Eq(expr.into(), Type::Boolean.into()),
         Literal::Unit => Constraint::Eq(expr.into(), Type::Unit.into()),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::lex::tok;
+
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        let mut builder = ConstraintBuilder::new();
+        builder.visit_binary(
+            ExprId::new(0),
+            &Binary {
+                lhs: ExprId::new(1),
+                op: BinaryOp::Plus(tok::Plus),
+                rhs: ExprId::new(2),
+            },
+        );
+        dbg!(builder.constraints);
     }
 }

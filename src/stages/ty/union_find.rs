@@ -1,6 +1,6 @@
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::stages::ty2::TypeVarId;
+use crate::stages::ty::TypeVarId;
 
 #[derive(Clone, Debug)]
 pub struct UnionFind(HashMap<TypeVarId, (TypeVarId, usize)>);

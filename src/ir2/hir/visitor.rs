@@ -47,8 +47,8 @@ impl Hir {
                         DeclarationTy::Inferred(_) => None,
                     },
                 ),
-                Statement::Return(return_statement) => todo!(),
-                Statement::Expr(expr_statement) => todo!(),
+                Statement::Return(return_statement) => {}
+                Statement::Expr(expr_statement) => {}
             });
 
         self.exprs.iter().enumerate().for_each(|(id, expr)| {

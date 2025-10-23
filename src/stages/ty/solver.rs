@@ -1,9 +1,9 @@
 use super::*;
 
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{HashMap, VecDeque, hash_map::Entry};
 
 #[derive(Clone, Debug)]
-struct Solver {
+pub struct Solver {
     root: UnionFind,
     solutions: HashMap<TypeVarId, Solution>,
 }
@@ -14,6 +14,31 @@ impl Solver {
             root: UnionFind::new(),
             solutions: HashMap::new(),
         }
+    }
+
+    pub fn run(constraints: &[Constraint]) -> HashMap<TypeVarId, Type> {
+        let mut solver = Self::new();
+
+        solver.solutions.extend(
+            [Type::Unit, Type::U8, Type::I8, Type::Boolean]
+                .map(|ty| (ty.clone().into(), ty.into())),
+        );
+
+        let mut constraints = VecDeque::from_iter(constraints);
+
+        while let Some(constraint) = constraints.pop_front() {
+            let solved = solver.solve_constraint(constraint);
+
+            if !solved {
+                // constraints.push_back(constraint);
+            }
+        }
+
+        solver
+            .solutions
+            .keys()
+            .map(|key| (key.clone(), solver.get_ty(key)))
+            .collect()
     }
 
     fn solve(&mut self, var: TypeVarId, solution: impl Into<Solution>) {
@@ -72,7 +97,7 @@ impl Solver {
                     ),
                 }
             }
-            Constraint::IntegerLiteral(var) => {
+            Constraint::Integer(var, kind) => {
                 let var = self.root.resolve(var);
 
                 match self.solutions.entry(var.clone()) {
@@ -88,7 +113,7 @@ impl Solver {
                     },
                     // No solution currently exists, so input that an integer literal is expected.
                     Entry::Vacant(solution) => {
-                        solution.insert(Solution::Literal(IntegerLiteral::Any.into()));
+                        solution.insert(Solution::Literal(IntegerKind::Any.into()));
                         true
                     }
                 }
@@ -156,7 +181,7 @@ mod test {
         let mut solver = Solver::new();
 
         // Manually solve expression as literal.
-        solver.solve(expr0.clone(), Literal::Integer(IntegerLiteral::Unsigned));
+        solver.solve(expr0.clone(), Literal::Integer(IntegerKind::Unsigned));
         // Should default to type if none specified.
         assert_eq!(solver.get_ty(&expr0), Type::U8);
     }
@@ -166,7 +191,7 @@ mod test {
         let expr0 = TypeVarId::Expr(ExprId::new(0));
         let mut solver = Solver::new();
 
-        assert!(solver.solve_constraint(&Constraint::IntegerLiteral(expr0.clone())));
+        assert!(solver.solve_constraint(&Constraint::Integer(expr0.clone(), IntegerKind::Any)));
         assert_eq!(solver.get_ty(&expr0), Type::I8);
     }
 }

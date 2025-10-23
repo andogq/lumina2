@@ -30,15 +30,13 @@ fn run(source: &str) -> u8 {
 }
 
 fn main() {
-    let source = "fn main() -> u8 { let a = 1; let b = 2; a + b }";
+    let source = "fn main() -> u8 { if true { 1 } else { 2 } }";
 
     let mut toks = lex::lex2::Lexer::new(source);
     let cst = ir2::cst::Program::parse(&mut toks);
     let ast = stages::ast_builder::build_ast(&cst);
     let hir = stages::hir_builder::lower(&ast);
-    let solver = stages::ty::build_solver(&hir);
-    let solver = solver.solve();
-    dbg!(solver);
+    stages::ty::solve(&hir);
 }
 
 #[cfg(test)]
