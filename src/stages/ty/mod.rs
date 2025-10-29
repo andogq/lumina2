@@ -1,8 +1,8 @@
 mod constraint_builder;
+mod disjoint_union_set;
 mod solver;
-mod union_find;
 
-use self::union_find::UnionFind;
+use self::disjoint_union_set::DisjointUnionSet;
 use crate::{
     enum_conversion,
     ir2::hir::*,
