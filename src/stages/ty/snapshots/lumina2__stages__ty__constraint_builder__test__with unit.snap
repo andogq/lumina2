@@ -1,0 +1,16 @@
+---
+source: src/stages/ty/constraint_builder.rs
+expression: Some(Unit)
+---
+[
+    Eq(
+        Binding(
+            BindingId(
+                0,
+            ),
+        ),
+        Type(
+            Unit,
+        ),
+    ),
+]

@@ -1,0 +1,44 @@
+---
+source: src/stages/ty/constraint_builder.rs
+expression: "Binary { lhs: ExprId(1), op: Greater(RAngle), rhs: ExprId(2) }"
+---
+[
+    Eq(
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+        Expr(
+            ExprId(
+                2,
+            ),
+        ),
+    ),
+    Integer(
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+        Any,
+    ),
+    Integer(
+        Expr(
+            ExprId(
+                2,
+            ),
+        ),
+        Any,
+    ),
+    Eq(
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Type(
+            Boolean,
+        ),
+    ),
+]

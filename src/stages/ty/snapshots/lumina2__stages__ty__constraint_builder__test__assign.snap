@@ -1,0 +1,28 @@
+---
+source: src/stages/ty/constraint_builder.rs
+expression: "Assign { variable: ExprId(1), value: ExprId(2) }"
+---
+[
+    Eq(
+        Expr(
+            ExprId(
+                2,
+            ),
+        ),
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+    ),
+    Eq(
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Type(
+            Unit,
+        ),
+    ),
+]

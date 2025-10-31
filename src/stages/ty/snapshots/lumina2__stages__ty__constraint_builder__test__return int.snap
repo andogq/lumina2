@@ -1,0 +1,16 @@
+---
+source: src/stages/ty/constraint_builder.rs
+expression: "[] => I8"
+---
+[
+    Eq(
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Type(
+            I8,
+        ),
+    ),
+]

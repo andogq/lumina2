@@ -1,0 +1,36 @@
+---
+source: src/stages/ty/constraint_builder.rs
+expression: "Binary { lhs: ExprId(1), op: LogicalAnd(AmpAmp), rhs: ExprId(2) }"
+---
+[
+    Eq(
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+        Type(
+            Boolean,
+        ),
+    ),
+    Eq(
+        Expr(
+            ExprId(
+                2,
+            ),
+        ),
+        Type(
+            Boolean,
+        ),
+    ),
+    Eq(
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Type(
+            Boolean,
+        ),
+    ),
+]

@@ -1,0 +1,26 @@
+---
+source: src/stages/ty/constraint_builder.rs
+expression: "Unary { op: Negative(Minus), value: ExprId(1) }"
+---
+[
+    Eq(
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+    ),
+    Integer(
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+        Signed,
+    ),
+]

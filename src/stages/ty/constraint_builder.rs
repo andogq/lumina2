@@ -210,17 +210,121 @@ mod test {
 
     use super::*;
 
-    #[test]
-    fn it_works() {
-        let mut builder = ConstraintBuilder::new();
-        builder.visit_binary(
-            ExprId::new(0),
-            &Binary {
-                lhs: ExprId::new(1),
-                op: BinaryOp::Plus(tok::Plus),
-                rhs: ExprId::new(2),
+    use insta::*;
+    use rstest::*;
+
+    #[fixture]
+    fn builder() -> ConstraintBuilder {
+        ConstraintBuilder::new()
+    }
+
+    #[rstest]
+    #[case("simple", [], Type::Unit)]
+    #[case("return int", [], Type::I8)]
+    #[case("params", [(BindingId::new(0), Type::I8), (BindingId::new(1), Type::Boolean)], Type::Boolean)]
+    fn function_expression(
+        mut builder: ConstraintBuilder,
+        #[case] name: &str,
+        #[case] params: impl IntoIterator<Item = (BindingId, Type)>,
+        #[case] return_ty: Type,
+    ) {
+        let params = params.into_iter().collect::<Vec<_>>();
+        builder.visit_function_declaration(
+            params.clone(),
+            return_ty.clone(),
+            &Block {
+                statements: Vec::new(),
+                expr: ExprId::new(0),
             },
         );
-        dbg!(builder.constraints);
+        assert_debug_snapshot!(
+            name,
+            builder.constraints,
+            &format!("{params:?} => {return_ty:?}")
+        );
+    }
+
+    #[rstest]
+    #[case("no type", None)]
+    #[case("with unit", Some(Type::Unit))]
+    #[case("with type", Some(Type::I8))]
+    fn variable_declaration(
+        mut builder: ConstraintBuilder,
+        #[case] name: &str,
+        #[case] ty: Option<Type>,
+    ) {
+        builder.visit_variable_declaration(BindingId::new(0), ty.clone());
+        assert_debug_snapshot!(name, builder.constraints, &format!("{ty:?}"));
+    }
+
+    #[rstest]
+    #[case("assign", Assign { variable: ExprId::new(1), value: ExprId::new(2) })]
+    fn assign_constraint(
+        mut builder: ConstraintBuilder,
+        #[case] name: &str,
+        #[case] assign: Assign,
+    ) {
+        builder.visit_assign(ExprId::new(0), &assign);
+        assert_debug_snapshot!(name, builder.constraints, &format!("{assign:?}"));
+    }
+
+    #[rstest]
+    #[case(
+        "plus",
+        Binary {
+            lhs: ExprId::new(1),
+            op: BinaryOp::Plus(tok::Plus),
+            rhs: ExprId::new(2),
+        },
+    )]
+    #[case(
+        "logical and",
+        Binary {
+            lhs: ExprId::new(1),
+            op: BinaryOp::LogicalAnd(tok::AmpAmp),
+            rhs: ExprId::new(2),
+        },
+    )]
+    #[case(
+        "equal",
+        Binary {
+            lhs: ExprId::new(1),
+            op: BinaryOp::Equal(tok::EqEq),
+            rhs: ExprId::new(2),
+        },
+    )]
+    #[case(
+        "greater",
+        Binary {
+            lhs: ExprId::new(1),
+            op: BinaryOp::Greater(tok::RAngle),
+            rhs: ExprId::new(2),
+        },
+    )]
+    fn binary_constraint(
+        mut builder: ConstraintBuilder,
+        #[case] name: &str,
+        #[case] binary: Binary,
+    ) {
+        builder.visit_binary(ExprId::new(0), &binary);
+        assert_debug_snapshot!(name, builder.constraints, &format!("{binary:?}"));
+    }
+
+    #[rstest]
+    #[case("negative", Unary { op: UnaryOp::Negative(tok::Minus), value: ExprId::new(1) })]
+    fn unary_constraint(mut builder: ConstraintBuilder, #[case] name: &str, #[case] unary: Unary) {
+        builder.visit_unary(ExprId::new(0), &unary);
+        assert_debug_snapshot!(name, builder.constraints, &format!("{unary:?}"));
+    }
+
+    #[rstest]
+    fn switch_constraint(
+        mut builder: ConstraintBuilder,
+        #[case] name: &str,
+        #[case] discriminator: ExprId,
+        #[case] branches: impl IntoIterator<Item = (Literal, Block)>,
+        #[case] default: Option<Block>,
+    ) {
+        builder.visit_switch()
     }
 }

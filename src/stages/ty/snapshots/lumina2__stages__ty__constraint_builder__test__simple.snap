@@ -1,0 +1,16 @@
+---
+source: src/stages/ty/constraint_builder.rs
+expression: "[] => Unit"
+---
+[
+    Eq(
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Type(
+            Unit,
+        ),
+    ),
+]

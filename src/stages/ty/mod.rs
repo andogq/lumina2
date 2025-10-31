@@ -23,7 +23,7 @@ enum_conversion! {
     Type: Type,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Constraint {
     Eq(TypeVarId, TypeVarId),
     Integer(TypeVarId, IntegerKind),
