@@ -3,7 +3,7 @@ use crate::{
     lex::tok,
 };
 
-struct AstBuilder<'cst> {
+pub(crate) struct AstBuilder<'cst> {
     cst: &'cst cst::Program,
     ast: Ast,
 }
@@ -93,7 +93,7 @@ impl<'cst> AstBuilder<'cst> {
         id
     }
 
-    fn lower_expr(&mut self, expr: &cst::Expr) -> ExprId {
+    pub fn lower_expr(&mut self, expr: &cst::Expr) -> ExprId {
         let expr = match expr {
             cst::Expr::Assign(assign) => self.lower_assign(assign).into(),
             cst::Expr::Binary(binary) => self.lower_binary(binary).into(),

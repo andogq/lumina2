@@ -9,7 +9,7 @@ use crate::ir2::{
 };
 
 #[derive(Clone, Debug)]
-struct HirBuilder<'ast> {
+pub struct HirBuilder<'ast> {
     /// HIR that is being built.
     hir: Hir,
     /// Reference AST.
@@ -21,6 +21,9 @@ struct HirBuilder<'ast> {
     scopes: Scopes,
     /// Cached unit expression.
     unit_expression: Option<ExprId>,
+
+    /// Mappings from previous expression ID, to new expression ID.
+    pub expr_mapping: HashMap<ast::ExprId, ExprId>,
 }
 
 impl<'ast> HirBuilder<'ast> {
@@ -36,14 +39,18 @@ impl<'ast> HirBuilder<'ast> {
             function_bindings: HashMap::new(),
             scopes: Scopes::new(),
             unit_expression: None,
+            expr_mapping: HashMap::new(),
+        }
+    }
+
+    pub fn lower_functions(&mut self) {
+        for function in &self.ast.function_declarations {
+            self.lower_function(function);
         }
     }
 
     pub fn build(mut self) -> Hir {
-        for function in &self.ast.function_declarations {
-            self.lower_function(function);
-        }
-
+        // self.lower_functions();
         self.hir
     }
 
@@ -204,8 +211,8 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
         }
     }
 
-    pub fn lower_expr(&mut self, expr: ast::ExprId) -> ExprId {
-        let expr = self.ast.get_expr(expr);
+    pub fn lower_expr(&mut self, expr_id: ast::ExprId) -> ExprId {
+        let expr = self.ast.get_expr(expr_id);
 
         let expr = match expr {
             ast::Expr::Assign(assign) => self.lower_assign(assign).into(),
@@ -218,7 +225,11 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
             ast::Expr::Variable(variable) => self.lower_variable(variable).into(),
         };
 
-        self.add_expr(expr)
+        let id = self.add_expr(expr);
+
+        self.expr_mapping.insert(expr_id, id);
+
+        id
     }
 
     fn lower_assign(&mut self, assign: &ast::Assign) -> Assign {

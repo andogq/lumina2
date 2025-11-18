@@ -317,14 +317,14 @@ mod test {
         assert_debug_snapshot!(name, builder.constraints, &format!("{unary:?}"));
     }
 
-    #[rstest]
-    fn switch_constraint(
-        mut builder: ConstraintBuilder,
-        #[case] name: &str,
-        #[case] discriminator: ExprId,
-        #[case] branches: impl IntoIterator<Item = (Literal, Block)>,
-        #[case] default: Option<Block>,
-    ) {
-        builder.visit_switch()
-    }
+    // #[rstest]
+    // fn switch_constraint(
+    //     mut builder: ConstraintBuilder,
+    //     #[case] name: &str,
+    //     #[case] discriminator: ExprId,
+    //     #[case] branches: impl IntoIterator<Item = (Literal, Block)>,
+    //     #[case] default: Option<Block>,
+    // ) {
+    //     builder.visit_switch()
+    // }
 }

@@ -31,13 +31,27 @@ impl Solver {
         );
 
         let mut constraints = VecDeque::from_iter(constraints);
+        let mut retry = Vec::new();
 
-        while let Some(constraint) = constraints.pop_front() {
-            let solved = solver.solve_constraint(constraint);
+        while !constraints.is_empty() {
+            let mut progress = false;
+            while let Some(constraint) = constraints.pop_front() {
+                let solved = solver.solve_constraint(constraint);
 
-            if !solved {
-                constraints.push_back(constraint);
+                progress |= solved;
+
+                if !solved {
+                    retry.push(constraint);
+                }
             }
+
+            if !progress {
+                println!("couldn't progress type solving");
+                dbg!(retry);
+                panic!();
+            }
+
+            constraints = std::mem::take(&mut retry).into_iter().collect();
         }
 
         solver

@@ -116,7 +116,7 @@ mod expr {
 
     use super::*;
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct ExprId(pub(super) usize);
 
     impl ExprId {
