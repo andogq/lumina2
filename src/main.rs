@@ -22,8 +22,6 @@ fn run(source: &str) -> u8 {
     let tir = tir::lower(&ctx, &program);
     let ir = ir::lower(&ctx, &tir);
 
-    dbg!(&ir.functions[tir::FunctionId::zero()]);
-
     let ink_ctx = inkwell::context::Context::create();
     let llvm = llvm::Llvm::new(&ink_ctx, &ir);
     llvm.run("main")

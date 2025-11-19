@@ -47,19 +47,22 @@ impl HirVisitor for ConstraintBuilder {
             .push(Constraint::Eq(body.expr.into(), return_ty.into()));
     }
 
-    fn visit_variable_declaration(&mut self, binding: BindingId, ty: Option<Type>) {
-        let Some(ty) = ty else {
-            return;
-        };
-
-        // Constrain the binding to the type it's assigned to.
-        self.constraints
-            .push(Constraint::Eq(binding.into(), ty.into()));
+    fn visit_variable_declaration(&mut self, binding: BindingId, ty: DeclarationTy) {
+        match ty {
+            // Constrain the binding to the type it's assigned to.
+            DeclarationTy::Type(ty) => self
+                .constraints
+                .push(Constraint::Eq(binding.into(), ty.into())),
+            // Constrain the binding to the inferred expression.
+            DeclarationTy::Inferred(expr_id) => self
+                .constraints
+                .push(Constraint::Eq(binding.into(), expr_id.into())),
+        }
     }
 
     fn visit_assign(&mut self, id: ExprId, assign: &Assign) {
         self.constraints.extend([
-            // Valur must match variable.
+            // Value must match variable.
             Constraint::Eq(assign.value.into(), assign.variable.into()),
             // The actual expression resolves to unit.
             Constraint::Eq(id.into(), Type::Unit.into()),
@@ -245,13 +248,13 @@ mod test {
     }
 
     #[rstest]
-    #[case("no type", None)]
-    #[case("with unit", Some(Type::Unit))]
-    #[case("with type", Some(Type::I8))]
+    #[case("inferred", DeclarationTy::Inferred(ExprId::new(0)))]
+    #[case("with unit", DeclarationTy::Type(Type::Unit))]
+    #[case("with type", DeclarationTy::Type(Type::I8))]
     fn variable_declaration(
         mut builder: ConstraintBuilder,
         #[case] name: &str,
-        #[case] ty: Option<Type>,
+        #[case] ty: DeclarationTy,
     ) {
         builder.visit_variable_declaration(BindingId::new(0), ty.clone());
         assert_debug_snapshot!(name, builder.constraints, &format!("{ty:?}"));

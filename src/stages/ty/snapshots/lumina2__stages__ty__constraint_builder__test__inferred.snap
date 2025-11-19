@@ -1,0 +1,18 @@
+---
+source: src/stages/ty/constraint_builder.rs
+expression: Inferred(ExprId(0))
+---
+[
+    Eq(
+        Binding(
+            BindingId(
+                0,
+            ),
+        ),
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+    ),
+]

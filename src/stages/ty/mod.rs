@@ -126,8 +126,6 @@ mod test {
             });
         }
 
-        dbg!(&ast);
-
         // Lower the AST into the HIR.
         let mut hir_builder = hir_builder::HirBuilder::new(&ast);
         hir_builder.lower_functions();
@@ -137,8 +135,6 @@ mod test {
 
         // Extract the HIR.
         let hir = hir_builder.build();
-
-        dbg!(&hir);
 
         // Run type inference.
         let tys = solve(&hir);

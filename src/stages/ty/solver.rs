@@ -46,8 +46,9 @@ impl Solver {
             }
 
             if !progress {
-                println!("couldn't progress type solving");
+                eprintln!("couldn't progress type solving");
                 dbg!(retry);
+                dbg!(solver.solutions);
                 panic!();
             }
 

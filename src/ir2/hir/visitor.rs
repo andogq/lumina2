@@ -8,7 +8,7 @@ pub trait HirVisitor {
         body: &Block,
     ) {
     }
-    fn visit_variable_declaration(&mut self, binding: BindingId, ty: Option<Type>) {}
+    fn visit_variable_declaration(&mut self, binding: BindingId, ty: DeclarationTy) {}
     fn visit_assign(&mut self, id: ExprId, assign: &Assign) {}
     fn visit_binary(&mut self, id: ExprId, binary: &Binary) {}
     fn visit_unary(&mut self, id: ExprId, unary: &Unary) {}
@@ -42,10 +42,7 @@ impl Hir {
             .for_each(|statement| match statement {
                 Statement::Declare(declare_statement) => visitor.visit_variable_declaration(
                     declare_statement.binding,
-                    match &declare_statement.ty {
-                        DeclarationTy::Type(ty) => Some(ty.clone()),
-                        DeclarationTy::Inferred(_) => None,
-                    },
+                    declare_statement.ty.clone(),
                 ),
                 Statement::Return(return_statement) => {}
                 Statement::Expr(expr_statement) => {}
