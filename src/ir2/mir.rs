@@ -1,12 +1,22 @@
 use crate::ir2::hir::Type;
 
-use self::{
+pub use self::{
     basic_blocks::*, functions::*, operand::*, place::*, rvalue::*, statement::*, terminator::*,
 };
 
+#[derive(Clone, Debug)]
 pub struct Mir {
     pub functions: Vec<Function>,
     pub basic_blocks: Vec<BasicBlock>,
+}
+
+impl Mir {
+    pub fn new() -> Self {
+        Self {
+            functions: Vec::new(),
+            basic_blocks: Vec::new(),
+        }
+    }
 }
 
 mod functions {
@@ -15,6 +25,7 @@ mod functions {
     #[derive(Clone, Copy, Debug)]
     pub struct FunctionId(usize);
 
+    #[derive(Clone, Debug)]
     pub struct Function {
         pub locals: Vec<Type>,
         pub entry: BasicBlockId,
@@ -22,53 +33,71 @@ mod functions {
 
     #[derive(Clone, Copy, Debug)]
     pub struct LocalId(usize);
+    impl LocalId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
+    }
 }
 
 mod basic_blocks {
     use super::*;
 
     #[derive(Clone, Copy, Debug)]
-    pub struct BasicBlockId(usize);
+    pub struct BasicBlockId(pub usize);
+    impl BasicBlockId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
+    }
 
+    #[derive(Clone, Debug)]
     pub struct BasicBlock {
-        statements: Vec<Statement>,
-        terminator: Terminator,
+        pub statements: Vec<Statement>,
+        pub terminator: Terminator,
     }
 }
 
 mod statement {
     use super::*;
 
+    #[derive(Clone, Debug)]
     pub enum Statement {
         Assign(Assign),
         StorageLive(StorageLive),
         StorageDead(StorageDead),
     }
 
+    #[derive(Clone, Debug)]
     pub struct Assign {
-        place: Place,
-        rvalue: RValue,
+        pub place: Place,
+        pub rvalue: RValue,
     }
 
+    #[derive(Clone, Debug)]
     pub struct StorageLive {
-        local: LocalId,
+        pub local: LocalId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct StorageDead {
-        local: LocalId,
+        pub local: LocalId,
     }
 }
 
 mod terminator {
     use super::*;
 
+    #[derive(Clone, Debug)]
     pub enum Terminator {
         Call(Call),
         Goto(Goto),
         Return,
         SwitchInt(SwitchInt),
+        Unterminated,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Call {
         pub func: Operand,
         pub args: Vec<Operand>,
@@ -76,10 +105,12 @@ mod terminator {
         pub target: BasicBlockId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Goto {
         pub basic_block: BasicBlockId,
     }
 
+    #[derive(Clone, Debug)]
     pub struct SwitchInt {
         pub discriminator: Operand,
         pub targets: Vec<(Constant, BasicBlockId)>,
@@ -90,11 +121,13 @@ mod terminator {
 mod place {
     use super::*;
 
+    #[derive(Clone, Debug)]
     pub struct Place {
-        local: LocalId,
-        projection: Vec<Projection>,
+        pub local: LocalId,
+        pub projection: Vec<Projection>,
     }
 
+    #[derive(Clone, Debug)]
     pub enum Projection {
         Deref,
     }
@@ -105,6 +138,7 @@ mod rvalue {
 
     use super::*;
 
+    #[derive(Clone, Debug)]
     pub enum RValue {
         Use(Operand),
         Ref(Place),
@@ -112,12 +146,14 @@ mod rvalue {
         Unary(Unary),
     }
 
+    #[derive(Clone, Debug)]
     pub struct Binary {
         pub lhs: Operand,
         pub op: BinaryOp,
         pub rhs: Operand,
     }
 
+    #[derive(Clone, Debug)]
     pub struct Unary {
         pub op: UnaryOp,
         pub value: Operand,
@@ -127,14 +163,17 @@ mod rvalue {
 mod operand {
     use super::*;
 
+    #[derive(Clone, Debug)]
     pub enum Operand {
         Place(Place),
         Constant(Constant),
     }
 
+    #[derive(Clone, Debug)]
     pub enum Constant {
         U8(u8),
         I8(i8),
         Boolean(bool),
+        Unit,
     }
 }

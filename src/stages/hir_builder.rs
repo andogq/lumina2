@@ -50,7 +50,7 @@ impl<'ast> HirBuilder<'ast> {
     }
 
     pub fn build(mut self) -> Hir {
-        // self.lower_functions();
+        self.lower_functions();
         self.hir
     }
 

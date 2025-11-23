@@ -1,3 +1,4 @@
+mod thir;
 mod visitor;
 
 use std::collections::HashMap;
@@ -5,7 +6,8 @@ use std::collections::HashMap;
 use crate::ir2::ast::StringId;
 
 pub use self::{
-    bindings::*, block::*, expr::*, functions::*, statement::*, type_refs::*, visitor::*,
+    bindings::*, block::*, expr::*, functions::*, statement::*, thir::Thir, type_refs::*,
+    visitor::*,
 };
 
 #[derive(Clone, Debug)]

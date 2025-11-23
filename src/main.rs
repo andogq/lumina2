@@ -34,7 +34,10 @@ fn main() {
     let cst = ir2::cst::Program::parse(&mut toks);
     let ast = stages::ast_builder::build_ast(&cst);
     let hir = stages::hir_builder::lower(&ast);
-    stages::ty::solve(&hir);
+    let types = stages::ty::solve(&hir);
+    let thir = ir2::hir::Thir::new(hir, types);
+    let mir = stages::mir_builder::lower(&thir);
+    dbg!(&mir);
 }
 
 #[cfg(test)]
