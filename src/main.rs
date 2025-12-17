@@ -19,9 +19,13 @@ fn run(source: &str) -> u8 {
     let cst = ir2::cst::Program::parse(&mut toks);
     let ast = stages::ast_builder::build_ast(&cst);
     let hir = stages::hir_builder::lower(&ast);
+    dbg!(&hir);
     let types = stages::ty::solve(&hir);
+    dbg!(&types);
     let thir = ir2::hir::Thir::new(hir, types);
+    dbg!(&thir);
     let mir = stages::mir_builder::lower(&thir);
+    dbg!(&mir);
 
     let ink = inkwell::context::Context::create();
     let module = stages::codegen::codegen(&ink, &mir);

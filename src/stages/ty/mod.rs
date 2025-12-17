@@ -79,7 +79,7 @@ impl IntegerKind {
 
 pub fn solve(hir: &Hir) -> HashMap<TypeVarId, Type> {
     let constraints = ConstraintBuilder::build(hir);
-    Solver::run(&constraints)
+    Solver::run(dbg!(&constraints))
 }
 
 #[cfg(test)]

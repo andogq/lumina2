@@ -119,7 +119,21 @@ impl<'ast> HirBuilder<'ast> {
 
             let expr = block
                 .expression
+                // Use the provided expression to end the block.
                 .map(|expr| builder.lower_expr(expr))
+                .or_else(|| {
+                    // Otherwise, if the final statement is `return` then add an unreachable
+                    // marker.
+                    block
+                        .statements
+                        .last()
+                        .and_then(|statement| {
+                            matches!(statement, ast::Statement::Return(_))
+                                .then_some(Expr::Unreachable)
+                        })
+                        .map(|expr| builder.add_expr(expr))
+                })
+                // Otherwise, assume unit.
                 .unwrap_or_else(|| builder.unit_expression());
 
             builder.terminate(expr)
@@ -191,13 +205,15 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
         match statement {
             ast::Statement::Let(let_statement) => {
                 let binding = self.scopes.declare_binding(let_statement.variable);
-                let expr = self.lower_expr(let_statement.value);
+                let value = self.lower_expr(let_statement.value);
 
                 // TODO: Unsure when to create this, should optionally be annotated type.
-                let ty = DeclarationTy::Inferred(expr);
+                let ty = DeclarationTy::Inferred(value);
                 self.hir.bindings.insert(binding, ty.clone());
                 self.add_statement(Statement::Declare(DeclareStatement { binding, ty }));
 
+                let variable = self.add_expr(Expr::Variable(Variable { binding }));
+                let expr = self.add_expr(Expr::Assign(Assign { variable, value }));
                 self.add_statement(Statement::Expr(ExprStatement { expr }));
             }
             ast::Statement::Return(return_statement) => {

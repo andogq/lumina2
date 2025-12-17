@@ -27,7 +27,9 @@ fn lower_function(thir: &Thir, builder: &mut Builder, function: &hir::Function) 
 
     // If the block resolves to a value of the same type as the return value, then it's an implicit
     // return.
-    if thir.get_expr_ty(block.expr) == &function.return_ty {
+    if let Some(result) = result
+        && thir.get_expr_ty(block.expr) == &function.return_ty
+    {
         builder.store(LocalId::new(0), RValue::Use(result));
     }
 
@@ -37,7 +39,11 @@ fn lower_function(thir: &Thir, builder: &mut Builder, function: &hir::Function) 
     }
 }
 
-fn lower_block(thir: &Thir, builder: &mut FunctionBuilder<'_>, block: &hir::Block) -> Operand {
+fn lower_block(
+    thir: &Thir,
+    builder: &mut FunctionBuilder<'_>,
+    block: &hir::Block,
+) -> Option<Operand> {
     for statement in &block.statements {
         match statement {
             hir::Statement::Declare(hir::DeclareStatement { binding, ty }) => {
@@ -51,8 +57,10 @@ fn lower_block(thir: &Thir, builder: &mut FunctionBuilder<'_>, block: &hir::Bloc
                 );
             }
             hir::Statement::Return(hir::ReturnStatement { expr }) => {
-                let value = lower_expr(thir, builder, *expr);
-                builder.store(LocalId::new(0), RValue::Use(value));
+                if let Some(value) = lower_expr(thir, builder, *expr) {
+                    builder.store(LocalId::new(0), RValue::Use(value));
+                }
+                builder.terminate(Terminator::Return);
             }
             hir::Statement::Expr(hir::ExprStatement { expr }) => {
                 lower_expr(thir, builder, *expr);
@@ -63,18 +71,22 @@ fn lower_block(thir: &Thir, builder: &mut FunctionBuilder<'_>, block: &hir::Bloc
     lower_expr(thir, builder, block.expr)
 }
 
-fn lower_expr(thir: &Thir, builder: &mut FunctionBuilder<'_>, expr: hir::ExprId) -> Operand {
-    match thir.get_expr(expr) {
+fn lower_expr(
+    thir: &Thir,
+    builder: &mut FunctionBuilder<'_>,
+    expr: hir::ExprId,
+) -> Option<Operand> {
+    Some(match thir.get_expr(expr) {
         hir::Expr::Assign(hir::Assign { variable, value }) => {
-            let value = lower_expr(thir, builder, *value);
+            let value = lower_expr(thir, builder, *value)?;
             let place = expr_to_place(thir, builder, *variable);
             builder.assign(place, RValue::Use(value));
 
             Operand::Constant(Constant::Unit)
         }
         hir::Expr::Binary(hir::Binary { lhs, op, rhs }) => {
-            let lhs = lower_expr(thir, builder, *lhs);
-            let rhs = lower_expr(thir, builder, *rhs);
+            let lhs = lower_expr(thir, builder, *lhs)?;
+            let rhs = lower_expr(thir, builder, *rhs)?;
 
             let result = builder.add_local(thir.get_expr_ty(expr).clone());
 
@@ -93,7 +105,7 @@ fn lower_expr(thir: &Thir, builder: &mut FunctionBuilder<'_>, expr: hir::ExprId)
             })
         }
         hir::Expr::Unary(hir::Unary { op, value }) => {
-            let value = lower_expr(thir, builder, *value);
+            let value = lower_expr(thir, builder, *value)?;
 
             let result = builder.add_local(thir.get_expr_ty(expr).clone());
 
@@ -116,7 +128,7 @@ fn lower_expr(thir: &Thir, builder: &mut FunctionBuilder<'_>, expr: hir::ExprId)
             default,
         }) => {
             let discriminator_ty = thir.get_expr_ty(*discriminator);
-            let discriminator = lower_expr(thir, builder, *discriminator);
+            let discriminator = lower_expr(thir, builder, *discriminator)?;
 
             let current_block = builder.block;
 
@@ -132,12 +144,16 @@ fn lower_expr(thir: &Thir, builder: &mut FunctionBuilder<'_>, expr: hir::ExprId)
                     builder.block = bb;
 
                     // Lower the block.
-                    let result = lower_block(thir, builder, thir.get_block(*block));
+                    if let Some(result) = lower_block(thir, builder, thir.get_block(*block)) {
+                        // Store the resulting block value in the switch value, and jump back to merge
+                        // block.
+                        builder.store(switch_value, RValue::Use(result));
+                    }
 
-                    // Store the resulting block value in the switch value, and jump back to merge
-                    // block.
-                    builder.store(switch_value, RValue::Use(result));
-                    builder.goto(end_block);
+                    // Jump back to the end block, if it hasn't been terminated.
+                    if matches!(builder.current_block().terminator, Terminator::Unterminated) {
+                        builder.goto(end_block);
+                    }
 
                     (literal_to_constant(target, discriminator_ty), bb)
                 })
@@ -149,7 +165,7 @@ fn lower_expr(thir: &Thir, builder: &mut FunctionBuilder<'_>, expr: hir::ExprId)
                 builder.block = bb;
 
                 // Lower the block.
-                let result = lower_block(thir, builder, thir.get_block(*default));
+                let result = lower_block(thir, builder, thir.get_block(*default))?;
 
                 // Store the resulting block value in the switch value, and jump back to merge
                 // block.
@@ -176,12 +192,13 @@ fn lower_expr(thir: &Thir, builder: &mut FunctionBuilder<'_>, expr: hir::ExprId)
             Operand::Constant(literal_to_constant(literal, thir.get_expr_ty(expr)))
         }
         hir::Expr::Call(call) => todo!(),
-        hir::Expr::Block(block_id) => lower_block(thir, builder, thir.get_block(*block_id)),
+        hir::Expr::Block(block_id) => lower_block(thir, builder, thir.get_block(*block_id))?,
         hir::Expr::Variable(hir::Variable { binding }) => Operand::Place(Place {
             local: builder[*binding],
             projection: vec![],
         }),
-    }
+        hir::Expr::Unreachable => return None,
+    })
 }
 
 struct Builder {

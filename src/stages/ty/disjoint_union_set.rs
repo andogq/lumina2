@@ -10,12 +10,12 @@ impl DisjointUnionSet {
         Self(HashMap::new())
     }
 
-    pub fn union_sets(&mut self, lhs: TypeVarId, rhs: TypeVarId) {
+    pub fn union_sets(&mut self, lhs: TypeVarId, rhs: TypeVarId) -> TypeVarId {
         let mut lhs = self.get(&lhs);
         let mut rhs = self.get(&rhs);
 
         if lhs.0 == rhs.0 {
-            return;
+            return lhs.0.clone();
         }
 
         // Ensure the rhs is the shortest side.
@@ -23,11 +23,17 @@ impl DisjointUnionSet {
             std::mem::swap(&mut lhs, &mut rhs);
         }
 
-        self.0.insert(rhs.0.clone(), (lhs.0.clone(), 1));
+        let root = lhs.0.clone();
+        self.0.insert(rhs.0.clone(), (root.clone(), 1));
+        root
     }
 
     pub fn find_set<'u: 'i, 'i>(&'u self, id: &'i TypeVarId) -> &'i TypeVarId {
         self.get(id).0
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = &TypeVarId> {
+        self.0.keys()
     }
 
     fn depth(&self, id: &TypeVarId) -> usize {

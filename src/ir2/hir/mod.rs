@@ -124,6 +124,7 @@ mod expr {
         Call(Call),
         Block(BlockId),
         Variable(Variable),
+        Unreachable,
     }
 
     #[derive(Clone, Debug)]
@@ -202,6 +203,7 @@ mod type_refs {
 
     #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     pub enum Type {
+        Never,
         Unit,
         I8,
         U8,

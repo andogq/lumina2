@@ -60,6 +60,11 @@ impl HirVisitor for ConstraintBuilder {
         }
     }
 
+    fn visit_return(&mut self, value: ExprId, return_ty: Type) {
+        self.constraints
+            .push(Constraint::Eq(value.into(), return_ty.into()))
+    }
+
     fn visit_assign(&mut self, id: ExprId, assign: &Assign) {
         self.constraints.extend([
             // Value must match variable.
@@ -196,6 +201,11 @@ impl HirVisitor for ConstraintBuilder {
     fn visit_variable(&mut self, id: ExprId, variable: BindingId) {
         self.constraints
             .push(Constraint::Eq(id.into(), variable.into()));
+    }
+
+    fn visit_unreachable(&mut self, id: ExprId) {
+        self.constraints
+            .push(Constraint::Eq(id.into(), Type::Never.into()));
     }
 }
 

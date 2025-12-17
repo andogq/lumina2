@@ -9,6 +9,7 @@ pub trait HirVisitor {
     ) {
     }
     fn visit_variable_declaration(&mut self, binding: BindingId, ty: DeclarationTy) {}
+    fn visit_return(&mut self, value: ExprId, return_ty: Type) {}
     fn visit_assign(&mut self, id: ExprId, assign: &Assign) {}
     fn visit_binary(&mut self, id: ExprId, binary: &Binary) {}
     fn visit_unary(&mut self, id: ExprId, unary: &Unary) {}
@@ -24,6 +25,7 @@ pub trait HirVisitor {
     fn visit_call(&mut self, id: ExprId, call: &Call) {}
     fn visit_block(&mut self, id: ExprId, block: &Block) {}
     fn visit_variable(&mut self, id: ExprId, variable: BindingId) {}
+    fn visit_unreachable(&mut self, id: ExprId) {}
 }
 
 impl Hir {
@@ -44,7 +46,12 @@ impl Hir {
                     declare_statement.binding,
                     declare_statement.ty.clone(),
                 ),
-                Statement::Return(return_statement) => {}
+                Statement::Return(return_statement) => visitor.visit_return(
+                    return_statement.expr,
+                    // HACK: This should be the return type of each indiviudal function. Currently
+                    // not possible as blocks aren't linked back to their function.
+                    Type::U8,
+                ),
                 Statement::Expr(expr_statement) => {}
             });
 
@@ -69,6 +76,7 @@ impl Hir {
                 Expr::Call(call) => visitor.visit_call(id, call),
                 Expr::Block(block_id) => visitor.visit_block(id, self.get_block(*block_id)),
                 Expr::Variable(variable) => visitor.visit_variable(id, variable.binding),
+                Expr::Unreachable => visitor.visit_unreachable(id),
             }
         });
     }

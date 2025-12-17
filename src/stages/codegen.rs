@@ -7,7 +7,7 @@ use inkwell::{
     context::Context,
     module::Module,
     types::{BasicType, BasicTypeEnum, FunctionType},
-    values::{AnyValue, BasicValue, BasicValueEnum, FunctionValue, PointerValue},
+    values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
 use crate::ir2::{
@@ -200,6 +200,7 @@ impl<'ink> Codegen<'ink> {
             Type::U8 => self.ink.i8_type().into(),
             Type::Boolean => self.ink.bool_type().into(),
             Type::Ref(_) => self.ink.ptr_type(AddressSpace::default()).into(),
+            Type::Never => unreachable!(),
         }
     }
 

@@ -26,7 +26,7 @@ impl Solver {
 
         // Pre-fill with primitive types.
         solver.solutions.extend(
-            [Type::Unit, Type::U8, Type::I8, Type::Boolean]
+            [Type::Unit, Type::U8, Type::I8, Type::Boolean, Type::Never]
                 .map(|ty| (ty.clone().into(), ty.into())),
         );
 
@@ -55,9 +55,11 @@ impl Solver {
             constraints = std::mem::take(&mut retry).into_iter().collect();
         }
 
+        // HACK: Combine all the set items with the solution items.
         solver
-            .solutions
+            .root
             .keys()
+            .chain(solver.solutions.keys())
             .map(|key| (key.clone(), solver.get_ty(key)))
             .collect()
     }
@@ -84,38 +86,36 @@ impl Solver {
         match constraint {
             Constraint::Eq(left, right) => {
                 // 'Resolve' the nodes, to handle duplicate types.
-                let left = self.root.find_set(left);
-                let right = self.root.find_set(right);
+                let left = self.root.find_set(left).clone();
+                let right = self.root.find_set(right).clone();
 
                 // Find the current solutions.
-                let left_solution = self.solutions.get(left);
-                let right_solution = self.solutions.get(right);
+                let left_solution = self.solutions.get(&left);
+                let right_solution = self.solutions.get(&right);
 
-                match (left_solution, right_solution) {
+                // Merge the nodes.
+                let root = self.root.union_sets(left.clone(), right.clone());
+
+                let solution = match (left_solution, right_solution) {
                     // Try simplify the solutions
                     (Some(left_solution), Some(right_solution)) => {
-                        let solution = solve_solutions(left_solution, right_solution);
-                        self.solutions.insert(left.clone(), solution.clone());
-                        self.solutions.insert(right.clone(), solution.clone());
-                        true
+                        Some(solve_solutions(left_solution, right_solution))
                     }
                     // Left has solution.
-                    (Some(solution), None) => {
+                    (Some(solution), None) | (None, Some(solution)) => {
                         // Since left and right must be equal, the solution can be re-used,
                         // satisfying the constraint.
-                        self.solutions.insert(right.clone(), solution.clone());
-                        true
-                    }
-                    // Same as above, but with right solution.
-                    (None, Some(solution)) => {
-                        self.solutions.insert(left.clone(), solution.clone());
-                        true
+                        Some(solution.clone())
                     }
                     // Neither node has a solution, however they must be the same, so merge them.
-                    (None, None) => {
-                        self.root.union_sets(left.clone(), right.clone());
-                        false
-                    }
+                    (None, None) => None,
+                };
+
+                if let Some(solution) = solution {
+                    self.solutions.insert(root, solution);
+                    true
+                } else {
+                    false
                 }
             }
             Constraint::Integer(var, kind) => {
@@ -187,6 +187,10 @@ fn solve_solutions(left: &Solution, right: &Solution) -> Solution {
             }
             (left, right) => panic!("invalid literal solutions: {left:?} != {right:?}"),
         },
+        // Propagate never types.
+        (Solution::Type(Type::Never), solution) | (solution, Solution::Type(Type::Never)) => {
+            solution.clone()
+        }
         (left, right) => panic!("incompatible solutions: {left:?} != {right:?}"),
     }
 }
@@ -201,6 +205,15 @@ mod test {
     fn expr<const N: usize>() -> [TypeVarId; N] {
         (0..N)
             .map(|i| TypeVarId::from(ExprId::new(i)))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap()
+    }
+
+    #[fixture]
+    fn binding<const N: usize>() -> [TypeVarId; N] {
+        (0..N)
+            .map(|i| TypeVarId::from(BindingId::new(i)))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap()
@@ -257,6 +270,52 @@ mod test {
 
         assert!(solver.solve_constraint(&Constraint::Integer(expr[0].clone(), IntegerKind::Any)));
         assert_eq!(solver.get_ty(&expr[0]), Type::I8);
+    }
+
+    #[rstest]
+    fn simple_infer(expr: [TypeVarId; 2]) {
+        // {
+        //   1 <-- Integer
+        // }   <-- U8
+        let [block, one] = expr;
+
+        let solutions = Solver::run(&[
+            Constraint::Integer(one.clone(), IntegerKind::Any),
+            Constraint::Eq(block.clone(), one.clone()),
+            Constraint::Eq(block.clone(), Type::U8.into()),
+        ]);
+        assert_eq!(solutions[&one], Type::U8);
+    }
+
+    #[rstest]
+    fn unsigned_infer(expr: [TypeVarId; 4], binding: [TypeVarId; 2]) {
+        // {
+        //   let a = 1; <-- Integer
+        //   let b = 2; <-- Integer
+        //   a + b
+        // }            <-- U8
+
+        let [a, b] = binding;
+        let [one, two, a_plus_b, block] = expr;
+
+        let solutions = Solver::run(&[
+            // Literals
+            Constraint::Integer(one.clone(), IntegerKind::Any),
+            Constraint::Integer(two.clone(), IntegerKind::Any),
+            // Variable bindings
+            Constraint::Eq(a.clone(), one.clone()),
+            Constraint::Eq(b.clone(), two.clone()),
+            // Expression
+            Constraint::Eq(a_plus_b.clone(), a.clone()),
+            Constraint::Eq(a_plus_b.clone(), b.clone()),
+            // Implicit return
+            Constraint::Eq(a_plus_b.clone(), block.clone()),
+            // Block constraint (eg function signature)
+            Constraint::Eq(block.clone(), Type::U8.into()),
+        ]);
+
+        assert_eq!(solutions[&a], Type::U8);
+        assert_eq!(solutions[&b], Type::U8);
     }
 
     mod solutions_solver {
