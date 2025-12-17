@@ -237,7 +237,16 @@ impl<'b> FunctionBuilder<'b> {
         let function_i = builder.mir.functions.len();
 
         // Register the function definition.
-        builder.mir.functions.push(Function { locals, entry });
+        builder.mir.functions.push(Function {
+            locals,
+            entry,
+            ret_ty: function.return_ty.clone(),
+            params: function
+                .parameters
+                .iter()
+                .map(|(_, ty)| ty.clone())
+                .collect(),
+        });
 
         Self {
             builder,

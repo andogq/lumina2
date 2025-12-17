@@ -22,17 +22,25 @@ impl Mir {
 mod functions {
     use super::*;
 
-    #[derive(Clone, Copy, Debug)]
-    pub struct FunctionId(usize);
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct FunctionId(pub usize);
+    impl FunctionId {
+        pub fn new(id: usize) -> Self {
+            Self(id)
+        }
+    }
 
     #[derive(Clone, Debug)]
     pub struct Function {
+        pub ret_ty: Type,
+        pub params: Vec<Type>,
+
         pub locals: Vec<Type>,
         pub entry: BasicBlockId,
     }
 
-    #[derive(Clone, Copy, Debug)]
-    pub struct LocalId(usize);
+    #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+    pub struct LocalId(pub usize);
     impl LocalId {
         pub fn new(id: usize) -> Self {
             Self(id)
@@ -43,7 +51,7 @@ mod functions {
 mod basic_blocks {
     use super::*;
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
     pub struct BasicBlockId(pub usize);
     impl BasicBlockId {
         pub fn new(id: usize) -> Self {

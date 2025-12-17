@@ -15,21 +15,6 @@ use crate::stages::parse::Parse;
 pub use self::{ctx::*, lex::Tok};
 
 fn run(source: &str) -> u8 {
-    let ctx = Ctx::new();
-
-    let toks = lex::Lexer::new(&ctx, source);
-    let program = ast::parse(toks);
-    let tir = tir::lower(&ctx, &program);
-    let ir = ir::lower(&ctx, &tir);
-
-    let ink_ctx = inkwell::context::Context::create();
-    let llvm = llvm::Llvm::new(&ink_ctx, &ir);
-    llvm.run("main")
-}
-
-fn main() {
-    let source = "fn main() -> u8 { if true { 1 } else { 2 } }";
-
     let mut toks = lex::lex2::Lexer::new(source);
     let cst = ir2::cst::Program::parse(&mut toks);
     let ast = stages::ast_builder::build_ast(&cst);
@@ -37,7 +22,24 @@ fn main() {
     let types = stages::ty::solve(&hir);
     let thir = ir2::hir::Thir::new(hir, types);
     let mir = stages::mir_builder::lower(&thir);
-    dbg!(&mir);
+
+    let ink = inkwell::context::Context::create();
+    let module = stages::codegen::codegen(&ink, &mir);
+
+    {
+        let engine = module
+            .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+            .unwrap();
+        let fn_main =
+            unsafe { engine.get_function::<unsafe extern "C" fn() -> u8>("function_0") }.unwrap();
+        unsafe { fn_main.call() }
+    }
+}
+
+fn main() {
+    let result = run("fn main() -> u8 { if true { 1 } else { 2 } }");
+
+    dbg!(result);
 }
 
 #[cfg(test)]

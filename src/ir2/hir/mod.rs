@@ -206,6 +206,7 @@ mod type_refs {
         I8,
         U8,
         Boolean,
+        Ref(Box<Type>),
     }
 
     impl Type {
