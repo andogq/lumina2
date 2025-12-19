@@ -146,14 +146,13 @@ impl HirVisitor for ConstraintBuilder {
                 ]);
             }
             UnaryOp::Deref(_) => {
-                // TODO: Make sure that operand is a pointer.
-                // TODO: Make sure output is inner type of pointer.
-                todo!()
+                // Make sure that operand is a pointer, and output is inner type of pointer.
+                self.constraints
+                    .extend([Constraint::Reference(unary.value.into(), id.into())]);
             }
-            UnaryOp::Ref(_) => {
-                // TODO: Make sure output is a reference to the inner type.
-                todo!()
-            }
+            UnaryOp::Ref(_) => self
+                .constraints
+                .extend([Constraint::Reference(id.into(), unary.value.into())]),
         }
     }
 

@@ -256,7 +256,7 @@ mod expr {
                 Tok::Amp => Self::BinaryAnd(lexer.expect().unwrap()),
                 Tok::Bar => Self::BinaryOr(lexer.expect().unwrap()),
 
-                Tok::Eq => Self::Equal(lexer.expect().unwrap()),
+                Tok::EqEq => Self::Equal(lexer.expect().unwrap()),
                 Tok::BangEq => Self::NotEqual(lexer.expect().unwrap()),
                 Tok::LAngle => Self::Less(lexer.expect().unwrap()),
                 Tok::LtEq => Self::LessEqual(lexer.expect().unwrap()),

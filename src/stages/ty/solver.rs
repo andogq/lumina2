@@ -38,6 +38,12 @@ impl Solver {
             while let Some(constraint) = constraints.pop_front() {
                 let solved = solver.solve_constraint(constraint);
 
+                let tmp = solver.solutions.iter().filter(
+                        |(k, v)| !matches!(v, Solution::Type(ty) if TypeVarId::from(ty.clone()) == **k)
+                    )
+                    .collect::<HashMap<_, _>>();
+                dbg!(tmp);
+
                 progress |= solved;
 
                 if !solved {
@@ -55,6 +61,11 @@ impl Solver {
             constraints = std::mem::take(&mut retry).into_iter().collect();
         }
 
+        dbg!(
+            solver.root.find_set(&Type::U8.into()),
+            solver.root.find_set(&Type::I8.into())
+        );
+
         // HACK: Combine all the set items with the solution items.
         solver
             .root
@@ -66,8 +77,13 @@ impl Solver {
 
     /// Save the solution for the provided [`TypeVarId`].
     fn solve(&mut self, var: TypeVarId, solution: impl Into<Solution>) {
-        assert!(!self.solutions.contains_key(&var));
-        self.solutions.insert(var, solution.into());
+        let solution = solution.into();
+        let solution = if let Some(existing) = self.solutions.get(&var) {
+            solve_solutions(existing, &solution)
+        } else {
+            solution
+        };
+        self.solutions.insert(var, solution);
     }
 
     /// Create a solver prefilled with provided solutions.
@@ -83,20 +99,35 @@ impl Solver {
 
     /// Attempt to solve the given constraint. Will return `true` if it was successfully solved.
     fn solve_constraint(&mut self, constraint: &Constraint) -> bool {
-        match constraint {
+        match dbg!(constraint) {
             Constraint::Eq(left, right) => {
                 // 'Resolve' the nodes, to handle duplicate types.
                 let left = self.root.find_set(left).clone();
                 let right = self.root.find_set(right).clone();
 
+                dbg!(&left, &right);
+
+                if left == right {
+                    // This constraint is already satisfied, no further processing is required.
+                    return true;
+                }
+
                 // Find the current solutions.
                 let left_solution = self.solutions.get(&left);
                 let right_solution = self.solutions.get(&right);
 
-                // Merge the nodes.
-                let root = self.root.union_sets(left.clone(), right.clone());
+                dbg!(left_solution, right_solution);
 
                 let solution = match (left_solution, right_solution) {
+                    // HACK: Two references must be merged.
+                    (Some(Solution::Reference(lhs)), Some(Solution::Reference(rhs))) => {
+                        let lhs = self.root.find_set(lhs).clone();
+                        let rhs = self.root.find_set(rhs).clone();
+
+                        let inner_root = self.root.union_sets(lhs, rhs);
+
+                        Some(Solution::Reference(inner_root))
+                    }
                     // Try simplify the solutions
                     (Some(left_solution), Some(right_solution)) => {
                         Some(solve_solutions(left_solution, right_solution))
@@ -112,7 +143,9 @@ impl Solver {
                 };
 
                 if let Some(solution) = solution {
-                    self.solutions.insert(root, solution);
+                    // Merge the nodes.
+                    let root = self.root.union_sets(left.clone(), right.clone());
+                    self.solve(root, solution);
                     true
                 } else {
                     false
@@ -143,6 +176,50 @@ impl Solver {
                     }
                 }
             }
+            Constraint::Reference(var, inner_type) => {
+                let var = self.root.find_set(var);
+                let inner_type = self.root.find_set(inner_type);
+
+                let var_solution = self.solutions.get(var);
+                let inner_type_solution = self.solutions.get(inner_type);
+
+                match (var_solution, inner_type_solution) {
+                    (Some(Solution::Type(Type::Ref(ref_ty))), Some(Solution::Type(inner_type)))
+                        if **ref_ty == *inner_type =>
+                    {
+                        self.solve(var.clone(), Type::Ref(Box::new(inner_type.clone())));
+                        true
+                    }
+                    (Some(Solution::Type(Type::Ref(ref_ty))), None) => {
+                        self.solve(inner_type.clone(), Solution::Type(*ref_ty.clone()));
+                        true
+                    }
+                    (Some(Solution::Type(ty)), _) => {
+                        panic!("invalid type solution for reference constraint: {ty:?}");
+                    }
+                    (Some(Solution::Reference(var_ref)), _) => {
+                        // Inner value of reference must be same as rhs.
+                        self.root.union_sets(var_ref.clone(), inner_type.clone());
+
+                        true
+                    }
+                    (None, Some(inner_solution)) => {
+                        self.solve(
+                            var.clone(),
+                            Solution::Reference(match inner_solution {
+                                Solution::Type(inner_ty) => inner_ty.clone().into(),
+                                Solution::Reference(type_var_id) => type_var_id.clone(),
+                                Solution::Literal(_) => inner_type.clone(),
+                            }),
+                        );
+                        true
+                    }
+                    _ => {
+                        self.solve(var.clone(), Solution::Reference(inner_type.clone()));
+                        true
+                    }
+                }
+            }
         }
     }
 
@@ -150,8 +227,13 @@ impl Solver {
     fn get_ty(&self, var: &TypeVarId) -> Type {
         let root = self.root.find_set(var);
 
-        match self.solutions.get(root).expect("solution") {
+        match self
+            .solutions
+            .get(root)
+            .unwrap_or_else(|| panic!("existing solution: {var:?} (root: {root:?})"))
+        {
             Solution::Type(ty) => ty.clone(),
+            Solution::Reference(inner_type) => Type::Ref(Box::new(self.get_ty(inner_type))),
             Solution::Literal(literal) => literal.to_type(),
         }
     }
@@ -159,8 +241,8 @@ impl Solver {
 
 fn solve_solutions(left: &Solution, right: &Solution) -> Solution {
     match (left, right) {
-        // Solved as types, and they are identical.
-        (Solution::Type(left), Solution::Type(right)) if left == right => left.clone().into(),
+        // Solutions are identical, so propagate.
+        (left, right) if left == right => left.clone(),
         // One type, and one literal. Requires further checks.
         (Solution::Type(ty), Solution::Literal(lit))
         | (Solution::Literal(lit), Solution::Type(ty)) => match (lit, ty) {
@@ -316,6 +398,80 @@ mod test {
 
         assert_eq!(solutions[&a], Type::U8);
         assert_eq!(solutions[&b], Type::U8);
+    }
+
+    #[rstest]
+    fn reference_infer(expr: [TypeVarId; 4], binding: [TypeVarId; 2]) {
+        // {
+        //   let a = 1;  <- Integer
+        //   let b = &a; <- Reference(a)
+        //   *b
+        // }             <- U8
+        let [a, b] = binding;
+        let [one, ref_a, deref_b, block] = expr;
+
+        let solutions = Solver::run(&[
+            // Literal
+            Constraint::Integer(one.clone(), IntegerKind::Any),
+            // Expressions
+            Constraint::Reference(ref_a.clone(), a.clone()), // &a
+            Constraint::Reference(b.clone(), deref_b.clone()), // *b
+            // Variable bindings
+            Constraint::Eq(a.clone(), one.clone()),
+            Constraint::Eq(b.clone(), ref_a.clone()),
+            // Implicit return
+            Constraint::Eq(block.clone(), deref_b.clone()),
+            // Block constraint
+            Constraint::Eq(block.clone(), Type::U8.into()),
+        ]);
+
+        assert_eq!(solutions[&a], Type::U8);
+        assert_eq!(solutions[&b], Type::Ref(Box::new(Type::U8)));
+    }
+
+    #[rstest]
+    fn more_references(expr: [TypeVarId; 4], binding: [TypeVarId; 2]) {
+        // {
+        //   let a = 123; <- Integer
+        //   let b = &a;  <- Reference(a)
+        //   *b
+        // }              <- U8
+        let [num, ref_a, deref_b, block] = expr;
+        let [a, b] = binding;
+
+        let solutions = Solver::run(&[
+            // Literal
+            Constraint::Integer(num.clone(), IntegerKind::Any),
+            // Expressions
+            Constraint::Reference(ref_a.clone(), a.clone()),
+            Constraint::Reference(b.clone(), deref_b.clone()),
+            // Bindings
+            Constraint::Eq(a.clone(), num.clone()),
+            Constraint::Eq(b.clone(), ref_a.clone()),
+            // Block
+            Constraint::Eq(block.clone(), deref_b),
+            Constraint::Eq(block.clone(), Type::U8.into()),
+        ]);
+
+        dbg!(&solutions);
+
+        assert_eq!(solutions[&block], Type::U8);
+        assert_eq!(solutions[&a], Type::U8);
+        assert_eq!(solutions[&b], Type::Ref(Box::new(Type::U8)));
+    }
+
+    #[rstest]
+    fn overriding(expr: [TypeVarId; 4]) {
+        let solutions = Solver::run(&[
+            Constraint::Integer(expr[0].clone(), IntegerKind::Any),
+            Constraint::Reference(expr[1].clone(), expr[0].clone()),
+            Constraint::Reference(expr[2].clone(), expr[3].clone()),
+            Constraint::Eq(expr[2].clone(), expr[1].clone()),
+            Constraint::Eq(expr[3].clone(), Type::U8.into()),
+        ]);
+
+        assert_eq!(solutions[&expr[0]], Type::U8);
+        assert_eq!(solutions[&expr[3]], Type::U8);
     }
 
     mod solutions_solver {

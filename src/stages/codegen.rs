@@ -7,7 +7,7 @@ use inkwell::{
     context::Context,
     module::Module,
     types::{BasicType, BasicTypeEnum, FunctionType},
-    values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
+    values::{AnyValue, BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
 use crate::ir2::{
@@ -309,12 +309,12 @@ impl<'ink, 'codegen> FunctionCodegen<'ink, 'codegen> {
 
         for projection in &place.projection {
             (ptr, ty) = match (projection, ty) {
-                (Projection::Deref, Type::Ref(inner_ty)) => (
+                (Projection::Deref, ref ty @ Type::Ref(ref inner_ty)) => (
                     self.builder
-                        .build_load(self.basic_ty(&inner_ty), ptr, "deref")
+                        .build_load(self.basic_ty(ty), ptr, "deref")
                         .unwrap()
                         .into_pointer_value(),
-                    *inner_ty,
+                    (**inner_ty).clone(),
                 ),
                 (Projection::Deref, ty) => panic!("cannot dereference {ty:?}"),
             }

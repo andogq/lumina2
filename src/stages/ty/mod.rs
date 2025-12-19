@@ -29,11 +29,13 @@ enum_conversion! {
 enum Constraint {
     Eq(TypeVarId, TypeVarId),
     Integer(TypeVarId, IntegerKind),
+    Reference(TypeVarId, TypeVarId),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Solution {
     Type(Type),
+    Reference(TypeVarId),
     Literal(Literal),
 }
 

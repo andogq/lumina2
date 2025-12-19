@@ -132,7 +132,8 @@ fn lower_expr(
 
             let current_block = builder.block;
 
-            let switch_value = builder.add_local(thir.get_expr_ty(expr).clone());
+            let switch_ty = thir.get_expr_ty(expr);
+            let switch_value = builder.add_local(switch_ty.clone());
             let end_block = builder.new_basic_block();
 
             // Lower all of the branches.
@@ -144,7 +145,9 @@ fn lower_expr(
                     builder.block = bb;
 
                     // Lower the block.
-                    if let Some(result) = lower_block(thir, builder, thir.get_block(*block)) {
+                    if let Some(result) = lower_block(thir, builder, thir.get_block(*block))
+                        && !matches!(switch_ty, Type::Unit | Type::Never)
+                    {
                         // Store the resulting block value in the switch value, and jump back to merge
                         // block.
                         builder.store(switch_value, RValue::Use(result));
