@@ -27,15 +27,21 @@ enum_conversion! {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Constraint {
-    Eq(TypeVarId, TypeVarId),
-    Integer(TypeVarId, IntegerKind),
-    Reference(TypeVarId, TypeVarId),
+    Eq(TypeVarId),
+    Integer(IntegerKind),
+    Reference(TypeVarId),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Solution {
     Type(Type),
     Reference(TypeVarId),
+    Literal(Literal),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Reference {
+    TypeVarId(TypeVarId),
     Literal(Literal),
 }
 
@@ -58,7 +64,20 @@ enum_conversion! {
 impl Literal {
     pub fn to_type(&self) -> Type {
         match self {
-            Literal::Integer(integer_literal) => integer_literal.to_type(),
+            Self::Integer(integer_literal) => integer_literal.to_type(),
+        }
+    }
+
+    pub fn can_coerce(&self, ty: &Type) -> bool {
+        match self {
+            Self::Integer(integer_literal) => integer_literal.can_coerce(ty),
+        }
+    }
+
+    pub fn narrow(&self, other: &Literal) -> Option<Literal> {
+        match (self, other) {
+            (Self::Integer(lhs), Self::Integer(rhs)) => Some(Self::Integer(lhs.narrow(rhs)?)),
+            _ => None,
         }
     }
 }
@@ -75,6 +94,23 @@ impl IntegerKind {
         match self {
             IntegerKind::Signed | IntegerKind::Any => Type::I8,
             IntegerKind::Unsigned => Type::U8,
+        }
+    }
+
+    pub fn can_coerce(&self, ty: &Type) -> bool {
+        matches!(
+            (self, ty),
+            (Self::Any, Type::U8 | Type::I8)
+                | (Self::Signed, Type::I8)
+                | (Self::Unsigned, Type::U8)
+        )
+    }
+
+    pub fn narrow(&self, other: &IntegerKind) -> Option<IntegerKind> {
+        match (self, other) {
+            (lhs, rhs) if lhs == rhs => Some(lhs.clone()),
+            (Self::Any, answer) | (answer, Self::Any) => Some(answer.clone()),
+            _ => None,
         }
     }
 }

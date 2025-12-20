@@ -1,8 +1,41 @@
+use super::*;
 use crate::stages::ty::Literal;
 
-use super::*;
+use std::collections::HashMap;
 
-use std::collections::{HashMap, VecDeque, hash_map::Entry};
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum MergeResult {
+    /// Merge the nodes, and substitute the provided solution as the solution.
+    Substitute(Solution),
+    /// Merge the provided type variables, and substitute with a solution referencing the resulting
+    /// root node.
+    MergeAndReference(TypeVarId, TypeVarId),
+    /// Use [`Solution::Reference`] as the solution, where the reference is to the root of the
+    /// merged nodes.
+    ReferenceRoot,
+    /// Merge is not possible due to an incompatibility.
+    Incompatible(IncompatibleKind),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum IncompatibleKind {
+    /// Types are not equal.
+    Type(Type, Type),
+    /// Literal cannot be coerced into type.
+    Coercion(Literal, Type),
+    /// Literals cannot be narrowed.
+    Narrow(Literal, Literal),
+    /// Type is not a reference.
+    NotReference(Type),
+    /// Reference cannot be used as a literal.
+    ReferenceLiteral,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum NonConcreteType {
+    Type(Type),
+    Literal(Literal),
+}
 
 #[derive(Clone, Debug)]
 pub struct Solver {
@@ -11,7 +44,6 @@ pub struct Solver {
 }
 
 impl Solver {
-    /// Create an empty solver.
     pub fn new() -> Self {
         Self {
             root: DisjointUnionSet::new(),
@@ -19,261 +51,249 @@ impl Solver {
         }
     }
 
-    /// Run the solver to solve the provided constraints. This will pre-fill the solver with
-    /// primitive types.
-    pub fn run(constraints: &[Constraint]) -> HashMap<TypeVarId, Type> {
+    pub fn prefill(solutions: impl IntoIterator<Item = (TypeVarId, Solution)>) -> Self {
         let mut solver = Self::new();
-
-        // Pre-fill with primitive types.
-        solver.solutions.extend(
-            [Type::Unit, Type::U8, Type::I8, Type::Boolean, Type::Never]
-                .map(|ty| (ty.clone().into(), ty.into())),
-        );
-
-        let mut constraints = VecDeque::from_iter(constraints);
-        let mut retry = Vec::new();
-
-        while !constraints.is_empty() {
-            let mut progress = false;
-            while let Some(constraint) = constraints.pop_front() {
-                let solved = solver.solve_constraint(constraint);
-
-                let tmp = solver.solutions.iter().filter(
-                        |(k, v)| !matches!(v, Solution::Type(ty) if TypeVarId::from(ty.clone()) == **k)
-                    )
-                    .collect::<HashMap<_, _>>();
-                dbg!(tmp);
-
-                progress |= solved;
-
-                if !solved {
-                    retry.push(constraint);
-                }
-            }
-
-            if !progress {
-                eprintln!("couldn't progress type solving");
-                dbg!(retry);
-                dbg!(solver.solutions);
-                panic!();
-            }
-
-            constraints = std::mem::take(&mut retry).into_iter().collect();
-        }
-
-        dbg!(
-            solver.root.find_set(&Type::U8.into()),
-            solver.root.find_set(&Type::I8.into())
-        );
-
-        // HACK: Combine all the set items with the solution items.
+        solver.solutions.extend(solutions);
         solver
-            .root
-            .keys()
-            .chain(solver.solutions.keys())
-            .map(|key| (key.clone(), solver.get_ty(key)))
-            .collect()
     }
 
-    /// Save the solution for the provided [`TypeVarId`].
-    fn solve(&mut self, var: TypeVarId, solution: impl Into<Solution>) {
-        let solution = solution.into();
-        let solution = if let Some(existing) = self.solutions.get(&var) {
-            solve_solutions(existing, &solution)
-        } else {
-            solution
+    pub fn run(constraints: &[(TypeVarId, Constraint)]) -> HashMap<TypeVarId, Type> {
+        // Pre-fill with builtin types.
+        let mut solver = Self::prefill(
+            [Type::Never, Type::Unit, Type::I8, Type::U8, Type::Boolean]
+                .map(|ty| (TypeVarId::Type(ty.clone()), Solution::Type(ty))),
+        );
+
+        for (var, constraint) in constraints {
+            assert!(solver.process_constraint(var, constraint));
+        }
+
+        solver.get_types()
+    }
+
+    pub fn process_constraint(&mut self, var: &TypeVarId, constraint: &Constraint) -> bool {
+        match constraint {
+            Constraint::Eq(eq_var) => self.solve_eq(var, eq_var),
+            Constraint::Integer(integer_kind) => self.solve_integer(var, integer_kind),
+            Constraint::Reference(ref_var) => self.solve_reference(var, ref_var),
+        }
+    }
+
+    fn solve_eq(&mut self, var: &TypeVarId, eq_var: &TypeVarId) -> bool {
+        self.merge(var, eq_var).is_some()
+    }
+
+    fn solve_integer(&mut self, var: &TypeVarId, integer_kind: &IntegerKind) -> bool {
+        let var = self.root.find_set(var).clone();
+        let var_solution = self.get_solution(&var).cloned();
+        let integer_solution = Solution::Literal(Literal::Integer(integer_kind.clone()));
+
+        let Ok((solution, should_insert)) =
+            self.simple_merge(var_solution.as_ref(), Some(&integer_solution))
+        else {
+            return false;
         };
-        self.solutions.insert(var, solution);
+
+        assert!(should_insert);
+
+        self.solutions.insert(
+            var.clone(),
+            solution.expect("no nodes to merge for reference"),
+        );
+
+        true
     }
 
-    /// Create a solver prefilled with provided solutions.
-    pub fn prefill(values: impl IntoIterator<Item = (TypeVarId, Type)>) -> Self {
-        let mut solver = Self::new();
+    fn solve_reference(&mut self, var: &TypeVarId, ref_var: &TypeVarId) -> bool {
+        let var = self.root.find_set(var).clone();
+        let ref_var = self.root.find_set(ref_var).clone();
 
-        values
-            .into_iter()
-            .for_each(|(var, solution)| solver.solve(var, solution));
+        let var_solution = self.get_solution(&var).cloned();
+        let ref_solution = Solution::Reference(ref_var.clone());
 
-        solver
+        let Ok((solution, should_insert)) =
+            self.simple_merge(var_solution.as_ref(), Some(&ref_solution))
+        else {
+            return false;
+        };
+
+        assert!(should_insert);
+
+        self.solutions.insert(
+            var.clone(),
+            solution.expect("no nodes to merge for reference"),
+        );
+
+        true
     }
 
-    /// Attempt to solve the given constraint. Will return `true` if it was successfully solved.
-    fn solve_constraint(&mut self, constraint: &Constraint) -> bool {
-        match dbg!(constraint) {
-            Constraint::Eq(left, right) => {
-                // 'Resolve' the nodes, to handle duplicate types.
-                let left = self.root.find_set(left).clone();
-                let right = self.root.find_set(right).clone();
+    fn merge(&mut self, lhs: &TypeVarId, rhs: &TypeVarId) -> Option<TypeVarId> {
+        let lhs = self.root.find_set(lhs);
+        let rhs = self.root.find_set(rhs);
 
-                dbg!(&left, &right);
+        if lhs == rhs {
+            // Already merged!
+            return Some(lhs.clone());
+        }
 
-                if left == right {
-                    // This constraint is already satisfied, no further processing is required.
-                    return true;
+        let lhs_solution = self.get_solution(lhs).cloned();
+        let rhs_solution = self.get_solution(rhs).cloned();
+
+        let lhs = lhs.clone();
+        let rhs = rhs.clone();
+
+        // Ensure that if the variables have a solution, they're compatible and can be merged.
+        let (solution, should_insert) = self
+            .simple_merge(lhs_solution.as_ref(), rhs_solution.as_ref())
+            .ok()?;
+
+        // Remove any existing solutions so they don't get re-used.
+        self.solutions.remove(&lhs);
+        self.solutions.remove(&rhs);
+
+        // Merge the nodes.
+        let root = self.root.union_sets(lhs.clone(), rhs.clone());
+
+        if should_insert {
+            // If no solution is provided, use the merged root.
+            let solution = solution.unwrap_or_else(|| Solution::Reference(root.clone()));
+
+            // Insert the solution.
+            self.solutions.insert(root.clone(), solution);
+        }
+
+        Some(root)
+    }
+
+    fn simple_merge(
+        &mut self,
+        lhs: Option<&Solution>,
+        rhs: Option<&Solution>,
+    ) -> Result<(Option<Solution>, bool), IncompatibleKind> {
+        Ok(match (lhs, rhs) {
+            (Some(lhs_solution), Some(rhs_solution)) => (
+                match self.merge_solutions(lhs_solution, rhs_solution) {
+                    MergeResult::Substitute(solution) => Some(solution),
+                    MergeResult::MergeAndReference(lhs, rhs) => {
+                        self.merge(&lhs, &rhs).map(Solution::Reference)
+                    }
+                    MergeResult::ReferenceRoot => None,
+                    MergeResult::Incompatible(kind) => return Err(kind),
+                },
+                true,
+            ),
+            (Some(solution), None) | (None, Some(solution)) => (Some(solution.clone()), true),
+            (None, None) => (None, false),
+        })
+    }
+
+    fn merge_solutions(&self, lhs: &Solution, rhs: &Solution) -> MergeResult {
+        match (lhs, rhs) {
+            // Already identical solutions.
+            (lhs, rhs) if lhs == rhs => MergeResult::Substitute(lhs.clone()),
+            // One side is already solved as a type reference, and other side is a reference of an
+            // unknown type.
+            (Solution::Type(ty @ Type::Ref(ref_ty)), Solution::Reference(ref_var))
+            | (Solution::Reference(ref_var), Solution::Type(ty @ Type::Ref(ref_ty))) => {
+                match self.get_non_concrete_type(ref_var) {
+                    // Solution already exists, and it's compatible.
+                    Some(NonConcreteType::Type(solved_ty)) if solved_ty == **ref_ty => {
+                        MergeResult::Substitute(Solution::Type(ty.clone()))
+                    }
+                    Some(NonConcreteType::Literal(literal)) if literal.can_coerce(ref_ty) => {
+                        MergeResult::Substitute(Solution::Type(ty.clone()))
+                    }
+                    // Solution doesn't exist, so existing solution is fine.
+                    None => MergeResult::Substitute(Solution::Type(ty.clone())),
+                    // Existing solution isn't compatible.
+                    Some(NonConcreteType::Type(solved_ty)) => MergeResult::Incompatible(
+                        IncompatibleKind::Type(solved_ty, *ref_ty.clone()),
+                    ),
+                    Some(NonConcreteType::Literal(literal)) => MergeResult::Incompatible(
+                        IncompatibleKind::Coercion(literal, *ref_ty.clone()),
+                    ),
                 }
-
-                // Find the current solutions.
-                let left_solution = self.solutions.get(&left);
-                let right_solution = self.solutions.get(&right);
-
-                dbg!(left_solution, right_solution);
-
-                let solution = match (left_solution, right_solution) {
-                    // HACK: Two references must be merged.
-                    (Some(Solution::Reference(lhs)), Some(Solution::Reference(rhs))) => {
-                        let lhs = self.root.find_set(lhs).clone();
-                        let rhs = self.root.find_set(rhs).clone();
-
-                        let inner_root = self.root.union_sets(lhs, rhs);
-
-                        Some(Solution::Reference(inner_root))
+            }
+            (Solution::Type(ty), Solution::Reference(ref_var))
+            | (Solution::Reference(ref_var), Solution::Type(ty)) => {
+                MergeResult::Incompatible(match self.get_non_concrete_type(ref_var) {
+                    Some(NonConcreteType::Type(solved_ty)) => {
+                        IncompatibleKind::Type(ty.clone(), Type::Ref(Box::new(solved_ty)))
                     }
-                    // Try simplify the solutions
-                    (Some(left_solution), Some(right_solution)) => {
-                        Some(solve_solutions(left_solution, right_solution))
-                    }
-                    // Left has solution.
-                    (Some(solution), None) | (None, Some(solution)) => {
-                        // Since left and right must be equal, the solution can be re-used,
-                        // satisfying the constraint.
-                        Some(solution.clone())
-                    }
-                    // Neither node has a solution, however they must be the same, so merge them.
-                    (None, None) => None,
-                };
-
-                if let Some(solution) = solution {
-                    // Merge the nodes.
-                    let root = self.root.union_sets(left.clone(), right.clone());
-                    self.solve(root, solution);
-                    true
+                    Some(NonConcreteType::Literal(literal)) => IncompatibleKind::ReferenceLiteral,
+                    None => IncompatibleKind::NotReference(ty.clone()),
+                })
+            }
+            // One side is a type, and other side is a literal.
+            (Solution::Type(ty), Solution::Literal(literal))
+            | (Solution::Literal(literal), Solution::Type(ty)) => {
+                if literal.can_coerce(ty) {
+                    MergeResult::Substitute(Solution::Type(ty.clone()))
                 } else {
-                    false
+                    MergeResult::Incompatible(IncompatibleKind::Coercion(
+                        literal.clone(),
+                        ty.clone(),
+                    ))
                 }
             }
-            Constraint::Integer(var, kind) => {
-                let var = self.root.find_set(var);
-
-                match self.solutions.entry(var.clone()) {
-                    // Solution already exists, make sure that it can be an integer.
-                    Entry::Occupied(solution) => match solution.get() {
-                        // Concrete type, which is an integer.
-                        Solution::Type(ty) if ty.is_integer() => true,
-                        // Already expecting integer literal.
-                        Solution::Literal(Literal::Integer(solution_kind))
-                            if solution_kind == kind =>
-                        {
-                            true
-                        }
-                        solution => panic!(
-                            "expected integer literal from constraint, but found {solution:?}"
-                        ),
-                    },
-                    // No solution currently exists, so input that an integer literal is expected.
-                    Entry::Vacant(solution) => {
-                        solution.insert(Solution::Literal(IntegerKind::Any.into()));
-                        true
-                    }
+            // One side is a reference to an unknown type, and other side is a literal. This can
+            // never be merged, as literal references are not popular.
+            (Solution::Reference(_), Solution::Literal(_))
+            | (Solution::Literal(_), Solution::Reference(_)) => {
+                MergeResult::Incompatible(IncompatibleKind::ReferenceLiteral)
+            }
+            // Both sides are references.
+            (Solution::Reference(lhs), Solution::Reference(rhs)) => {
+                MergeResult::MergeAndReference(lhs.clone(), rhs.clone())
+            }
+            // Both sides are literals.
+            (Solution::Literal(lhs), Solution::Literal(rhs)) => {
+                if let Some(literal) = lhs.narrow(rhs) {
+                    MergeResult::Substitute(Solution::Literal(literal))
+                } else {
+                    MergeResult::Incompatible(IncompatibleKind::Narrow(lhs.clone(), rhs.clone()))
                 }
             }
-            Constraint::Reference(var, inner_type) => {
-                let var = self.root.find_set(var);
-                let inner_type = self.root.find_set(inner_type);
-
-                let var_solution = self.solutions.get(var);
-                let inner_type_solution = self.solutions.get(inner_type);
-
-                match (var_solution, inner_type_solution) {
-                    (Some(Solution::Type(Type::Ref(ref_ty))), Some(Solution::Type(inner_type)))
-                        if **ref_ty == *inner_type =>
-                    {
-                        self.solve(var.clone(), Type::Ref(Box::new(inner_type.clone())));
-                        true
-                    }
-                    (Some(Solution::Type(Type::Ref(ref_ty))), None) => {
-                        self.solve(inner_type.clone(), Solution::Type(*ref_ty.clone()));
-                        true
-                    }
-                    (Some(Solution::Type(ty)), _) => {
-                        panic!("invalid type solution for reference constraint: {ty:?}");
-                    }
-                    (Some(Solution::Reference(var_ref)), _) => {
-                        // Inner value of reference must be same as rhs.
-                        self.root.union_sets(var_ref.clone(), inner_type.clone());
-
-                        true
-                    }
-                    (None, Some(inner_solution)) => {
-                        self.solve(
-                            var.clone(),
-                            Solution::Reference(match inner_solution {
-                                Solution::Type(inner_ty) => inner_ty.clone().into(),
-                                Solution::Reference(type_var_id) => type_var_id.clone(),
-                                Solution::Literal(_) => inner_type.clone(),
-                            }),
-                        );
-                        true
-                    }
-                    _ => {
-                        self.solve(var.clone(), Solution::Reference(inner_type.clone()));
-                        true
-                    }
-                }
+            // Propagate any non-never types.
+            (Solution::Type(Type::Never), Solution::Type(ty))
+            | (Solution::Type(ty), Solution::Type(Type::Never)) => {
+                MergeResult::Substitute(Solution::Type(ty.clone()))
+            }
+            // Equal solutions are already checked, so if this is reached they are not equal.
+            (Solution::Type(lhs), Solution::Type(rhs)) => {
+                MergeResult::Incompatible(IncompatibleKind::Type(lhs.clone(), rhs.clone()))
             }
         }
     }
 
-    /// Fetch the type of a type variable.
-    fn get_ty(&self, var: &TypeVarId) -> Type {
-        let root = self.root.find_set(var);
+    fn get_solution(&self, var: &TypeVarId) -> Option<&Solution> {
+        let var = self.root.find_set(var);
+        self.solutions.get(var)
+    }
 
-        match self
-            .solutions
-            .get(root)
-            .unwrap_or_else(|| panic!("existing solution: {var:?} (root: {root:?})"))
-        {
-            Solution::Type(ty) => ty.clone(),
-            Solution::Reference(inner_type) => Type::Ref(Box::new(self.get_ty(inner_type))),
-            Solution::Literal(literal) => literal.to_type(),
+    fn get_non_concrete_type(&self, var: &TypeVarId) -> Option<NonConcreteType> {
+        match self.get_solution(var)? {
+            Solution::Type(solution) => Some(NonConcreteType::Type(solution.clone())),
+            Solution::Reference(type_var_id) => Some(NonConcreteType::Type(Type::Ref(Box::new(
+                self.get_type(type_var_id)?,
+            )))),
+            Solution::Literal(literal) => Some(NonConcreteType::Literal(literal.clone())),
         }
     }
-}
 
-fn solve_solutions(left: &Solution, right: &Solution) -> Solution {
-    match (left, right) {
-        // Solutions are identical, so propagate.
-        (left, right) if left == right => left.clone(),
-        // One type, and one literal. Requires further checks.
-        (Solution::Type(ty), Solution::Literal(lit))
-        | (Solution::Literal(lit), Solution::Type(ty)) => match (lit, ty) {
-            // Integer literal, against some integer type.
-            (Literal::Integer(kind), ty @ (Type::U8 | Type::I8)) => match (kind, ty) {
-                // Any integer literal can be used with any integer type.
-                (IntegerKind::Any, ty @ (Type::I8 | Type::U8)) => ty.clone().into(),
-                // Signed integer literal must be used with signed integer type.
-                (IntegerKind::Signed, Type::I8) => Type::I8.into(),
-                // Unsigned integer literal can be used with any integer type.
-                (IntegerKind::Unsigned, ty @ (Type::I8 | Type::U8)) => ty.clone().into(),
-                (kind, ty) => panic!("invalid integer literal kind {kind:?} for type {ty:?}"),
-            },
-            (lit, ty) => panic!("incompatible literal {lit:?} with type {ty:?}"),
-        },
-        // Two literals.
-        (Solution::Literal(left), Solution::Literal(right)) => match (left, right) {
-            // Literals are identical, no further information to be gathered.
-            (left, right) if left == right => left.clone().into(),
-            // Make integer literal more specific, if possible.
-            (Literal::Integer(IntegerKind::Any), Literal::Integer(kind))
-            | (Literal::Integer(kind), Literal::Integer(IntegerKind::Any)) => {
-                Literal::Integer(kind.clone()).into()
-            }
-            (left, right) => panic!("invalid literal solutions: {left:?} != {right:?}"),
-        },
-        // Propagate never types.
-        (Solution::Type(Type::Never), solution) | (solution, Solution::Type(Type::Never)) => {
-            solution.clone()
-        }
-        (left, right) => panic!("incompatible solutions: {left:?} != {right:?}"),
+    fn get_type(&self, var: &TypeVarId) -> Option<Type> {
+        Some(match self.get_non_concrete_type(var)? {
+            NonConcreteType::Type(ty) => ty,
+            NonConcreteType::Literal(literal) => literal.to_type(),
+        })
+    }
+
+    pub fn get_types(&self) -> HashMap<TypeVarId, Type> {
+        self.root
+            .keys()
+            .chain(self.solutions.keys())
+            .map(|var| (var.clone(), self.get_type(var).unwrap()))
+            .collect()
     }
 }
 
@@ -301,57 +321,66 @@ mod test {
             .unwrap()
     }
 
+    #[fixture]
+    fn solver() -> Solver {
+        Solver::new()
+    }
+
     #[rstest]
     fn prefilled(expr: [TypeVarId; 1]) {
-        let solver = Solver::prefill([(expr[0].clone(), Type::I8)]);
-        assert_eq!(solver.get_ty(&expr[0]), Type::I8);
+        let solver = Solver::prefill([(expr[0].clone(), Solution::Type(Type::I8))]);
+        assert_eq!(solver.get_type(&expr[0]).unwrap(), Type::I8);
     }
 
     #[rstest]
     fn simple_constraint(expr: [TypeVarId; 2]) {
-        let mut solver = Solver::prefill([(expr[0].clone(), Type::I8)]);
+        let mut solver = Solver::prefill([(expr[0].clone(), Solution::Type(Type::I8))]);
 
-        assert!(solver.solve_constraint(&Constraint::Eq(expr[0].clone(), expr[1].clone())));
-        assert_eq!(solver.get_ty(&expr[1]), Type::I8);
+        assert!(solver.process_constraint(&expr[0], &Constraint::Eq(expr[1].clone())));
+        assert_eq!(solver.get_type(&expr[1]).unwrap(), Type::I8);
     }
 
     #[rstest]
     fn deep_constraint(expr: [TypeVarId; 3]) {
-        let mut solver = Solver::prefill([(expr[0].clone(), Type::I8)]);
+        let mut solver = Solver::prefill([(expr[0].clone(), Solution::Type(Type::I8))]);
 
-        assert!(solver.solve_constraint(&Constraint::Eq(expr[0].clone(), expr[1].clone())));
-        assert!(solver.solve_constraint(&Constraint::Eq(expr[1].clone(), expr[2].clone())));
-        assert_eq!(solver.get_ty(&expr[1]), Type::I8);
-        assert_eq!(solver.get_ty(&expr[2]), Type::I8);
+        assert!(solver.process_constraint(&expr[0], &Constraint::Eq(expr[1].clone())));
+        assert!(solver.process_constraint(&expr[1], &Constraint::Eq(expr[2].clone())));
+        assert_eq!(solver.get_type(&expr[1]).unwrap(), Type::I8);
+        assert_eq!(solver.get_type(&expr[2]).unwrap(), Type::I8);
     }
 
     #[rstest]
     fn deep_constraint_reversed(expr: [TypeVarId; 3]) {
-        let mut solver = Solver::prefill([(expr[0].clone(), Type::I8)]);
+        let mut solver = Solver::prefill([(expr[0].clone(), Solution::Type(Type::I8))]);
 
         // Solve equality constraint before constraint with solution.
-        assert!(!solver.solve_constraint(&Constraint::Eq(expr[1].clone(), expr[2].clone())));
-        assert!(solver.solve_constraint(&Constraint::Eq(expr[0].clone(), expr[1].clone())));
-        assert_eq!(solver.get_ty(&expr[1]), Type::I8);
-        assert_eq!(solver.get_ty(&expr[2]), Type::I8);
+        assert!(solver.process_constraint(&expr[1], &Constraint::Eq(expr[2].clone())));
+        assert!(solver.process_constraint(&expr[0], &Constraint::Eq(expr[1].clone())));
+        assert_eq!(solver.get_type(&expr[1]).unwrap(), Type::I8);
+        assert_eq!(solver.get_type(&expr[2]).unwrap(), Type::I8);
     }
 
     #[rstest]
     fn literal(expr: [TypeVarId; 1]) {
-        let mut solver = Solver::new();
+        let solver = Solver::prefill([
+            // Manually solve expression as literal.
+            (
+                expr[0].clone(),
+                Solution::Literal(Literal::Integer(IntegerKind::Unsigned)),
+            ),
+        ]);
 
-        // Manually solve expression as literal.
-        solver.solve(expr[0].clone(), Literal::Integer(IntegerKind::Unsigned));
         // Should default to type if none specified.
-        assert_eq!(solver.get_ty(&expr[0]), Type::U8);
+        assert_eq!(solver.get_type(&expr[0]).unwrap(), Type::U8);
     }
 
     #[rstest]
     fn literal_constraint(expr: [TypeVarId; 1]) {
         let mut solver = Solver::new();
 
-        assert!(solver.solve_constraint(&Constraint::Integer(expr[0].clone(), IntegerKind::Any)));
-        assert_eq!(solver.get_ty(&expr[0]), Type::I8);
+        assert!(solver.process_constraint(&expr[0], &Constraint::Integer(IntegerKind::Any)));
+        assert_eq!(solver.get_type(&expr[0]).unwrap(), Type::I8);
     }
 
     #[rstest]
@@ -362,9 +391,9 @@ mod test {
         let [block, one] = expr;
 
         let solutions = Solver::run(&[
-            Constraint::Integer(one.clone(), IntegerKind::Any),
-            Constraint::Eq(block.clone(), one.clone()),
-            Constraint::Eq(block.clone(), Type::U8.into()),
+            (one.clone(), Constraint::Integer(IntegerKind::Any)),
+            (block.clone(), Constraint::Eq(one.clone())),
+            (block.clone(), Constraint::Eq(Type::U8.into())),
         ]);
         assert_eq!(solutions[&one], Type::U8);
     }
@@ -382,18 +411,18 @@ mod test {
 
         let solutions = Solver::run(&[
             // Literals
-            Constraint::Integer(one.clone(), IntegerKind::Any),
-            Constraint::Integer(two.clone(), IntegerKind::Any),
+            (one.clone(), Constraint::Integer(IntegerKind::Any)),
+            (two.clone(), Constraint::Integer(IntegerKind::Any)),
             // Variable bindings
-            Constraint::Eq(a.clone(), one.clone()),
-            Constraint::Eq(b.clone(), two.clone()),
+            (a.clone(), Constraint::Eq(one.clone())),
+            (b.clone(), Constraint::Eq(two.clone())),
             // Expression
-            Constraint::Eq(a_plus_b.clone(), a.clone()),
-            Constraint::Eq(a_plus_b.clone(), b.clone()),
+            (a_plus_b.clone(), Constraint::Eq(a.clone())),
+            (a_plus_b.clone(), Constraint::Eq(b.clone())),
             // Implicit return
-            Constraint::Eq(a_plus_b.clone(), block.clone()),
+            (a_plus_b.clone(), Constraint::Eq(block.clone())),
             // Block constraint (eg function signature)
-            Constraint::Eq(block.clone(), Type::U8.into()),
+            (block.clone(), Constraint::Eq(Type::U8.into())),
         ]);
 
         assert_eq!(solutions[&a], Type::U8);
@@ -412,17 +441,17 @@ mod test {
 
         let solutions = Solver::run(&[
             // Literal
-            Constraint::Integer(one.clone(), IntegerKind::Any),
+            (one.clone(), Constraint::Integer(IntegerKind::Any)),
             // Expressions
-            Constraint::Reference(ref_a.clone(), a.clone()), // &a
-            Constraint::Reference(b.clone(), deref_b.clone()), // *b
+            (ref_a.clone(), Constraint::Reference(a.clone())), // &a
+            (b.clone(), Constraint::Reference(deref_b.clone())), // *b
             // Variable bindings
-            Constraint::Eq(a.clone(), one.clone()),
-            Constraint::Eq(b.clone(), ref_a.clone()),
+            (a.clone(), Constraint::Eq(one.clone())),
+            (b.clone(), Constraint::Eq(ref_a.clone())),
             // Implicit return
-            Constraint::Eq(block.clone(), deref_b.clone()),
+            (block.clone(), Constraint::Eq(deref_b.clone())),
             // Block constraint
-            Constraint::Eq(block.clone(), Type::U8.into()),
+            (block.clone(), Constraint::Eq(Type::U8.into())),
         ]);
 
         assert_eq!(solutions[&a], Type::U8);
@@ -441,19 +470,17 @@ mod test {
 
         let solutions = Solver::run(&[
             // Literal
-            Constraint::Integer(num.clone(), IntegerKind::Any),
+            (num.clone(), Constraint::Integer(IntegerKind::Any)),
             // Expressions
-            Constraint::Reference(ref_a.clone(), a.clone()),
-            Constraint::Reference(b.clone(), deref_b.clone()),
+            (ref_a.clone(), Constraint::Reference(a.clone())),
+            (b.clone(), Constraint::Reference(deref_b.clone())),
             // Bindings
-            Constraint::Eq(a.clone(), num.clone()),
-            Constraint::Eq(b.clone(), ref_a.clone()),
+            (a.clone(), Constraint::Eq(num.clone())),
+            (b.clone(), Constraint::Eq(ref_a.clone())),
             // Block
-            Constraint::Eq(block.clone(), deref_b),
-            Constraint::Eq(block.clone(), Type::U8.into()),
+            (block.clone(), Constraint::Eq(deref_b)),
+            (block.clone(), Constraint::Eq(Type::U8.into())),
         ]);
-
-        dbg!(&solutions);
 
         assert_eq!(solutions[&block], Type::U8);
         assert_eq!(solutions[&a], Type::U8);
@@ -463,91 +490,80 @@ mod test {
     #[rstest]
     fn overriding(expr: [TypeVarId; 4]) {
         let solutions = Solver::run(&[
-            Constraint::Integer(expr[0].clone(), IntegerKind::Any),
-            Constraint::Reference(expr[1].clone(), expr[0].clone()),
-            Constraint::Reference(expr[2].clone(), expr[3].clone()),
-            Constraint::Eq(expr[2].clone(), expr[1].clone()),
-            Constraint::Eq(expr[3].clone(), Type::U8.into()),
+            (expr[0].clone(), Constraint::Integer(IntegerKind::Any)),
+            (expr[1].clone(), Constraint::Reference(expr[0].clone())),
+            (expr[2].clone(), Constraint::Reference(expr[3].clone())),
+            (expr[2].clone(), Constraint::Eq(expr[1].clone())),
+            (expr[3].clone(), Constraint::Eq(Type::U8.into())),
         ]);
 
         assert_eq!(solutions[&expr[0]], Type::U8);
         assert_eq!(solutions[&expr[3]], Type::U8);
     }
 
-    mod solutions_solver {
+    mod merge_solutions {
         use super::*;
 
         #[rstest]
-        fn identical_types() {
+        fn identical_types(solver: Solver) {
             assert_eq!(
-                solve_solutions(&Solution::Type(Type::U8), &Solution::Type(Type::U8)),
-                Solution::Type(Type::U8)
+                solver.merge_solutions(&Solution::Type(Type::U8), &Solution::Type(Type::U8)),
+                MergeResult::Substitute(Solution::Type(Type::U8))
             );
         }
 
         #[rstest]
-        fn type_and_any_integer_literal() {
+        fn type_and_any_integer_literal(solver: Solver) {
             assert_eq!(
-                solve_solutions(
+                solver.merge_solutions(
                     &Solution::Type(Type::U8),
                     &Solution::Literal(Literal::Integer(IntegerKind::Any))
                 ),
-                Solution::Type(Type::U8)
+                MergeResult::Substitute(Solution::Type(Type::U8))
             );
         }
 
         #[rstest]
-        fn type_and_signed_integer_literal() {
+        fn type_and_signed_integer_literal(solver: Solver) {
             assert_eq!(
-                solve_solutions(
+                solver.merge_solutions(
                     &Solution::Type(Type::I8),
                     &Solution::Literal(Literal::Integer(IntegerKind::Signed))
                 ),
-                Solution::Type(Type::I8)
+                MergeResult::Substitute(Solution::Type(Type::I8))
             );
         }
 
         #[rstest]
-        fn type_and_unsigned_integer_literal_i8() {
+        fn type_and_unsigned_integer_literal_u8(solver: Solver) {
             assert_eq!(
-                solve_solutions(
-                    &Solution::Type(Type::I8),
-                    &Solution::Literal(Literal::Integer(IntegerKind::Unsigned))
-                ),
-                Solution::Type(Type::I8)
-            );
-        }
-
-        #[rstest]
-        fn type_and_unsigned_integer_literal_u8() {
-            assert_eq!(
-                solve_solutions(
+                solver.merge_solutions(
                     &Solution::Type(Type::U8),
                     &Solution::Literal(Literal::Integer(IntegerKind::Unsigned))
                 ),
-                Solution::Type(Type::U8)
+                MergeResult::Substitute(Solution::Type(Type::U8))
             );
         }
 
         #[rstest]
-        fn literal_identical() {
+        fn literal_identical(solver: Solver) {
             assert_eq!(
-                solve_solutions(
+                solver.merge_solutions(
                     &Solution::Literal(Literal::Integer(IntegerKind::Unsigned)),
                     &Solution::Literal(Literal::Integer(IntegerKind::Unsigned))
                 ),
-                Solution::Literal(Literal::Integer(IntegerKind::Unsigned))
+                MergeResult::Substitute(Solution::Literal(Literal::Integer(IntegerKind::Unsigned)))
             );
         }
 
         #[rstest]
-        fn literal_any_integer() {
+        fn literal_any_integer(solver: Solver) {
             assert_eq!(
-                solve_solutions(
+                solver.merge_solutions(
                     &Solution::Literal(Literal::Integer(IntegerKind::Unsigned)),
                     &Solution::Literal(Literal::Integer(IntegerKind::Any))
                 ),
-                Solution::Literal(Literal::Integer(IntegerKind::Unsigned))
+                MergeResult::Substitute(Solution::Literal(Literal::Integer(IntegerKind::Unsigned)))
             );
         }
     }
