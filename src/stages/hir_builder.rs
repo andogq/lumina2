@@ -31,9 +31,6 @@ impl<'ast> HirBuilder<'ast> {
         Self {
             hir: Hir {
                 functions: Vec::new(),
-                bindings: HashMap::new(),
-                blocks: Vec::new(),
-                exprs: Vec::new(),
             },
             ast,
             function_bindings: HashMap::new(),
@@ -78,7 +75,9 @@ impl<'ast> HirBuilder<'ast> {
         let binding = self.scopes.declare_binding(function.name);
         self.function_bindings.insert(binding, id);
 
-        let (parameters, entry) = self.with_scope(|builder| {
+        let (parameters, entry, bindings, blocks, exprs) = self.with_scope(|builder| {
+            let mut builder = FunctionBuilder::new(builder);
+
             let parameters = function
                 .params
                 .iter()
@@ -92,7 +91,13 @@ impl<'ast> HirBuilder<'ast> {
 
             let entry = builder.lower_block(function.body);
 
-            (parameters, entry)
+            (
+                parameters,
+                entry,
+                builder.bindings,
+                builder.blocks,
+                builder.exprs,
+            )
         });
 
         self.hir.functions.push(Function {
@@ -102,9 +107,38 @@ impl<'ast> HirBuilder<'ast> {
                 .map(|ty| self.ident_to_type(ty))
                 .unwrap_or(Type::Unit),
             entry,
+            bindings,
+            blocks,
+            exprs,
         });
 
         id
+    }
+}
+
+#[derive(Debug)]
+struct FunctionBuilder<'hir, 'ast> {
+    builder: &'hir mut HirBuilder<'ast>,
+    bindings: HashMap<BindingId, DeclarationTy>,
+    blocks: Vec<Block>,
+    exprs: Vec<Expr>,
+}
+
+impl<'hir, 'ast> FunctionBuilder<'hir, 'ast> {
+    pub fn new(builder: &'hir mut HirBuilder<'ast>) -> Self {
+        Self {
+            builder,
+            bindings: HashMap::new(),
+            blocks: Vec::new(),
+            exprs: Vec::new(),
+        }
+    }
+
+    pub fn with_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        self.scopes.push();
+        let value = f(self);
+        self.scopes.pop();
+        value
     }
 
     pub fn lower_block(&mut self, block: ast::BlockId) -> BlockId {
@@ -150,13 +184,21 @@ impl<'ast> HirBuilder<'ast> {
     }
 
     fn add_expr(&mut self, expr: Expr) -> ExprId {
-        let id = ExprId::new(self.hir.exprs.len());
-        self.hir.exprs.push(expr);
+        let id = ExprId::new(self.exprs.len());
+        self.exprs.push(expr);
         id
     }
 
+    fn get_expr(&self, expr: ExprId) -> &Expr {
+        &self.exprs[expr.0]
+    }
+
+    fn get_block(&self, block: BlockId) -> &Block {
+        &self.blocks[block.0]
+    }
+
     fn expr_as_block(&mut self, expr: ExprId) -> BlockId {
-        if let Expr::Block(block_id) = self.hir.get_expr(expr) {
+        if let Expr::Block(block_id) = self.get_expr(expr) {
             return *block_id;
         }
 
@@ -164,7 +206,7 @@ impl<'ast> HirBuilder<'ast> {
     }
 
     fn block_as_expr(&mut self, block: BlockId) -> ExprId {
-        let hir_block = self.hir.get_block(block);
+        let hir_block = self.get_block(block);
 
         if hir_block.statements.is_empty() {
             hir_block.expr
@@ -174,14 +216,28 @@ impl<'ast> HirBuilder<'ast> {
     }
 }
 
+impl<'hir, 'ast> Deref for FunctionBuilder<'hir, 'ast> {
+    type Target = HirBuilder<'ast>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.builder
+    }
+}
+
+impl<'hir, 'ast> DerefMut for FunctionBuilder<'hir, 'ast> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.builder
+    }
+}
+
 #[derive(Debug)]
-struct BlockBuilder<'hir, 'ast> {
-    builder: &'hir mut HirBuilder<'ast>,
+struct BlockBuilder<'func, 'hir, 'ast> {
+    builder: &'func mut FunctionBuilder<'hir, 'ast>,
     statements: Vec<Statement>,
 }
 
-impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
-    pub fn new(builder: &'hir mut HirBuilder<'ast>) -> Self {
+impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
+    pub fn new(builder: &'func mut FunctionBuilder<'hir, 'ast>) -> Self {
         Self {
             builder,
             statements: Vec::new(),
@@ -193,8 +249,8 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
     }
 
     fn terminate(self, expr: ExprId) -> BlockId {
-        let id = BlockId::new(self.builder.hir.blocks.len());
-        self.builder.hir.blocks.push(Block {
+        let id = BlockId::new(self.builder.blocks.len());
+        self.builder.blocks.push(Block {
             statements: self.statements,
             expr,
         });
@@ -209,7 +265,7 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
 
                 // TODO: Unsure when to create this, should optionally be annotated type.
                 let ty = DeclarationTy::Inferred(value);
-                self.hir.bindings.insert(binding, ty.clone());
+                self.bindings.insert(binding, ty.clone());
                 self.add_statement(Statement::Declare(DeclareStatement { binding, ty }));
 
                 let variable = self.add_expr(Expr::Variable(Variable { binding }));
@@ -323,15 +379,15 @@ impl<'hir, 'ast> BlockBuilder<'hir, 'ast> {
     }
 }
 
-impl<'hir, 'ast> Deref for BlockBuilder<'hir, 'ast> {
-    type Target = HirBuilder<'ast>;
+impl<'func, 'hir, 'ast> Deref for BlockBuilder<'func, 'hir, 'ast> {
+    type Target = FunctionBuilder<'hir, 'ast>;
 
     fn deref(&self) -> &Self::Target {
         self.builder
     }
 }
 
-impl<'hir, 'ast> DerefMut for BlockBuilder<'hir, 'ast> {
+impl<'func, 'hir, 'ast> DerefMut for BlockBuilder<'func, 'hir, 'ast> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.builder
     }
@@ -590,6 +646,7 @@ mod test {
         #[case] name: &str,
         #[case] block: ast::BlockId,
     ) {
+        let mut builder = FunctionBuilder::new(&mut builder);
         assert_debug_snapshot!(name, builder.lower_block(block));
     }
 
@@ -610,6 +667,7 @@ mod test {
             #[case] name: &str,
             #[case] assign: ast::Assign,
         ) {
+            let mut builder = FunctionBuilder::new(&mut builder);
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_assign(&assign));
         }
@@ -624,6 +682,7 @@ mod test {
             #[case] name: &str,
             #[case] binary: ast::Binary,
         ) {
+            let mut builder = FunctionBuilder::new(&mut builder);
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_binary(&binary));
         }
@@ -638,6 +697,7 @@ mod test {
             #[case] name: &str,
             #[case] unary: ast::Unary,
         ) {
+            let mut builder = FunctionBuilder::new(&mut builder);
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_unary(&unary));
         }
@@ -660,6 +720,7 @@ mod test {
             #[case] name: &str,
             #[case] if_expr: ast::If,
         ) {
+            let mut builder = FunctionBuilder::new(&mut builder);
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_if(&if_expr));
         }
@@ -673,6 +734,7 @@ mod test {
             #[case] name: &str,
             #[case] literal: ast::Literal,
         ) {
+            let mut builder = FunctionBuilder::new(&mut builder);
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_literal(&literal));
         }
@@ -685,6 +747,7 @@ mod test {
             #[case] name: &str,
             #[case] call: ast::Call,
         ) {
+            let mut builder = FunctionBuilder::new(&mut builder);
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_call(&call));
         }
@@ -696,6 +759,7 @@ mod test {
             #[case] name: &str,
             #[case] variable: ast::Variable,
         ) {
+            let mut builder = FunctionBuilder::new(&mut builder);
             let mut builder = BlockBuilder::new(&mut builder);
             assert_debug_snapshot!(name, builder.lower_variable(&variable));
         }

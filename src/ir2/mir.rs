@@ -7,14 +7,12 @@ pub use self::{
 #[derive(Clone, Debug)]
 pub struct Mir {
     pub functions: Vec<Function>,
-    pub basic_blocks: Vec<BasicBlock>,
 }
 
 impl Mir {
     pub fn new() -> Self {
         Self {
             functions: Vec::new(),
-            basic_blocks: Vec::new(),
         }
     }
 }
@@ -37,6 +35,8 @@ mod functions {
 
         pub locals: Vec<Type>,
         pub entry: BasicBlockId,
+
+        pub basic_blocks: Vec<BasicBlock>,
     }
 
     #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]

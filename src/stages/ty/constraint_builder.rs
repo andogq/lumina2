@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     ir2::{
         cst::{BinaryOp, UnaryOp},
@@ -9,12 +11,14 @@ use crate::{
 use super::IntegerKind;
 
 pub struct ConstraintBuilder {
+    functions: HashMap<FunctionId, (Vec<Type>, Type)>,
     constraints: Vec<(TypeVarId, Constraint)>,
 }
 
 impl ConstraintBuilder {
     pub fn new() -> Self {
         Self {
+            functions: HashMap::new(),
             constraints: Vec::new(),
         }
     }
@@ -27,13 +31,16 @@ impl ConstraintBuilder {
 }
 
 impl HirVisitor for ConstraintBuilder {
+    type FunctionVisitor = Self;
+
     fn visit_function_declaration(
         &mut self,
+        id: FunctionId,
         params: Vec<(BindingId, Type)>,
         return_ty: Type,
-        body: &Block,
+        block: &Block,
     ) {
-        // Build constraints for all the parameters.
+        // Constrain the bindings
         self.constraints.extend(
             params
                 .iter()
@@ -42,11 +49,23 @@ impl HirVisitor for ConstraintBuilder {
 
         // TODO: Build constraint for `return_ty` once the function ID is attached
 
-        // Ensure the expression of the body resolves to the return type.
+        // Ensure block expression yields the return type.
         self.constraints
-            .push((body.expr.into(), Constraint::Eq(return_ty.into())));
+            .push((block.expr.into(), Constraint::Eq(return_ty.clone().into())));
+
+        // Record the function signature.
+        self.functions.insert(
+            id,
+            (params.into_iter().map(|(_, ty)| ty).collect(), return_ty),
+        );
     }
 
+    fn visit_function(&mut self, _id: FunctionId, visit: impl FnOnce(&mut Self::FunctionVisitor)) {
+        visit(self);
+    }
+}
+
+impl HirFunctionVisitor for ConstraintBuilder {
     fn visit_variable_declaration(&mut self, binding: BindingId, ty: DeclarationTy) {
         match ty {
             // Constrain the binding to the type it's assigned to.
@@ -243,6 +262,7 @@ mod test {
     ) {
         let params = params.into_iter().collect::<Vec<_>>();
         builder.visit_function_declaration(
+            FunctionId::new(0),
             params.clone(),
             return_ty.clone(),
             &Block {

@@ -7,7 +7,7 @@ use inkwell::{
     context::Context,
     module::Module,
     types::{BasicType, BasicTypeEnum, FunctionType},
-    values::{AnyValue, BasicValue, BasicValueEnum, FunctionValue, PointerValue},
+    values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
 use crate::ir2::{
@@ -35,7 +35,7 @@ pub fn codegen<'ink>(ink: &'ink Context, mir: &Mir) -> Module<'ink> {
             codegen.declare_local(LocalId::new(i), ty);
         }
 
-        lower_block(&mut codegen, mir, function.entry);
+        lower_block(&mut codegen, function, function.entry);
 
         // Unconditional jump to the first block.
         let user_entry = codegen.get_basic_block(function.entry);
@@ -54,10 +54,10 @@ pub fn codegen<'ink>(ink: &'ink Context, mir: &Mir) -> Module<'ink> {
 
 fn lower_block<'ink, 'codegen>(
     codegen: &mut FunctionCodegen<'ink, 'codegen>,
-    mir: &Mir,
+    function: &Function,
     block_id: BasicBlockId,
 ) -> IBasicBlock<'ink> {
-    let block = &mir.basic_blocks[block_id.0];
+    let block = &function.basic_blocks[block_id.0];
     let bb = codegen.get_basic_block(block_id);
 
     if bb.get_terminator().is_some() {
@@ -86,7 +86,7 @@ fn lower_block<'ink, 'codegen>(
     match &block.terminator {
         Terminator::Call(call) => todo!(),
         Terminator::Goto(Goto { basic_block }) => {
-            let basic_block = lower_block(codegen, mir, *basic_block);
+            let basic_block = lower_block(codegen, function, *basic_block);
 
             codegen
                 .builder
@@ -118,12 +118,12 @@ fn lower_block<'ink, 'codegen>(
                 .map(|(value, block)| {
                     (
                         codegen.constant(value).0.into_int_value(),
-                        lower_block(codegen, mir, *block),
+                        lower_block(codegen, function, *block),
                     )
                 })
                 .collect::<Vec<_>>();
 
-            let otherwise = lower_block(codegen, mir, *otherwise);
+            let otherwise = lower_block(codegen, function, *otherwise);
 
             codegen
                 .builder

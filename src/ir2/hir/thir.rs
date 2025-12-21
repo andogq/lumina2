@@ -7,16 +7,39 @@ use super::*;
 #[derive(Clone, Debug)]
 pub struct Thir {
     pub functions: Vec<Function>,
-    pub bindings: HashMap<BindingId, Type>,
-    pub blocks: Vec<Block>,
-    pub exprs: Vec<(Expr, Type)>,
 }
 
 impl Thir {
     pub fn new(hir: Hir, types: HashMap<TypeVarId, Type>) -> Self {
         Self {
-            functions: hir.functions,
-            bindings: hir
+            functions: hir
+                .functions
+                .into_iter()
+                .map(|function| Function::from_hir(function, &types))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Function {
+    pub parameters: Vec<(BindingId, Type)>,
+    pub return_ty: Type,
+    pub entry: BlockId,
+
+    pub bindings: HashMap<BindingId, Type>,
+    pub blocks: Vec<Block>,
+    pub exprs: Vec<(Expr, Type)>,
+}
+
+impl Function {
+    fn from_hir(function: super::Function, types: &HashMap<TypeVarId, Type>) -> Self {
+        Self {
+            parameters: function.parameters,
+            return_ty: function.return_ty,
+            entry: function.entry,
+
+            bindings: function
                 .bindings
                 .into_iter()
                 .map(|(binding, ty)| {
@@ -29,8 +52,8 @@ impl Thir {
                     )
                 })
                 .collect(),
-            blocks: hir.blocks,
-            exprs: hir
+            blocks: function.blocks,
+            exprs: function
                 .exprs
                 .into_iter()
                 .enumerate()

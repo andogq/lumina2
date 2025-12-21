@@ -1,4 +1,4 @@
-mod thir;
+pub mod thir;
 mod visitor;
 
 use std::collections::HashMap;
@@ -13,19 +13,6 @@ pub use self::{
 #[derive(Clone, Debug)]
 pub struct Hir {
     pub functions: Vec<Function>,
-    pub bindings: HashMap<BindingId, DeclarationTy>,
-    pub blocks: Vec<Block>,
-    pub exprs: Vec<Expr>,
-}
-
-impl Hir {
-    pub fn get_expr(&self, expr: ExprId) -> &Expr {
-        &self.exprs[expr.0]
-    }
-
-    pub fn get_block(&self, block: BlockId) -> &Block {
-        &self.blocks[block.0]
-    }
 }
 
 mod functions {
@@ -36,9 +23,23 @@ mod functions {
         pub parameters: Vec<(BindingId, Type)>,
         pub return_ty: Type,
         pub entry: BlockId,
+
+        pub bindings: HashMap<BindingId, DeclarationTy>,
+        pub blocks: Vec<Block>,
+        pub exprs: Vec<Expr>,
     }
 
-    #[derive(Clone, Copy, Debug)]
+    impl Function {
+        pub fn get_expr(&self, expr: ExprId) -> &Expr {
+            &self.exprs[expr.0]
+        }
+
+        pub fn get_block(&self, block: BlockId) -> &Block {
+            &self.blocks[block.0]
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct FunctionId(usize);
     impl FunctionId {
         pub fn new(id: usize) -> Self {
@@ -51,7 +52,7 @@ mod block {
     use super::*;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct BlockId(pub(super) usize);
+    pub struct BlockId(pub usize);
     impl BlockId {
         pub fn new(id: usize) -> Self {
             Self(id)
@@ -107,7 +108,7 @@ mod expr {
     use super::*;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct ExprId(pub(super) usize);
+    pub struct ExprId(pub usize);
     impl ExprId {
         pub fn new(id: usize) -> Self {
             Self(id)
