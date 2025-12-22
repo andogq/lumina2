@@ -113,7 +113,7 @@ impl IntegerKind {
     }
 }
 
-pub fn solve(hir: &Hir) -> HashMap<TypeVarId, Type> {
+pub fn solve(hir: &Hir) -> HashMap<FunctionId, HashMap<TypeVarId, Type>> {
     // Collect all function parameters.
     let function_declarations = hir
         .functions
@@ -132,8 +132,21 @@ pub fn solve(hir: &Hir) -> HashMap<TypeVarId, Type> {
         })
         .collect::<Vec<_>>();
 
-    let constraints = ConstraintBuilder::build(hir);
-    Solver::run(dbg!(&constraints))
+    // Run the solver for each function in isolation.
+    hir.functions
+        .iter()
+        .enumerate()
+        .map(|(id, f)| {
+            (
+                FunctionId::new(id),
+                ConstraintBuilder::build(f, function_declarations.iter().cloned()),
+            )
+        })
+        .inspect(|(id, constraints)| {
+            dbg!(id, constraints);
+        })
+        .map(|(id, constraints)| (id, Solver::run(&constraints)))
+        .collect()
 }
 
 #[cfg(test)]
@@ -166,19 +179,21 @@ mod test {
 
         // HACK: Manually add a block to the AST with the expression. Then insert a
         // function declaration with the block as the body.
-        {
+        let function_id = {
             let block_id = ast.blocks.len();
             ast.blocks.push(ast::Block {
                 statements: vec![ast::Statement::Expr(ast::ExprStatement { expr: expr_id })],
                 expression: None,
             });
+            let function_id = FunctionId::new(ast.function_declarations.len());
             ast.function_declarations.push(ast::FunctionDeclaration {
                 name: ast::StringId::new(2),
                 params: Vec::new(),
                 return_ty: None,
                 body: ast::BlockId::new(block_id),
             });
-        }
+            function_id
+        };
 
         // Lower the AST into the HIR.
         let mut hir_builder = hir_builder::HirBuilder::new(&ast);
@@ -194,7 +209,11 @@ mod test {
         let tys = solve(&hir);
 
         // Fetch the expression type.
-        tys.get(&expr_id.into()).unwrap().clone()
+        tys.get(&function_id)
+            .unwrap()
+            .get(&expr_id.into())
+            .unwrap()
+            .clone()
     }
 
     #[rstest]

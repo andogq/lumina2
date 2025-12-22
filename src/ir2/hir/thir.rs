@@ -10,12 +10,13 @@ pub struct Thir {
 }
 
 impl Thir {
-    pub fn new(hir: Hir, types: HashMap<TypeVarId, Type>) -> Self {
+    pub fn new(hir: Hir, types: HashMap<FunctionId, HashMap<TypeVarId, Type>>) -> Self {
         Self {
             functions: hir
                 .functions
                 .into_iter()
-                .map(|function| Function::from_hir(function, &types))
+                .enumerate()
+                .map(|(id, function)| Function::from_hir(function, &types[&FunctionId::new(id)]))
                 .collect(),
         }
     }

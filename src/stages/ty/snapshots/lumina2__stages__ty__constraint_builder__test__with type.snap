@@ -1,16 +1,18 @@
 ---
 source: src/stages/ty/constraint_builder.rs
-expression: Some(I8)
+expression: Type(I8)
 ---
 [
-    Eq(
+    (
         Binding(
             BindingId(
                 0,
             ),
         ),
-        Type(
-            I8,
+        Eq(
+            Type(
+                I8,
+            ),
         ),
     ),
 ]

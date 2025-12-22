@@ -1,8 +1,3 @@
-use std::{
-    collections::HashMap,
-    ops::{Deref, DerefMut},
-};
-
 use crate::{
     ir2::{
         cst::{BinaryOp, UnaryOp},
@@ -13,51 +8,38 @@ use crate::{
 
 use super::IntegerKind;
 
-pub struct ConstraintBuilder {
-    functions: HashMap<FunctionId, (Vec<Type>, Type)>,
+pub struct ConstraintBuilder<'hir> {
+    function: &'hir Function,
     constraints: Vec<(TypeVarId, Constraint)>,
 }
 
-impl ConstraintBuilder {
-    pub fn new() -> Self {
+impl<'hir> ConstraintBuilder<'hir> {
+    pub fn new(
+        function: &'hir Function,
+        constraints: impl IntoIterator<Item = (TypeVarId, Constraint)>,
+    ) -> Self {
         Self {
-            functions: HashMap::new(),
-            constraints: Vec::new(),
+            function,
+            constraints: Vec::from_iter(constraints),
         }
     }
 
-    pub fn build(hir: &Hir) -> Vec<(TypeVarId, Constraint)> {
-        let mut builder = ConstraintBuilder::new();
-        hir.visit(&mut builder);
+    pub fn build(
+        function: &'hir Function,
+        constraints: impl IntoIterator<Item = (TypeVarId, Constraint)>,
+    ) -> Vec<(TypeVarId, Constraint)> {
+        let mut builder = Self::new(function, constraints);
+        builder.add_declaration();
+        function.visit(&mut builder);
         builder.constraints
     }
-}
 
-impl HirVisitor for ConstraintBuilder {
-    type FunctionVisitor<'builder> = ConstraintFunctionBuilder<'builder>;
-
-    fn visit_function_declaration(
-        &mut self,
-        id: FunctionId,
-        binding: BindingId,
-        params: Vec<(BindingId, Type)>,
-        return_ty: Type,
-        block: &Block,
-    ) {
-        self.constraints.push((
-            binding.into(),
-            Constraint::Eq(
-                Type::Function {
-                    params: params.iter().map(|(_, ty)| ty.clone()).collect(),
-                    ret_ty: Box::new(return_ty.clone()),
-                }
-                .into(),
-            ),
-        ));
-
+    /// Add constraints based on the declaration of this function.
+    fn add_declaration(&mut self) {
         // Constrain the parameter bindings.
         self.constraints.extend(
-            params
+            self.function
+                .parameters
                 .iter()
                 .map(|(binding, ty)| ((*binding).into(), Constraint::Eq(ty.clone().into()))),
         );
@@ -65,41 +47,33 @@ impl HirVisitor for ConstraintBuilder {
         // TODO: Build constraint for `return_ty` once the function ID is attached
 
         // Ensure block expression yields the return type.
-        self.constraints
-            .push((block.expr.into(), Constraint::Eq(return_ty.clone().into())));
-
-        // Record the function signature.
-        self.functions.insert(
-            id,
-            (params.into_iter().map(|(_, ty)| ty).collect(), return_ty),
-        );
+        self.constraints.push((
+            self.function.get_block(self.function.entry).expr.into(),
+            Constraint::Eq(self.function.return_ty.clone().into()),
+        ));
     }
 
-    fn visit_function(
-        &mut self,
-        id: FunctionId,
-        visit: impl FnOnce(&mut Self::FunctionVisitor<'_>),
-    ) {
-        let mut builder = ConstraintFunctionBuilder::new(self, id);
-        visit(&mut builder);
-    }
-}
-
-pub struct ConstraintFunctionBuilder<'builder> {
-    builder: &'builder mut ConstraintBuilder,
-    current_function: FunctionId,
-}
-
-impl<'builder> ConstraintFunctionBuilder<'builder> {
-    pub fn new(builder: &'builder mut ConstraintBuilder, current_function: FunctionId) -> Self {
-        Self {
-            builder,
-            current_function,
-        }
+    pub fn generate_function_declarations(
+        functions: impl Iterator<Item = &'hir Function>,
+    ) -> Vec<(TypeVarId, Constraint)> {
+        functions
+            .map(|f| {
+                (
+                    TypeVarId::Binding(f.binding),
+                    Constraint::Eq(
+                        Type::Function {
+                            params: f.parameters.iter().map(|(_, ty)| ty.clone()).collect(),
+                            ret_ty: Box::new(f.return_ty.clone()),
+                        }
+                        .into(),
+                    ),
+                )
+            })
+            .collect()
     }
 }
 
-impl<'builder> HirFunctionVisitor for ConstraintFunctionBuilder<'builder> {
+impl<'hir> HirFunctionVisitor for ConstraintBuilder<'hir> {
     fn visit_variable_declaration(&mut self, binding: BindingId, ty: DeclarationTy) {
         match ty {
             // Constrain the binding to the type it's assigned to.
@@ -268,20 +242,6 @@ impl<'builder> HirFunctionVisitor for ConstraintFunctionBuilder<'builder> {
     }
 }
 
-impl<'builder> Deref for ConstraintFunctionBuilder<'builder> {
-    type Target = ConstraintBuilder;
-
-    fn deref(&self) -> &Self::Target {
-        self.builder
-    }
-}
-
-impl<'builder> DerefMut for ConstraintFunctionBuilder<'builder> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.builder
-    }
-}
-
 fn constraint_from_literal(literal: &Literal) -> Constraint {
     match literal {
         Literal::Integer(_) => Constraint::Integer(IntegerKind::Any),
@@ -292,6 +252,8 @@ fn constraint_from_literal(literal: &Literal) -> Constraint {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use crate::lex::tok;
 
     use super::*;
@@ -300,8 +262,16 @@ mod test {
     use rstest::*;
 
     #[fixture]
-    fn builder() -> ConstraintBuilder {
-        ConstraintBuilder::new()
+    fn function() -> Function {
+        Function {
+            binding: BindingId::new(0),
+            parameters: vec![],
+            return_ty: Type::Unit,
+            entry: BlockId::new(0),
+            bindings: HashMap::new(),
+            blocks: vec![],
+            exprs: vec![],
+        }
     }
 
     #[rstest]
@@ -309,26 +279,24 @@ mod test {
     #[case("return int", [], Type::I8)]
     #[case("params", [(BindingId::new(1), Type::I8), (BindingId::new(2), Type::Boolean)], Type::Boolean)]
     fn function_expression(
-        mut builder: ConstraintBuilder,
+        mut function: Function,
         #[case] name: &str,
         #[case] params: impl IntoIterator<Item = (BindingId, Type)>,
         #[case] return_ty: Type,
     ) {
-        let params = params.into_iter().collect::<Vec<_>>();
-        builder.visit_function_declaration(
-            FunctionId::new(0),
-            BindingId::new(0),
-            params.clone(),
-            return_ty.clone(),
-            &Block {
-                statements: Vec::new(),
-                expr: ExprId::new(0),
-            },
-        );
+        function.parameters = params.into_iter().collect();
+        function.return_ty = return_ty;
+        function.blocks.push(Block {
+            statements: Vec::new(),
+            expr: ExprId::new(0),
+        });
+
+        let mut builder = ConstraintBuilder::new(&function, []);
+        builder.add_declaration();
         assert_debug_snapshot!(
             name,
             builder.constraints,
-            &format!("{params:?} => {return_ty:?}")
+            &format!("{:?} => {:?}", function.parameters, function.return_ty)
         );
     }
 
@@ -336,24 +304,16 @@ mod test {
     #[case("inferred", DeclarationTy::Inferred(ExprId::new(0)))]
     #[case("with unit", DeclarationTy::Type(Type::Unit))]
     #[case("with type", DeclarationTy::Type(Type::I8))]
-    fn variable_declaration(
-        mut builder: ConstraintBuilder,
-        #[case] name: &str,
-        #[case] ty: DeclarationTy,
-    ) {
-        let mut builder = ConstraintFunctionBuilder::new(&mut builder, FunctionId::new(0));
+    fn variable_declaration(function: Function, #[case] name: &str, #[case] ty: DeclarationTy) {
+        let mut builder = ConstraintBuilder::new(&function, []);
         builder.visit_variable_declaration(BindingId::new(0), ty.clone());
         assert_debug_snapshot!(name, builder.constraints, &format!("{ty:?}"));
     }
 
     #[rstest]
     #[case("assign", Assign { variable: ExprId::new(1), value: ExprId::new(2) })]
-    fn assign_constraint(
-        mut builder: ConstraintBuilder,
-        #[case] name: &str,
-        #[case] assign: Assign,
-    ) {
-        let mut builder = ConstraintFunctionBuilder::new(&mut builder, FunctionId::new(0));
+    fn assign_constraint(function: Function, #[case] name: &str, #[case] assign: Assign) {
+        let mut builder = ConstraintBuilder::new(&function, []);
         builder.visit_assign(ExprId::new(0), &assign);
         assert_debug_snapshot!(name, builder.constraints, &format!("{assign:?}"));
     }
@@ -391,20 +351,16 @@ mod test {
             rhs: ExprId::new(2),
         },
     )]
-    fn binary_constraint(
-        mut builder: ConstraintBuilder,
-        #[case] name: &str,
-        #[case] binary: Binary,
-    ) {
-        let mut builder = ConstraintFunctionBuilder::new(&mut builder, FunctionId::new(0));
+    fn binary_constraint(function: Function, #[case] name: &str, #[case] binary: Binary) {
+        let mut builder = ConstraintBuilder::new(&function, []);
         builder.visit_binary(ExprId::new(0), &binary);
         assert_debug_snapshot!(name, builder.constraints, &format!("{binary:?}"));
     }
 
     #[rstest]
     #[case("negative", Unary { op: UnaryOp::Negative(tok::Minus), value: ExprId::new(1) })]
-    fn unary_constraint(mut builder: ConstraintBuilder, #[case] name: &str, #[case] unary: Unary) {
-        let mut builder = ConstraintFunctionBuilder::new(&mut builder, FunctionId::new(0));
+    fn unary_constraint(function: Function, #[case] name: &str, #[case] unary: Unary) {
+        let mut builder = ConstraintBuilder::new(&function, []);
         builder.visit_unary(ExprId::new(0), &unary);
         assert_debug_snapshot!(name, builder.constraints, &format!("{unary:?}"));
     }

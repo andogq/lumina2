@@ -1,36 +1,42 @@
 ---
 source: src/stages/ty/constraint_builder.rs
-expression: "[(BindingId(0), I8), (BindingId(1), Boolean)] => Boolean"
+expression: "[(BindingId(1), I8), (BindingId(2), Boolean)] => Boolean"
 ---
 [
-    Eq(
-        Binding(
-            BindingId(
-                0,
-            ),
-        ),
-        Type(
-            I8,
-        ),
-    ),
-    Eq(
+    (
         Binding(
             BindingId(
                 1,
             ),
         ),
-        Type(
-            Boolean,
+        Eq(
+            Type(
+                I8,
+            ),
         ),
     ),
-    Eq(
+    (
+        Binding(
+            BindingId(
+                2,
+            ),
+        ),
+        Eq(
+            Type(
+                Boolean,
+            ),
+        ),
+    ),
+    (
         Expr(
             ExprId(
                 0,
             ),
         ),
-        Type(
-            Boolean,
+        Eq(
+            Type(
+                Boolean,
+            ),
         ),
     ),
 ]

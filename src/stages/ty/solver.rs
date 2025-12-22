@@ -59,10 +59,7 @@ impl Solver {
 
     pub fn run(constraints: &[(TypeVarId, Constraint)]) -> HashMap<TypeVarId, Type> {
         // Pre-fill with builtin types.
-        let mut solver = Self::prefill(
-            [Type::Never, Type::Unit, Type::I8, Type::U8, Type::Boolean]
-                .map(|ty| (TypeVarId::Type(ty.clone()), Solution::Type(ty))),
-        );
+        let mut solver = Self::prefill([]);
 
         for (var, constraint) in constraints {
             assert!(solver.process_constraint(var, constraint));
@@ -86,7 +83,7 @@ impl Solver {
 
     fn solve_integer(&mut self, var: &TypeVarId, integer_kind: &IntegerKind) -> bool {
         let var = self.root.find_set(var).clone();
-        let var_solution = self.get_solution(&var).cloned();
+        let var_solution = self.get_solution(&var);
         let integer_solution = Solution::Literal(Literal::Integer(integer_kind.clone()));
 
         let Ok((solution, should_insert)) =
@@ -109,7 +106,7 @@ impl Solver {
         let var = self.root.find_set(var).clone();
         let ref_var = self.root.find_set(ref_var).clone();
 
-        let var_solution = self.get_solution(&var).cloned();
+        let var_solution = self.get_solution(&var);
         let ref_solution = Solution::Reference(ref_var.clone());
 
         let Ok((solution, should_insert)) =
@@ -134,11 +131,10 @@ impl Solver {
         params: &[TypeVarId],
         ret_ty: &TypeVarId,
     ) -> bool {
-        dbg!(var);
         let Some(Solution::Type(Type::Function {
             params: fn_params,
             ret_ty: fn_ret_ty,
-        })) = dbg!(self.get_solution(var).cloned())
+        })) = self.get_solution(var)
         else {
             unimplemented!();
         };
@@ -175,8 +171,8 @@ impl Solver {
             return Some(lhs.clone());
         }
 
-        let lhs_solution = self.get_solution(lhs).cloned();
-        let rhs_solution = self.get_solution(rhs).cloned();
+        let lhs_solution = self.get_solution(lhs);
+        let rhs_solution = self.get_solution(rhs);
 
         let lhs = lhs.clone();
         let rhs = rhs.clone();
@@ -305,20 +301,21 @@ impl Solver {
         }
     }
 
-    fn get_solution(&self, var: &TypeVarId) -> Option<&Solution> {
+    fn get_solution(&self, var: &TypeVarId) -> Option<Solution> {
+        // Types always have a solution.
+        if let TypeVarId::Type(ty) = var {
+            return Some(Solution::Type(ty.clone()));
+        }
+
         let var = self.root.find_set(var);
-        self.solutions.get(var)
+        self.solutions.get(var).cloned()
     }
 
     fn get_non_concrete_type(&self, var: &TypeVarId) -> Option<NonConcreteType> {
-        if let TypeVarId::Type(ty) = var {
-            return Some(NonConcreteType::Type(ty.clone()));
-        }
-
         match self.get_solution(var)? {
             Solution::Type(solution) => Some(NonConcreteType::Type(solution.clone())),
             Solution::Reference(type_var_id) => Some(NonConcreteType::Type(Type::Ref(Box::new(
-                self.get_type(type_var_id)?,
+                self.get_type(&type_var_id)?,
             )))),
             Solution::Literal(literal) => Some(NonConcreteType::Literal(literal.clone())),
         }
@@ -335,9 +332,6 @@ impl Solver {
         self.root
             .keys()
             .chain(self.solutions.keys())
-            .inspect(|var| {
-                dbg!(var);
-            })
             .map(|var| (var.clone(), self.get_type(var).unwrap()))
             .collect()
     }

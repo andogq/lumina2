@@ -197,7 +197,7 @@ fn lower_expr(
         hir::Expr::Literal(literal) => {
             Operand::Constant(literal_to_constant(literal, function.get_expr_ty(expr)))
         }
-        hir::Expr::Call(call) => todo!(),
+        hir::Expr::Call(call) => unimplemented!(),
         hir::Expr::Block(block_id) => {
             lower_block(thir, function, builder, function.get_block(*block_id))?
         }

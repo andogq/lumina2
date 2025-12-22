@@ -3,43 +3,51 @@ source: src/stages/ty/constraint_builder.rs
 expression: "Binary { lhs: ExprId(1), op: Plus(Plus), rhs: ExprId(2) }"
 ---
 [
-    Eq(
+    (
         Expr(
             ExprId(
                 1,
             ),
         ),
-        Expr(
-            ExprId(
-                2,
+        Eq(
+            Expr(
+                ExprId(
+                    2,
+                ),
             ),
         ),
     ),
-    Integer(
+    (
         Expr(
             ExprId(
                 1,
             ),
         ),
-        Any,
+        Integer(
+            Any,
+        ),
     ),
-    Integer(
+    (
         Expr(
             ExprId(
                 2,
             ),
         ),
-        Any,
+        Integer(
+            Any,
+        ),
     ),
-    Eq(
+    (
         Expr(
             ExprId(
                 0,
             ),
         ),
-        Expr(
-            ExprId(
-                1,
+        Eq(
+            Expr(
+                ExprId(
+                    1,
+                ),
             ),
         ),
     ),
