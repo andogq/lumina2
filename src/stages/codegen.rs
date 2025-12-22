@@ -201,6 +201,7 @@ impl<'ink> Codegen<'ink> {
             Type::Boolean => self.ink.bool_type().into(),
             Type::Ref(_) => self.ink.ptr_type(AddressSpace::default()).into(),
             Type::Never => unreachable!(),
+            Type::Function { params, ret_ty } => todo!(),
         }
     }
 

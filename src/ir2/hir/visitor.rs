@@ -1,18 +1,26 @@
 use super::*;
 
 pub trait HirVisitor {
-    type FunctionVisitor: HirFunctionVisitor;
+    type FunctionVisitor<'a>: HirFunctionVisitor
+    where
+        Self: 'a;
 
     fn visit_function_declaration(
         &mut self,
         id: FunctionId,
+        binding: BindingId,
         params: Vec<(BindingId, Type)>,
         return_ty: Type,
         blocdk: &Block,
     ) {
     }
 
-    fn visit_function(&mut self, id: FunctionId, visit: impl FnOnce(&mut Self::FunctionVisitor)) {}
+    fn visit_function(
+        &mut self,
+        id: FunctionId,
+        visit: impl FnOnce(&mut Self::FunctionVisitor<'_>),
+    ) {
+    }
 }
 
 pub trait HirFunctionVisitor {
@@ -42,6 +50,7 @@ impl Hir {
         for (id, decl) in self.functions.iter().enumerate() {
             visitor.visit_function_declaration(
                 FunctionId::new(id),
+                decl.binding,
                 decl.parameters.clone(),
                 decl.return_ty.clone(),
                 decl.get_block(decl.entry),

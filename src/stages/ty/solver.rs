@@ -76,6 +76,7 @@ impl Solver {
             Constraint::Eq(eq_var) => self.solve_eq(var, eq_var),
             Constraint::Integer(integer_kind) => self.solve_integer(var, integer_kind),
             Constraint::Reference(ref_var) => self.solve_reference(var, ref_var),
+            Constraint::Function { params, ret_ty } => self.solve_function(var, params, ret_ty),
         }
     }
 
@@ -123,6 +124,44 @@ impl Solver {
             var.clone(),
             solution.expect("no nodes to merge for reference"),
         );
+
+        true
+    }
+
+    fn solve_function(
+        &mut self,
+        var: &TypeVarId,
+        params: &[TypeVarId],
+        ret_ty: &TypeVarId,
+    ) -> bool {
+        dbg!(var);
+        let Some(Solution::Type(Type::Function {
+            params: fn_params,
+            ret_ty: fn_ret_ty,
+        })) = dbg!(self.get_solution(var).cloned())
+        else {
+            unimplemented!();
+        };
+
+        assert_eq!(params.len(), fn_params.len());
+
+        let solved_params = params
+            .iter()
+            .zip(fn_params)
+            .filter_map(|(param, fn_param)| {
+                let var = self.merge(param, &fn_param.clone().into()).unwrap();
+                self.get_type(&var)
+            })
+            .collect::<Vec<_>>();
+
+        let solved_ret_ty = {
+            let var = self.merge(ret_ty, &(*fn_ret_ty).into()).unwrap();
+            self.get_type(&var)
+        };
+
+        if let Some(solved_ret_ty) = solved_ret_ty
+            && solved_params.len() == params.len()
+        {}
 
         true
     }
@@ -272,6 +311,10 @@ impl Solver {
     }
 
     fn get_non_concrete_type(&self, var: &TypeVarId) -> Option<NonConcreteType> {
+        if let TypeVarId::Type(ty) = var {
+            return Some(NonConcreteType::Type(ty.clone()));
+        }
+
         match self.get_solution(var)? {
             Solution::Type(solution) => Some(NonConcreteType::Type(solution.clone())),
             Solution::Reference(type_var_id) => Some(NonConcreteType::Type(Type::Ref(Box::new(
@@ -292,6 +335,9 @@ impl Solver {
         self.root
             .keys()
             .chain(self.solutions.keys())
+            .inspect(|var| {
+                dbg!(var);
+            })
             .map(|var| (var.clone(), self.get_type(var).unwrap()))
             .collect()
     }

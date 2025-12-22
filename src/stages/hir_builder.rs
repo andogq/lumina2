@@ -101,6 +101,7 @@ impl<'ast> HirBuilder<'ast> {
         });
 
         self.hir.functions.push(Function {
+            binding,
             parameters,
             return_ty: function
                 .return_ty

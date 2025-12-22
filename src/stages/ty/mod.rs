@@ -30,18 +30,16 @@ enum Constraint {
     Eq(TypeVarId),
     Integer(IntegerKind),
     Reference(TypeVarId),
+    Function {
+        params: Vec<TypeVarId>,
+        ret_ty: TypeVarId,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Solution {
     Type(Type),
     Reference(TypeVarId),
-    Literal(Literal),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Reference {
-    TypeVarId(TypeVarId),
     Literal(Literal),
 }
 
@@ -116,6 +114,24 @@ impl IntegerKind {
 }
 
 pub fn solve(hir: &Hir) -> HashMap<TypeVarId, Type> {
+    // Collect all function parameters.
+    let function_declarations = hir
+        .functions
+        .iter()
+        .map(|f| {
+            (
+                TypeVarId::Binding(f.binding),
+                Constraint::Eq(
+                    Type::Function {
+                        params: f.parameters.iter().map(|(_, ty)| ty.clone()).collect(),
+                        ret_ty: Box::new(f.return_ty.clone()),
+                    }
+                    .into(),
+                ),
+            )
+        })
+        .collect::<Vec<_>>();
+
     let constraints = ConstraintBuilder::build(hir);
     Solver::run(dbg!(&constraints))
 }

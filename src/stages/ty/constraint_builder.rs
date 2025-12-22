@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use crate::{
     ir2::{
@@ -31,16 +34,28 @@ impl ConstraintBuilder {
 }
 
 impl HirVisitor for ConstraintBuilder {
-    type FunctionVisitor = Self;
+    type FunctionVisitor<'builder> = ConstraintFunctionBuilder<'builder>;
 
     fn visit_function_declaration(
         &mut self,
         id: FunctionId,
+        binding: BindingId,
         params: Vec<(BindingId, Type)>,
         return_ty: Type,
         block: &Block,
     ) {
-        // Constrain the bindings
+        self.constraints.push((
+            binding.into(),
+            Constraint::Eq(
+                Type::Function {
+                    params: params.iter().map(|(_, ty)| ty.clone()).collect(),
+                    ret_ty: Box::new(return_ty.clone()),
+                }
+                .into(),
+            ),
+        ));
+
+        // Constrain the parameter bindings.
         self.constraints.extend(
             params
                 .iter()
@@ -60,12 +75,31 @@ impl HirVisitor for ConstraintBuilder {
         );
     }
 
-    fn visit_function(&mut self, _id: FunctionId, visit: impl FnOnce(&mut Self::FunctionVisitor)) {
-        visit(self);
+    fn visit_function(
+        &mut self,
+        id: FunctionId,
+        visit: impl FnOnce(&mut Self::FunctionVisitor<'_>),
+    ) {
+        let mut builder = ConstraintFunctionBuilder::new(self, id);
+        visit(&mut builder);
     }
 }
 
-impl HirFunctionVisitor for ConstraintBuilder {
+pub struct ConstraintFunctionBuilder<'builder> {
+    builder: &'builder mut ConstraintBuilder,
+    current_function: FunctionId,
+}
+
+impl<'builder> ConstraintFunctionBuilder<'builder> {
+    pub fn new(builder: &'builder mut ConstraintBuilder, current_function: FunctionId) -> Self {
+        Self {
+            builder,
+            current_function,
+        }
+    }
+}
+
+impl<'builder> HirFunctionVisitor for ConstraintFunctionBuilder<'builder> {
     fn visit_variable_declaration(&mut self, binding: BindingId, ty: DeclarationTy) {
         match ty {
             // Constrain the binding to the type it's assigned to.
@@ -209,7 +243,13 @@ impl HirFunctionVisitor for ConstraintBuilder {
     }
 
     fn visit_call(&mut self, id: ExprId, call: &Call) {
-        todo!()
+        self.constraints.push((
+            call.callee.into(),
+            Constraint::Function {
+                params: call.arguments.iter().map(|arg| (*arg).into()).collect(),
+                ret_ty: id.into(),
+            },
+        ));
     }
 
     fn visit_block(&mut self, id: ExprId, block: &Block) {
@@ -225,6 +265,20 @@ impl HirFunctionVisitor for ConstraintBuilder {
     fn visit_unreachable(&mut self, id: ExprId) {
         self.constraints
             .push((id.into(), Constraint::Eq(Type::Never.into())));
+    }
+}
+
+impl<'builder> Deref for ConstraintFunctionBuilder<'builder> {
+    type Target = ConstraintBuilder;
+
+    fn deref(&self) -> &Self::Target {
+        self.builder
+    }
+}
+
+impl<'builder> DerefMut for ConstraintFunctionBuilder<'builder> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.builder
     }
 }
 
@@ -253,7 +307,7 @@ mod test {
     #[rstest]
     #[case("simple", [], Type::Unit)]
     #[case("return int", [], Type::I8)]
-    #[case("params", [(BindingId::new(0), Type::I8), (BindingId::new(1), Type::Boolean)], Type::Boolean)]
+    #[case("params", [(BindingId::new(1), Type::I8), (BindingId::new(2), Type::Boolean)], Type::Boolean)]
     fn function_expression(
         mut builder: ConstraintBuilder,
         #[case] name: &str,
@@ -263,6 +317,7 @@ mod test {
         let params = params.into_iter().collect::<Vec<_>>();
         builder.visit_function_declaration(
             FunctionId::new(0),
+            BindingId::new(0),
             params.clone(),
             return_ty.clone(),
             &Block {
@@ -286,6 +341,7 @@ mod test {
         #[case] name: &str,
         #[case] ty: DeclarationTy,
     ) {
+        let mut builder = ConstraintFunctionBuilder::new(&mut builder, FunctionId::new(0));
         builder.visit_variable_declaration(BindingId::new(0), ty.clone());
         assert_debug_snapshot!(name, builder.constraints, &format!("{ty:?}"));
     }
@@ -297,6 +353,7 @@ mod test {
         #[case] name: &str,
         #[case] assign: Assign,
     ) {
+        let mut builder = ConstraintFunctionBuilder::new(&mut builder, FunctionId::new(0));
         builder.visit_assign(ExprId::new(0), &assign);
         assert_debug_snapshot!(name, builder.constraints, &format!("{assign:?}"));
     }
@@ -339,6 +396,7 @@ mod test {
         #[case] name: &str,
         #[case] binary: Binary,
     ) {
+        let mut builder = ConstraintFunctionBuilder::new(&mut builder, FunctionId::new(0));
         builder.visit_binary(ExprId::new(0), &binary);
         assert_debug_snapshot!(name, builder.constraints, &format!("{binary:?}"));
     }
@@ -346,6 +404,7 @@ mod test {
     #[rstest]
     #[case("negative", Unary { op: UnaryOp::Negative(tok::Minus), value: ExprId::new(1) })]
     fn unary_constraint(mut builder: ConstraintBuilder, #[case] name: &str, #[case] unary: Unary) {
+        let mut builder = ConstraintFunctionBuilder::new(&mut builder, FunctionId::new(0));
         builder.visit_unary(ExprId::new(0), &unary);
         assert_debug_snapshot!(name, builder.constraints, &format!("{unary:?}"));
     }

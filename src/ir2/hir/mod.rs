@@ -20,6 +20,7 @@ mod functions {
 
     #[derive(Clone, Debug)]
     pub struct Function {
+        pub binding: BindingId,
         pub parameters: Vec<(BindingId, Type)>,
         pub return_ty: Type,
         pub entry: BlockId,
@@ -210,6 +211,10 @@ mod type_refs {
         U8,
         Boolean,
         Ref(Box<Type>),
+        Function {
+            params: Vec<Type>,
+            ret_ty: Box<Type>,
+        },
     }
 
     impl Type {
