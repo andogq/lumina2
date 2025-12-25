@@ -24,6 +24,7 @@ impl Thir {
 
 #[derive(Clone, Debug)]
 pub struct Function {
+    pub binding: BindingId,
     pub parameters: Vec<(BindingId, Type)>,
     pub return_ty: Type,
     pub entry: BlockId,
@@ -36,6 +37,7 @@ pub struct Function {
 impl Function {
     fn from_hir(function: super::Function, types: &HashMap<TypeVarId, Type>) -> Self {
         Self {
+            binding: function.binding,
             parameters: function.parameters,
             return_ty: function.return_ty,
             entry: function.entry,

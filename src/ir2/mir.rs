@@ -18,6 +18,8 @@ impl Mir {
 }
 
 mod functions {
+    use crate::ir2::hir::BindingId;
+
     use super::*;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -32,6 +34,7 @@ mod functions {
     pub struct Function {
         pub ret_ty: Type,
         pub params: Vec<Type>,
+        pub binding: BindingId,
 
         pub locals: Vec<Type>,
         pub entry: BasicBlockId,
@@ -183,5 +186,6 @@ mod operand {
         I8(i8),
         Boolean(bool),
         Unit,
+        Function(FunctionId),
     }
 }

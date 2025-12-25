@@ -197,14 +197,35 @@ fn lower_expr(
         hir::Expr::Literal(literal) => {
             Operand::Constant(literal_to_constant(literal, function.get_expr_ty(expr)))
         }
-        hir::Expr::Call(call) => unimplemented!(),
+        hir::Expr::Call(call) => {
+            let result = Place {
+                local: builder.add_local(function.get_expr_ty(expr).clone()),
+                projection: Vec::new(),
+            };
+            let target = builder.new_basic_block();
+
+            let func = lower_expr(thir, function, builder, call.callee).unwrap();
+            let args = call
+                .arguments
+                .iter()
+                .map(|expr| lower_expr(thir, function, builder, *expr).unwrap())
+                .collect();
+            builder.call(func, args, result.clone(), target);
+
+            builder.block = target;
+
+            Operand::Place(result)
+        }
         hir::Expr::Block(block_id) => {
             lower_block(thir, function, builder, function.get_block(*block_id))?
         }
-        hir::Expr::Variable(hir::Variable { binding }) => Operand::Place(Place {
-            local: builder[*binding],
-            projection: vec![],
-        }),
+        hir::Expr::Variable(hir::Variable { binding }) => match builder[*binding] {
+            Binding::Local(local) => Operand::Place(Place {
+                local,
+                projection: vec![],
+            }),
+            Binding::Function(function_id) => Operand::Constant(Constant::Function(function_id)),
+        },
         hir::Expr::Unreachable => return None,
     })
 }
@@ -227,30 +248,73 @@ impl Builder {
     }
 }
 
+enum Binding {
+    Local(LocalId),
+    Function(FunctionId),
+}
+
+impl Binding {
+    pub fn into_local(self) -> LocalId {
+        match self {
+            Self::Local(local) => local,
+            _ => panic!(),
+        }
+    }
+
+    pub fn into_function(self) -> FunctionId {
+        match self {
+            Self::Function(function_id) => function_id,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_local(&self) -> &LocalId {
+        match self {
+            Self::Local(local) => local,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_function(&self) -> &FunctionId {
+        match self {
+            Self::Function(function_id) => function_id,
+            _ => panic!(),
+        }
+    }
+}
+
 struct FunctionBuilder<'b> {
     builder: &'b mut Builder,
     function_i: usize,
-    bindings: HashMap<hir::BindingId, (LocalId, bool)>,
+    bindings: HashMap<hir::BindingId, (Binding, bool)>,
     block: BasicBlockId,
 }
 
 impl<'b> FunctionBuilder<'b> {
     fn new(builder: &'b mut Builder, function: &thir::Function) -> Self {
-        let (bindings, locals) = {
-            let mut bindings = HashMap::new();
-            let mut locals = Vec::new();
+        let (bindings, locals) =
+            {
+                let mut bindings = HashMap::new();
+                let mut locals = Vec::new();
 
-            // First local is the return value.
-            locals.push(function.return_ty.clone());
+                // Add bindings for function declarations.
+                bindings.extend(
+                    builder.mir.functions.iter().enumerate().map(|(id, f)| {
+                        (f.binding, (Binding::Function(FunctionId::new(id)), false))
+                    }),
+                );
 
-            // Add a local for each parameter, and register it against the binding.
-            for (i, (binding, ty)) in function.parameters.iter().enumerate() {
-                locals.push(ty.clone());
-                bindings.insert(*binding, (LocalId::new(i), true));
-            }
+                // First local is the return value.
+                locals.push(function.return_ty.clone());
 
-            (bindings, locals)
-        };
+                // Add a local for each parameter, and register it against the binding.
+                for (i, (binding, ty)) in function.parameters.iter().enumerate() {
+                    locals.push(ty.clone());
+                    bindings.insert(*binding, (Binding::Local(LocalId::new(i)), true));
+                }
+
+                (bindings, locals)
+            };
 
         let temp_entry = BasicBlockId::new(0);
 
@@ -265,6 +329,7 @@ impl<'b> FunctionBuilder<'b> {
 
         // Register the function definition.
         builder.mir.functions.push(Function {
+            binding: function.binding,
             locals,
             entry: temp_entry,
             ret_ty: function.return_ty.clone(),
@@ -310,7 +375,8 @@ impl<'b> FunctionBuilder<'b> {
 
     fn add_binding(&mut self, binding: hir::BindingId, ty: Type) -> LocalId {
         let local = self.add_local(ty);
-        self.bindings.insert(binding, (local, false));
+        self.bindings
+            .insert(binding, (Binding::Local(local), false));
         local
     }
 
@@ -354,6 +420,21 @@ impl<'b> FunctionBuilder<'b> {
         self.terminate(Terminator::Goto(Goto { basic_block }));
     }
 
+    fn call(
+        &mut self,
+        func: Operand,
+        args: Vec<Operand>,
+        destination: Place,
+        target: BasicBlockId,
+    ) {
+        self.terminate(Terminator::Call(Call {
+            func,
+            args,
+            destination,
+            target,
+        }));
+    }
+
     fn terminate(&mut self, terminator: Terminator) {
         self.current_block().terminator = terminator;
     }
@@ -374,7 +455,7 @@ impl IndexMut<BasicBlockId> for FunctionBuilder<'_> {
 }
 
 impl Index<hir::BindingId> for FunctionBuilder<'_> {
-    type Output = LocalId;
+    type Output = Binding;
 
     fn index(&self, index: hir::BindingId) -> &Self::Output {
         &self.bindings[&index].0
@@ -413,7 +494,7 @@ fn expr_to_place(
 ) -> Place {
     match function.get_expr(expr) {
         hir::Expr::Variable(hir::Variable { binding }) => Place {
-            local: builder[*binding],
+            local: *builder[*binding].as_local(),
             projection: Vec::new(),
         },
         hir::Expr::Unary(hir::Unary {

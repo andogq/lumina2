@@ -84,7 +84,46 @@ fn lower_block<'ink, 'codegen>(
     }
 
     match &block.terminator {
-        Terminator::Call(call) => todo!(),
+        Terminator::Call(call) => {
+            let args = call
+                .args
+                .iter()
+                .map(|arg| codegen.resolve_operand(arg).0.into())
+                .collect::<Vec<_>>();
+
+            let ret_value = match &call.func {
+                Operand::Constant(Constant::Function(function_id)) => {
+                    let function = codegen.functions[function_id].0;
+                    codegen
+                        .builder
+                        .build_direct_call(
+                            function,
+                            args.as_slice(),
+                            format!("function_{function_id:?}").as_str(),
+                        )
+                        .unwrap()
+                        .try_as_basic_value()
+                        .left()
+                        .unwrap()
+                }
+                func => {
+                    let func = codegen.resolve_operand(func);
+                    todo!("indirect call");
+                }
+            };
+
+            let ret_value_address = codegen.resolve_place(&call.destination).0;
+            codegen
+                .builder
+                .build_store(ret_value_address, ret_value)
+                .unwrap();
+
+            let basic_block = lower_block(codegen, function, call.target);
+            codegen
+                .builder
+                .build_unconditional_branch(basic_block)
+                .unwrap();
+        }
         Terminator::Goto(Goto { basic_block }) => {
             let basic_block = lower_block(codegen, function, *basic_block);
 
@@ -144,7 +183,7 @@ struct Codegen<'ink> {
     ink: &'ink Context,
     module: Module<'ink>,
 
-    functions: HashMap<FunctionId, FunctionValue<'ink>>,
+    functions: HashMap<FunctionId, (FunctionValue<'ink>, Type)>,
 }
 
 impl<'ink> Codegen<'ink> {
@@ -167,7 +206,16 @@ impl<'ink> Codegen<'ink> {
             self.fn_ty(&function.ret_ty, &function.params),
             None,
         );
-        self.functions.insert(id, fn_value);
+        self.functions.insert(
+            id,
+            (
+                fn_value,
+                Type::Function {
+                    params: function.params.clone(),
+                    ret_ty: Box::new(function.ret_ty.clone()),
+                },
+            ),
+        );
     }
 
     pub fn functions(&'_ mut self) -> Vec<FunctionId> {
@@ -230,6 +278,13 @@ impl<'ink> Codegen<'ink> {
                 Type::Boolean,
             ),
             Constant::Unit => unreachable!(),
+            Constant::Function(id) => {
+                let (function_value, ty) = &self.functions[id];
+                (
+                    function_value.as_global_value().as_pointer_value().into(),
+                    ty.clone(),
+                )
+            }
         }
     }
 }
@@ -247,7 +302,7 @@ struct FunctionCodegen<'ink, 'codegen> {
 
 impl<'ink, 'codegen> FunctionCodegen<'ink, 'codegen> {
     pub fn new(codegen: &'codegen mut Codegen<'ink>, function: FunctionId) -> Self {
-        let function = codegen.functions[&function];
+        let (function, _) = codegen.functions[&function];
 
         let entry_bb = function
             .get_first_basic_block()

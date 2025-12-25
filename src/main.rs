@@ -41,7 +41,7 @@ fn run(source: &str) -> u8 {
 }
 
 fn main() {
-    let result = run("fn main() -> u8 { if true { 1 } else { 2 } }");
+    let result = run("fn a() -> u8 { 123 } fn main() -> u8 { a() }");
 
     dbg!(result);
 }
