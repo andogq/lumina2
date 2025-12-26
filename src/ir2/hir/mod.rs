@@ -3,7 +3,7 @@ mod visitor;
 
 use std::collections::HashMap;
 
-use crate::ir2::ast::StringId;
+use crate::ir2::ast::{StringId, StringPool};
 
 pub use self::{
     bindings::*, block::*, expr::*, functions::*, statement::*, thir::Thir, type_refs::*,
@@ -13,6 +13,8 @@ pub use self::{
 #[derive(Clone, Debug)]
 pub struct Hir {
     pub functions: Vec<Function>,
+    pub strings: StringPool,
+    pub binding_to_string: HashMap<BindingId, StringId>,
 }
 
 mod functions {

@@ -35,13 +35,15 @@ fn run(source: &str) -> u8 {
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
         let fn_main =
-            unsafe { engine.get_function::<unsafe extern "C" fn() -> u8>("function_0") }.unwrap();
+            unsafe { engine.get_function::<unsafe extern "C" fn() -> u8>("main") }.unwrap();
         unsafe { fn_main.call() }
     }
 }
 
 fn main() {
-    let result = run("fn a() -> u8 { 123 } fn main() -> u8 { a() }");
+    let result = run(
+        "fn a() -> u8 { 123 } fn b() -> u8 { 99 } fn main() -> u8 { let func = if true { a } else { b }; func() }",
+    );
 
     dbg!(result);
 }

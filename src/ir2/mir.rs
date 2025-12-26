@@ -1,4 +1,9 @@
-use crate::ir2::hir::Type;
+use std::collections::HashMap;
+
+use crate::ir2::{
+    ast::{StringId, StringPool},
+    hir::{BindingId, Type},
+};
 
 pub use self::{
     basic_blocks::*, functions::*, operand::*, place::*, rvalue::*, statement::*, terminator::*,
@@ -7,12 +12,16 @@ pub use self::{
 #[derive(Clone, Debug)]
 pub struct Mir {
     pub functions: Vec<Function>,
+    pub strings: StringPool,
+    pub binding_to_string: HashMap<BindingId, StringId>,
 }
 
 impl Mir {
     pub fn new() -> Self {
         Self {
             functions: Vec::new(),
+            strings: StringPool::new(),
+            binding_to_string: HashMap::new(),
         }
     }
 }
@@ -36,7 +45,7 @@ mod functions {
         pub params: Vec<Type>,
         pub binding: BindingId,
 
-        pub locals: Vec<Type>,
+        pub locals: Vec<(Option<BindingId>, Type)>,
         pub entry: BasicBlockId,
 
         pub basic_blocks: Vec<BasicBlock>,

@@ -4,8 +4,9 @@ use std::{
 };
 
 use crate::ir2::{
+    ast::{StringId, StringPool},
     cst::UnaryOp,
-    hir::{self, Thir, Type, thir},
+    hir::{self, BindingId, Thir, Type, thir},
     mir::*,
 };
 
@@ -16,7 +17,7 @@ pub fn lower(thir: &Thir) -> Mir {
         lower_function(thir, &mut builder, function);
     }
 
-    builder.build()
+    builder.build(thir.strings.clone(), thir.binding_to_string.clone())
 }
 
 fn lower_function(thir: &Thir, builder: &mut Builder, function: &thir::Function) {
@@ -90,7 +91,7 @@ fn lower_expr(
             let lhs = lower_expr(thir, function, builder, *lhs)?;
             let rhs = lower_expr(thir, function, builder, *rhs)?;
 
-            let result = builder.add_local(function.get_expr_ty(expr).clone());
+            let result = builder.add_local(None, function.get_expr_ty(expr).clone());
 
             builder.store(
                 result,
@@ -109,7 +110,7 @@ fn lower_expr(
         hir::Expr::Unary(hir::Unary { op, value }) => {
             let value = lower_expr(thir, function, builder, *value)?;
 
-            let result = builder.add_local(function.get_expr_ty(expr).clone());
+            let result = builder.add_local(None, function.get_expr_ty(expr).clone());
 
             builder.store(
                 result,
@@ -135,7 +136,7 @@ fn lower_expr(
             let current_block = builder.block;
 
             let switch_ty = function.get_expr_ty(expr);
-            let switch_value = builder.add_local(switch_ty.clone());
+            let switch_value = builder.add_local(None, switch_ty.clone());
             let end_block = builder.new_basic_block();
 
             // Lower all of the branches.
@@ -199,7 +200,7 @@ fn lower_expr(
         }
         hir::Expr::Call(call) => {
             let result = Place {
-                local: builder.add_local(function.get_expr_ty(expr).clone()),
+                local: builder.add_local(None, function.get_expr_ty(expr).clone()),
                 projection: Vec::new(),
             };
             let target = builder.new_basic_block();
@@ -243,7 +244,13 @@ impl Builder {
         FunctionBuilder::new(self, function)
     }
 
-    pub fn build(self) -> Mir {
+    pub fn build(
+        mut self,
+        strings: StringPool,
+        binding_to_string: HashMap<BindingId, StringId>,
+    ) -> Mir {
+        self.mir.strings = strings;
+        self.mir.binding_to_string = binding_to_string;
         self.mir
     }
 }
@@ -305,11 +312,11 @@ impl<'b> FunctionBuilder<'b> {
                 );
 
                 // First local is the return value.
-                locals.push(function.return_ty.clone());
+                locals.push((None, function.return_ty.clone()));
 
                 // Add a local for each parameter, and register it against the binding.
                 for (i, (binding, ty)) in function.parameters.iter().enumerate() {
-                    locals.push(ty.clone());
+                    locals.push((Some(*binding), ty.clone()));
                     bindings.insert(*binding, (Binding::Local(LocalId::new(i)), true));
                 }
 
@@ -374,16 +381,16 @@ impl<'b> FunctionBuilder<'b> {
     }
 
     fn add_binding(&mut self, binding: hir::BindingId, ty: Type) -> LocalId {
-        let local = self.add_local(ty);
+        let local = self.add_local(Some(binding), ty);
         self.bindings
             .insert(binding, (Binding::Local(local), false));
         local
     }
 
-    fn add_local(&mut self, ty: Type) -> LocalId {
+    fn add_local(&mut self, binding: Option<BindingId>, ty: Type) -> LocalId {
         let locals = &mut self.function_mut().locals;
         let id = LocalId::new(locals.len());
-        locals.push(ty);
+        locals.push((binding, ty));
         id
     }
 

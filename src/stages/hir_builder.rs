@@ -31,6 +31,8 @@ impl<'ast> HirBuilder<'ast> {
         Self {
             hir: Hir {
                 functions: Vec::new(),
+                strings: ast.strings.clone(),
+                binding_to_string: HashMap::new(),
             },
             ast,
             function_bindings: HashMap::new(),
@@ -48,6 +50,7 @@ impl<'ast> HirBuilder<'ast> {
 
     pub fn build(mut self) -> Hir {
         self.lower_functions();
+        self.hir.binding_to_string = self.scopes.binding_to_string;
         self.hir
     }
 
@@ -419,6 +422,8 @@ struct Scopes {
     global: Scope,
     scopes: Vec<Scope>,
 
+    binding_to_string: HashMap<BindingId, StringId>,
+
     next_binding_id: usize,
     next_type_ref_id: usize,
 }
@@ -429,6 +434,7 @@ impl Scopes {
         Self {
             global: Scope::new(),
             scopes: Vec::new(),
+            binding_to_string: HashMap::new(),
             next_binding_id: 0,
             next_type_ref_id: 0,
         }
@@ -488,6 +494,7 @@ impl Scopes {
     fn declare_binding(&mut self, ident: StringId) -> BindingId {
         let binding = self.next_binding_id();
         self.current_mut().bindings.insert(ident, binding);
+        self.binding_to_string.insert(binding, ident);
         binding
     }
 
