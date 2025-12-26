@@ -1,5 +1,5 @@
 use crate::{
-    ir2::{ast::*, cst},
+    ir::{ast::*, cst},
     lex::tok,
 };
 
@@ -201,7 +201,7 @@ pub fn build_ast(cst: &cst::Program) -> Ast {
 mod test {
     use std::fmt::Debug;
 
-    use crate::{lex::lex2::Lexer, stages::parse::Parse};
+    use crate::{lex::Lexer, stages::parse::Parse};
 
     use super::*;
 

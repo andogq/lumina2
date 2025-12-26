@@ -1,4 +1,4 @@
-use crate::ir2::cst::{BinaryOp, UnaryOp};
+use crate::ir::cst::{BinaryOp, UnaryOp};
 
 pub use self::{block::*, expr::*, function::*, statement::*, string_pool::*};
 

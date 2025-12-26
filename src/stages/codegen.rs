@@ -10,7 +10,7 @@ use inkwell::{
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
-use crate::ir2::{
+use crate::ir::{
     cst::{BinaryOp, UnaryOp},
     hir::{BindingId, Type},
     mir::*,

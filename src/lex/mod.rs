@@ -1,395 +1,266 @@
-use std::{
-    iter::Peekable,
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-    str::Chars,
-};
-
-use crate::{Ctx, Ident};
+use std::{iter::Peekable, str::Chars};
 
 pub use self::tok::Tok;
 
-pub mod lex2;
 pub mod tok;
 
-pub struct Lexer<'ctx, 'src, I>
-where
-    I: Iterator<Item = (Tok, Span)>,
-{
-    ctx: &'ctx Ctx,
-    tokens: Peekable<I>,
-    src: PhantomData<&'src ()>,
+pub struct Lexer<'src> {
+    chars: Peekable<Chars<'src>>,
+    current_tok: Option<Tok>,
 }
 
-impl<'ctx, 'src, I> Deref for Lexer<'ctx, 'src, I>
-where
-    I: Iterator<Item = (Tok, Span)>,
-{
-    type Target = Peekable<I>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.tokens
-    }
-}
-
-impl<'ctx, 'src, I> DerefMut for Lexer<'ctx, 'src, I>
-where
-    I: Iterator<Item = (Tok, Span)>,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.tokens
-    }
-}
-
-impl<'ctx, 'src> Lexer<'ctx, 'src, TokenIter<'src>> {
-    pub fn new(ctx: &'ctx Ctx, source: &'src str) -> Self {
-        Self::from_iter(ctx, TokenIter::new(source))
-    }
-}
-
-impl<'ctx, 'src, I> Lexer<'ctx, 'src, I>
-where
-    I: Iterator<Item = (Tok, Span)>,
-{
-    pub fn from_iter(ctx: &'ctx Ctx, iter: I) -> Self {
+impl<'src> Lexer<'src> {
+    /// Create a new lexer from the provided source.
+    pub fn new(source: &'src str) -> Self {
         Self {
-            ctx,
-            tokens: iter.peekable(),
-            src: PhantomData,
+            chars: source.chars().peekable(),
+            current_tok: None,
         }
     }
 
-    /// Advance the token stream, expecting the given token.
-    pub fn expect(&mut self, tok: Tok) -> Tok {
-        let next = self.tokens.next().unwrap().0;
-        assert_eq!(next, tok);
-        next
+    /// Peek at the next token.
+    pub fn peek(&mut self) -> &Tok {
+        if let Some(ref tok) = self.current_tok {
+            return tok;
+        }
+
+        let next_tok = self.advance();
+        self.current_tok.insert(next_tok)
     }
 
-    pub fn try_expect(&mut self, tok: Tok) -> bool {
-        self.tokens.next_if(|(next, _)| next == &tok).is_some()
+    /// Produce the next token.
+    pub fn next(&mut self) -> Tok {
+        if let Some(tok) = self.current_tok.take() {
+            return tok;
+        }
+
+        self.advance()
     }
 
-    /// Advance the token stream, expecting an ident.
-    pub fn ident(&mut self) -> Ident {
-        let (tok, _) = self.next().unwrap();
-
-        let Tok::Ident(ident) = tok else {
-            panic!("expected ident, found {tok}");
-        };
-
-        self.ctx.idents.intern(ident)
-    }
-
-    pub fn int_lit(&mut self) -> usize {
-        let (tok, _) = self.next().unwrap();
-
-        let Tok::IntLit(lit) = tok else {
-            panic!("expected int, found {tok}");
-        };
-
-        lit
-    }
-}
-
-pub struct TokenIter<'src> {
-    source: Peekable<Chars<'src>>,
-    span: Span,
-    state: State,
-}
-
-impl<'src> TokenIter<'src> {
-    fn new(source: &'src str) -> Self {
-        Self {
-            source: source.chars().peekable(),
-            span: Span::new(),
-            state: State::Ready,
+    /// Produce the next token if it matches the provided generic. If it does not match, the lexer
+    /// will not be advanced.
+    pub fn next_if<T: TryFrom<Tok, Error = Tok>>(&mut self) -> Option<T> {
+        match self.expect::<T>() {
+            Ok(tok) => Some(tok),
+            Err(tok) => {
+                assert!(self.current_tok.is_none());
+                self.current_tok = Some(tok);
+                None
+            }
         }
     }
 
-    /// Step to the next character.
-    fn step_char(&mut self) -> Option<char> {
-        let c = self.source.next()?;
-        self.span.next_char();
-        Some(c)
+    /// Produce the next token if it matches the provided generic. If it does not match, the lexer
+    /// will still be advanced.
+    pub fn expect<T: TryFrom<Tok, Error = Tok>>(&mut self) -> Result<T, Tok> {
+        T::try_from(self.next())
     }
 
-    /// Advance and skip all whitespace.
+    /// Collect all tokens into a [`Vec`]. It is guaranteed to end with a single [`Eof`] token.
+    ///
+    /// [`Eof`]: crate::lex::tok::Eof
+    #[cfg(test)]
+    fn collect(mut self) -> Vec<Tok> {
+        std::iter::from_fn(|| Some(self.next()))
+            .take_while(|tok| !matches!(tok, Tok::Eof))
+            .chain([Tok::Eof])
+            .collect()
+    }
+
     fn skip_whitespace(&mut self) {
         while self
-            .source
+            .chars
             .peek()
             .map(|c| c.is_whitespace())
             .unwrap_or(false)
         {
-            self.step_char();
+            self.chars.next();
         }
     }
 
-    fn next_tok(&mut self) -> Option<(Tok, Span)> {
-        Some((
-            match (self.state.reset(), self.source.peek()) {
-                // !=
-                (State::Compound(CompoundChar::Bang), Some('=')) => {
-                    self.step_char();
-                    Tok::BangEq
-                }
-                // ==
-                (State::Compound(CompoundChar::Eq), Some('=')) => {
-                    self.step_char();
-                    Tok::EqEq
-                }
-                // <=
-                (State::Compound(CompoundChar::LAngle), Some('=')) => {
-                    self.step_char();
-                    Tok::LtEq
-                }
-                // >=
-                (State::Compound(CompoundChar::RAngle), Some('=')) => {
-                    self.step_char();
-                    Tok::GtEq
-                }
+    fn peek_char(&mut self) -> Option<char> {
+        self.skip_whitespace();
+        self.chars.peek().cloned()
+    }
 
-                // &&
-                (State::Compound(CompoundChar::Amp), Some('&')) => {
-                    self.step_char();
-                    Tok::AmpAmp
-                }
-                // ||
-                (State::Compound(CompoundChar::Bar), Some('|')) => {
-                    self.step_char();
-                    Tok::BarBar
-                }
-                // ->
-                (State::Compound(CompoundChar::Minus), Some('>')) => {
-                    self.step_char();
-                    Tok::ThinArrow
-                }
+    fn next_char(&mut self) -> Option<char> {
+        self.skip_whitespace();
+        self.chars.next()
+    }
 
-                // =
-                (State::Compound(CompoundChar::Eq), _) => Tok::Eq,
-                // <
-                (State::Compound(CompoundChar::LAngle), _) => Tok::LAngle,
-                // >
-                (State::Compound(CompoundChar::RAngle), _) => Tok::RAngle,
-                // &
-                (State::Compound(CompoundChar::Amp), _) => Tok::Amp,
-                // |
-                (State::Compound(CompoundChar::Bar), _) => Tok::Bar,
-                // -
-                (State::Compound(CompoundChar::Minus), _) => Tok::Minus,
+    /// Advance to the next token.
+    fn advance(&mut self) -> Tok {
+        let Some(char) = self.peek_char() else {
+            return Tok::Eof;
+        };
 
-                (State::Ready, Some('=')) => {
-                    self.state = State::Compound(CompoundChar::Eq);
-                    self.step_char();
-                    return self.next_tok();
-                }
-                (State::Ready, Some('<')) => {
-                    self.state = State::Compound(CompoundChar::LAngle);
-                    self.step_char();
-                    return self.next_tok();
-                }
-                (State::Ready, Some('>')) => {
-                    self.state = State::Compound(CompoundChar::RAngle);
-                    self.step_char();
-                    return self.next_tok();
-                }
-                (State::Ready, Some('|')) => {
-                    self.state = State::Compound(CompoundChar::Bar);
-                    self.step_char();
-                    return self.next_tok();
-                }
-                (State::Ready, Some('&')) => {
-                    self.state = State::Compound(CompoundChar::Amp);
-                    self.step_char();
-                    return self.next_tok();
-                }
-                (State::Ready, Some('!')) => {
-                    self.state = State::Compound(CompoundChar::Bang);
-                    self.step_char();
-                    return self.next_tok();
-                }
-                (State::Ready, Some('-')) => {
-                    self.state = State::Compound(CompoundChar::Minus);
-                    self.step_char();
-                    return self.next_tok();
-                }
+        match char {
+            '+' => {
+                self.next_char();
+                Tok::Plus
+            }
+            '*' => {
+                self.next_char();
+                Tok::Asterisk
+            }
+            '/' => {
+                self.next_char();
+                Tok::Slash
+            }
+            ':' => {
+                self.next_char();
+                Tok::Colon
+            }
+            ';' => {
+                self.next_char();
+                Tok::SemiColon
+            }
+            ',' => {
+                self.next_char();
+                Tok::Comma
+            }
+            '(' => {
+                self.next_char();
+                Tok::LParen
+            }
+            ')' => {
+                self.next_char();
+                Tok::RParen
+            }
+            '[' => {
+                self.next_char();
+                Tok::LBracket
+            }
+            ']' => {
+                self.next_char();
+                Tok::RBracket
+            }
+            '{' => {
+                self.next_char();
+                Tok::LBrace
+            }
+            '}' => {
+                self.next_char();
+                Tok::RBrace
+            }
 
-                // +
-                (State::Ready, Some('+')) => {
-                    self.step_char();
-                    Tok::Plus
-                }
-                // *
-                (State::Ready, Some('*')) => {
-                    self.step_char();
-                    Tok::Asterisk
-                }
-                // /
-                (State::Ready, Some('/')) => {
-                    self.step_char();
-                    Tok::Slash
-                }
-                // :
-                (State::Ready, Some(':')) => {
-                    self.step_char();
-                    Tok::Colon
-                }
-                // ;
-                (State::Ready, Some(';')) => {
-                    self.step_char();
-                    Tok::SemiColon
-                }
-                // ,
-                (State::Ready, Some(',')) => {
-                    self.step_char();
-                    Tok::Comma
-                }
+            '!' => {
+                self.next_char();
 
-                // (
-                (State::Ready, Some('(')) => {
-                    self.step_char();
-                    Tok::LParen
+                match self.peek_char() {
+                    Some('=') => {
+                        self.next_char();
+                        Tok::BangEq
+                    }
+                    _ => Tok::Bang,
                 }
-                // )
-                (State::Ready, Some(')')) => {
-                    self.step_char();
-                    Tok::RParen
-                }
-                // [
-                (State::Ready, Some('[')) => {
-                    self.step_char();
-                    Tok::LBracket
-                }
-                // ]
-                (State::Ready, Some(']')) => {
-                    self.step_char();
-                    Tok::RBracket
-                }
-                // {
-                (State::Ready, Some('{')) => {
-                    self.step_char();
-                    Tok::LBrace
-                }
-                // }
-                (State::Ready, Some('}')) => {
-                    self.step_char();
-                    Tok::RBrace
-                }
+            }
+            '=' => {
+                self.next_char();
 
-                (State::Ready, Some(&c)) if c.is_ascii_alphabetic() || c == '_' => {
-                    self.step_char();
-                    self.state = State::Ident(c.to_string());
-                    return self.next_tok();
+                match self.peek_char() {
+                    Some('=') => {
+                        self.next_char();
+                        Tok::EqEq
+                    }
+                    _ => Tok::Eq,
                 }
-                (State::Ident(mut ident), Some(&c)) if c.is_ascii_alphanumeric() || c == '_' => {
-                    self.step_char();
-                    ident.push(c);
-                    self.state = State::Ident(ident);
-                    return self.next_tok();
+            }
+            '<' => {
+                self.next_char();
+
+                match self.peek_char() {
+                    Some('=') => {
+                        self.next_char();
+                        Tok::LtEq
+                    }
+                    _ => Tok::LAngle,
                 }
-                (State::Ident(ident), _) => match ident.as_str() {
+            }
+            '>' => {
+                self.next_char();
+
+                match self.peek_char() {
+                    Some('=') => {
+                        self.next_char();
+                        Tok::GtEq
+                    }
+                    _ => Tok::RAngle,
+                }
+            }
+            '&' => {
+                self.next_char();
+
+                match self.peek_char() {
+                    Some('&') => {
+                        self.next_char();
+                        Tok::AmpAmp
+                    }
+                    _ => Tok::Amp,
+                }
+            }
+            '|' => {
+                self.next_char();
+
+                match self.peek_char() {
+                    Some('|') => {
+                        self.next_char();
+                        Tok::BarBar
+                    }
+                    _ => Tok::Bar,
+                }
+            }
+            '-' => {
+                self.next_char();
+
+                match self.peek_char() {
+                    Some('>') => {
+                        self.next_char();
+                        Tok::ThinArrow
+                    }
+                    _ => Tok::Minus,
+                }
+            }
+
+            char if char.is_numeric() => Tok::IntLit(
+                std::iter::from_fn(|| {
+                    let c = self
+                        .chars
+                        .peek()
+                        .and_then(|c| Some(c.to_digit(10)? as usize))?;
+                    self.next_char();
+                    Some(c)
+                })
+                .reduce(|value, c| (value * 10) + c)
+                .expect("int literal with at least one digit"),
+            ),
+
+            char if char.is_alphabetic() || char == '_' => {
+                let ident =
+                    std::iter::from_fn(|| self.chars.next_if(|c| c.is_alphanumeric() || *c == '_'))
+                        .collect::<String>();
+
+                match ident.as_str() {
                     "true" => Tok::True,
                     "false" => Tok::False,
-
                     "fn" => Tok::Fn,
                     "let" => Tok::Let,
                     "return" => Tok::Return,
-                    "if" => Tok::If,
                     "else" => Tok::Else,
+                    "if" => Tok::If,
                     _ => Tok::Ident(ident),
-                },
-
-                (State::Ready, Some(&c)) if c.is_ascii_digit() => {
-                    self.step_char();
-                    self.state = State::Literal(c.to_string());
-                    return self.next_tok();
                 }
-                (State::Literal(mut lit), Some(&c)) if c.is_ascii_digit() => {
-                    self.step_char();
-                    lit.push(c);
-                    self.state = State::Literal(lit);
-                    return self.next_tok();
-                }
-                (State::Literal(lit), _) => Tok::IntLit(lit.parse().unwrap()),
+            }
 
-                (State::Ready, None) => {
-                    self.state = State::Done;
-                    Tok::Eof
-                }
+            char => {
+                eprintln!("unknown character: {char}");
 
-                // Eof emitted, truly finished.
-                (State::Done, None) => {
-                    return None;
-                }
+                self.next_char();
 
-                (state, Some(c)) => {
-                    panic!("unknown character encountered: {c} in {state:?}");
-                }
-                (state, None) => {
-                    panic!("unexpected eof: {state:?}");
-                }
-            },
-            self.span.clone(),
-        ))
-    }
-}
-
-impl<'src> Iterator for TokenIter<'src> {
-    type Item = (Tok, Span);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.skip_whitespace();
-        self.next_tok()
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Span {
-    line: usize,
-    col: usize,
-}
-
-impl Span {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    fn next_line(&mut self) {
-        self.line += 1;
-        self.col = 0;
-    }
-
-    fn next_char(&mut self) {
-        self.col += 1;
-    }
-}
-
-#[derive(Clone, Debug)]
-enum State {
-    Ready,
-    Compound(CompoundChar),
-    Ident(String),
-    Literal(String),
-    Done,
-}
-
-#[derive(Clone, Debug)]
-enum CompoundChar {
-    Eq,
-    LAngle,
-    RAngle,
-    Bar,
-    Amp,
-    Bang,
-    Minus,
-}
-
-impl State {
-    fn reset(&mut self) -> Self {
-        let s = self.clone();
-        *self = State::Ready;
-        s
+                // TODO: Produce error token.
+                Tok::Eof
+            }
+        }
     }
 }
 
@@ -432,13 +303,9 @@ mod test {
     #[case("return", &[Tok::Return, Tok::Eof])]
     #[case("if", &[Tok::If, Tok::Eof])]
     #[case("some_ident", &[Tok::Ident("some_ident".to_string()), Tok::Eof])]
+    #[case("u32", &[Tok::Ident("u32".to_string()), Tok::Eof])]
     #[case("123", &[Tok::IntLit(123), Tok::Eof])]
     fn single_token(#[case] source: &str, #[case] toks: &[Tok]) {
-        assert_eq!(
-            TokenIter::new(source)
-                .map(|(tok, _)| tok)
-                .collect::<Vec<_>>(),
-            toks
-        );
+        assert_eq!(Lexer::new(source).collect(), toks);
     }
 }

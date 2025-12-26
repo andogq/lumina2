@@ -57,7 +57,7 @@ impl DisjointUnionSet {
 
 #[cfg(test)]
 mod test {
-    use crate::ir2::hir::ExprId;
+    use crate::ir::hir::ExprId;
 
     use super::*;
 

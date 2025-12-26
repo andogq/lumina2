@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use self::disjoint_union_set::DisjointUnionSet;
 use crate::{
     enum_conversion,
-    ir2::hir::*,
+    ir::hir::*,
     stages::ty::{constraint_builder::ConstraintBuilder, solver::Solver},
 };
 
@@ -154,8 +154,8 @@ mod test {
     use super::*;
 
     use crate::{
-        ir2::*,
-        lex::{lex2::Lexer, tok},
+        ir::*,
+        lex::{Lexer, tok},
         stages::{parse::Parse, *},
     };
 

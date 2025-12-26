@@ -3,7 +3,7 @@ mod visitor;
 
 use std::collections::HashMap;
 
-use crate::ir2::ast::{StringId, StringPool};
+use crate::ir::ast::{StringId, StringPool};
 
 pub use self::{
     bindings::*, block::*, expr::*, functions::*, statement::*, thir::Thir, type_refs::*,
@@ -105,7 +105,7 @@ mod statement {
 mod expr {
     use crate::{
         enum_conversion,
-        ir2::cst::{BinaryOp, UnaryOp},
+        ir::cst::{BinaryOp, UnaryOp},
     };
 
     use super::*;

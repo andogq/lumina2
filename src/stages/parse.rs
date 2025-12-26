@@ -1,7 +1,7 @@
 use crate::{
     Tok,
-    ir2::cst::{self, PunctuatedList},
-    lex::lex2::Lexer,
+    ir::cst::{self, PunctuatedList},
+    lex::Lexer,
 };
 
 pub trait Parse {

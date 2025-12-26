@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::ir2::{
+use crate::ir::{
     ast::{self, StringId},
     hir::*,
 };
@@ -519,7 +519,7 @@ impl Scopes {
 mod test {
     use super::*;
 
-    use crate::{ir2::cst, lex::tok};
+    use crate::{ir::cst, lex::tok};
 
     use insta::*;
     use rstest::*;

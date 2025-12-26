@@ -1,5 +1,0 @@
----
-source: src/ast/mod.rs
-expression: "parse_expr(&mut\nLexer::from_iter(toks.into_iter().map(|tok| (tok, Span::default()))))"
----
-(123 + 321)

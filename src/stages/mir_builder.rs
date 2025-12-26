@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut, Index, IndexMut},
 };
 
-use crate::ir2::{
+use crate::ir::{
     ast::{StringId, StringPool},
     cst::UnaryOp,
     hir::{self, BindingId, Thir, Type, thir},

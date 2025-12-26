@@ -1,5 +1,5 @@
 use crate::{
-    ir2::{
+    ir::{
         cst::{BinaryOp, UnaryOp},
         hir::*,
     },

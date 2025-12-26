@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ir2::{
+use crate::ir::{
     ast::{StringId, StringPool},
     hir::{BindingId, Type},
 };
@@ -27,7 +27,7 @@ impl Mir {
 }
 
 mod functions {
-    use crate::ir2::hir::BindingId;
+    use crate::ir::hir::BindingId;
 
     use super::*;
 
@@ -154,7 +154,7 @@ mod place {
 }
 
 mod rvalue {
-    use crate::ir2::cst::{BinaryOp, UnaryOp};
+    use crate::ir::cst::{BinaryOp, UnaryOp};
 
     use super::*;
 
