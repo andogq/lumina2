@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::ir::{
-    ast::{StringId, StringPool},
+    ast::StringId,
     cst::UnaryOp,
     hir::{self, BindingId, Thir, Type, thir},
     mir::*,
@@ -17,7 +17,7 @@ pub fn lower(thir: &Thir) -> Mir {
         lower_function(thir, &mut builder, function);
     }
 
-    builder.build(thir.strings.clone(), thir.binding_to_string.clone())
+    builder.build(thir.binding_to_string.clone())
 }
 
 fn lower_function(thir: &Thir, builder: &mut Builder, function: &thir::Function) {
@@ -244,12 +244,7 @@ impl Builder {
         FunctionBuilder::new(self, function)
     }
 
-    pub fn build(
-        mut self,
-        strings: StringPool,
-        binding_to_string: HashMap<BindingId, StringId>,
-    ) -> Mir {
-        self.mir.strings = strings;
+    pub fn build(mut self, binding_to_string: HashMap<BindingId, StringId>) -> Mir {
         self.mir.binding_to_string = binding_to_string;
         self.mir
     }

@@ -10,13 +10,16 @@ use inkwell::{
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
-use crate::ir::{
-    cst::{BinaryOp, UnaryOp},
-    hir::{BindingId, Type},
-    mir::*,
+use crate::{
+    ctx::Ctx,
+    ir::{
+        cst::{BinaryOp, UnaryOp},
+        hir::{BindingId, Type},
+        mir::*,
+    },
 };
 
-pub fn codegen<'ink>(ink: &'ink Context, mir: &Mir) -> Module<'ink> {
+pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir) -> Module<'ink> {
     let mut codegen = Codegen::new(ink);
 
     // Forward declare all functions.
@@ -25,7 +28,7 @@ pub fn codegen<'ink>(ink: &'ink Context, mir: &Mir) -> Module<'ink> {
         codegen.declare_fn(
             id,
             function,
-            mir.strings
+            ctx.strings
                 .get(*mir.binding_to_string.get(&function.binding).unwrap()),
         );
     }
@@ -41,14 +44,14 @@ pub fn codegen<'ink>(ink: &'ink Context, mir: &Mir) -> Module<'ink> {
                 Some(binding) => codegen.declare_local(
                     LocalId::new(i),
                     ty,
-                    mir.strings
+                    ctx.strings
                         .get(*mir.binding_to_string.get(binding).unwrap()),
                 ),
                 None => codegen.declare_local(LocalId::new(i), ty, format!("local_{i}").as_str()),
             }
         }
 
-        lower_block(&mut codegen, mir, function, function.entry);
+        lower_block(ctx, &mut codegen, mir, function, function.entry);
 
         // Unconditional jump to the first block.
         let user_entry = codegen.get_basic_block(function.entry);
@@ -66,6 +69,7 @@ pub fn codegen<'ink>(ink: &'ink Context, mir: &Mir) -> Module<'ink> {
 }
 
 fn lower_block<'ink, 'codegen>(
+    ctx: &Ctx,
     codegen: &mut FunctionCodegen<'ink, 'codegen>,
     mir: &Mir,
     function: &Function,
@@ -113,7 +117,7 @@ fn lower_block<'ink, 'codegen>(
                         .build_direct_call(
                             function,
                             args.as_slice(),
-                            mir.strings.get(
+                            ctx.strings.get(
                                 *mir.binding_to_string
                                     .get(&mir.functions[function_id.0].binding)
                                     .unwrap(),
@@ -152,14 +156,14 @@ fn lower_block<'ink, 'codegen>(
                 .build_store(ret_value_address, ret_value)
                 .unwrap();
 
-            let basic_block = lower_block(codegen, mir, function, call.target);
+            let basic_block = lower_block(ctx, codegen, mir, function, call.target);
             codegen
                 .builder
                 .build_unconditional_branch(basic_block)
                 .unwrap();
         }
         Terminator::Goto(Goto { basic_block }) => {
-            let basic_block = lower_block(codegen, mir, function, *basic_block);
+            let basic_block = lower_block(ctx, codegen, mir, function, *basic_block);
 
             codegen
                 .builder
@@ -191,12 +195,12 @@ fn lower_block<'ink, 'codegen>(
                 .map(|(value, block)| {
                     (
                         codegen.constant(value).0.into_int_value(),
-                        lower_block(codegen, mir, function, *block),
+                        lower_block(ctx, codegen, mir, function, *block),
                     )
                 })
                 .collect::<Vec<_>>();
 
-            let otherwise = lower_block(codegen, mir, function, *otherwise);
+            let otherwise = lower_block(ctx, codegen, mir, function, *otherwise);
 
             codegen
                 .builder

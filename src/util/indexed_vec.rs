@@ -4,6 +4,8 @@ use std::{
     ops::{Deref, Index, IndexMut},
 };
 
+use crate::ir::id::Id;
+
 /// Helper macro to create a vec which is indexed by a new-typed value.
 #[macro_export]
 macro_rules! indexed_vec {
@@ -51,30 +53,30 @@ impl<K, V> IndexedVec<K, V> {
 
 impl<K, V> IndexedVec<K, V>
 where
-    K: From<Key> + Into<Key>,
+    K: Id,
 {
     pub fn insert(&mut self, value: V) -> K {
-        let key = Key(self.0.len()).into();
+        let key = K::from_id(self.0.len());
         self.0.push(value);
         key
     }
 
     pub fn get(&self, key: K) -> Option<&V> {
-        self.0.get(key.into().0)
+        self.0.get(key.into_id())
     }
 
     pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
-        self.0.get_mut(key.into().0)
+        self.0.get_mut(key.into_id())
     }
 
     pub fn iter_keys(&self) -> impl Iterator<Item = (K, &V)> {
-        self.0.iter().enumerate().map(|(i, v)| (Key(i).into(), v))
+        self.0.iter().enumerate().map(|(i, v)| (K::from_id(i), v))
     }
 }
 
 impl<K, V> Index<K> for IndexedVec<K, V>
 where
-    K: From<Key> + Into<Key>,
+    K: Id,
 {
     type Output = V;
 
@@ -85,7 +87,7 @@ where
 
 impl<K, V> IndexMut<K> for IndexedVec<K, V>
 where
-    K: From<Key> + Into<Key>,
+    K: Id,
 {
     fn index_mut(&mut self, key: K) -> &mut Self::Output {
         self.get_mut(key).unwrap()

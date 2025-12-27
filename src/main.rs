@@ -1,19 +1,21 @@
 #![recursion_limit = "256"]
 
+mod ctx;
 mod ir;
 mod lex;
 mod stages;
 mod util;
 
-use crate::stages::parse::Parse;
+use crate::{ctx::Ctx, stages::parse::Parse};
 
 pub use self::lex::Tok;
 
 fn run(source: &str) -> u8 {
+    let mut ctx = Ctx::default();
     let mut toks = lex::Lexer::new(source);
     let cst = ir::cst::Program::parse(&mut toks);
-    let ast = stages::ast_builder::build_ast(&cst);
-    let hir = stages::hir_builder::lower(&ast);
+    let ast = stages::ast_builder::build_ast(&mut ctx, &cst);
+    let hir = stages::hir_builder::lower(&ctx, &ast);
     dbg!(&hir);
     let types = stages::ty::solve(&hir);
     dbg!(&types);
@@ -23,7 +25,7 @@ fn run(source: &str) -> u8 {
     dbg!(&mir);
 
     let ink = inkwell::context::Context::create();
-    let module = stages::codegen::codegen(&ink, &mir);
+    let module = stages::codegen::codegen(&ctx, &ink, &mir);
 
     {
         let engine = module

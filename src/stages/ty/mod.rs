@@ -154,6 +154,7 @@ mod test {
     use super::*;
 
     use crate::{
+        ctx::Ctx,
         ir::*,
         lex::{Lexer, tok},
         stages::{parse::Parse, *},
@@ -162,6 +163,8 @@ mod test {
     use rstest::*;
 
     fn get_ty(expr: &str) -> Type {
+        let mut ctx = Ctx::default();
+
         // Tokenise the source.
         let mut lexer = Lexer::new(expr);
         // Parse into CST.
@@ -172,10 +175,10 @@ mod test {
         // Create a new AST builder, and lower the expression.
         let cst_program = cst::Program::new();
         let mut builder = ast_builder::AstBuilder::new(&cst_program);
-        let expr_id = builder.lower_expr(&expr);
+        let expr_id = builder.lower_expr(&mut ctx, &expr);
 
         // Finalise the AST.
-        let mut ast = builder.build();
+        let mut ast = builder.build(&mut ctx);
 
         // HACK: Manually add a block to the AST with the expression. Then insert a
         // function declaration with the block as the body.
@@ -197,13 +200,13 @@ mod test {
 
         // Lower the AST into the HIR.
         let mut hir_builder = hir_builder::HirBuilder::new(&ast);
-        hir_builder.lower_functions();
+        hir_builder.lower_functions(&ctx);
 
         // Capture the new expression ID.
         let expr_id = hir_builder.expr_mapping[&expr_id];
 
         // Extract the HIR.
-        let hir = hir_builder.build();
+        let hir = hir_builder.build(&ctx);
 
         // Run type inference.
         let tys = solve(&hir);

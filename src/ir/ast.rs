@@ -8,8 +8,6 @@ pub struct Ast {
 
     pub blocks: Vec<Block>,
     pub expressions: Vec<Expr>,
-
-    pub strings: StringPool,
 }
 
 impl Ast {
@@ -18,7 +16,6 @@ impl Ast {
             function_declarations: Vec::new(),
             blocks: Vec::new(),
             expressions: Vec::new(),
-            strings: StringPool::new(),
         }
     }
 
@@ -204,7 +201,7 @@ mod string_pool {
         }
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Default)]
     pub struct StringPool {
         lookup: HashMap<String, StringId>,
         strings: Vec<String>,
@@ -212,10 +209,7 @@ mod string_pool {
 
     impl StringPool {
         pub fn new() -> Self {
-            Self {
-                lookup: HashMap::new(),
-                strings: Vec::new(),
-            }
+            Self::default()
         }
 
         pub fn intern(&mut self, s: impl ToString) -> StringId {

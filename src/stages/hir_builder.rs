@@ -3,9 +3,12 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::ir::{
-    ast::{self, StringId},
-    hir::*,
+use crate::{
+    ctx::Ctx,
+    ir::{
+        ast::{self, StringId},
+        hir::*,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -31,7 +34,6 @@ impl<'ast> HirBuilder<'ast> {
         Self {
             hir: Hir {
                 functions: Vec::new(),
-                strings: ast.strings.clone(),
                 binding_to_string: HashMap::new(),
             },
             ast,
@@ -42,14 +44,14 @@ impl<'ast> HirBuilder<'ast> {
         }
     }
 
-    pub fn lower_functions(&mut self) {
+    pub fn lower_functions(&mut self, ctx: &Ctx) {
         for function in &self.ast.function_declarations {
-            self.lower_function(function);
+            self.lower_function(ctx, function);
         }
     }
 
-    pub fn build(mut self) -> Hir {
-        self.lower_functions();
+    pub fn build(mut self, ctx: &Ctx) -> Hir {
+        self.lower_functions(ctx);
         self.hir.binding_to_string = self.scopes.binding_to_string;
         self.hir
     }
@@ -62,9 +64,9 @@ impl<'ast> HirBuilder<'ast> {
         value
     }
 
-    fn ident_to_type(&self, ident: StringId) -> Type {
+    fn ident_to_type(&self, ctx: &Ctx, ident: StringId) -> Type {
         // HACK: This only handles built-in types.
-        match self.ast.strings.get(ident) {
+        match ctx.strings.get(ident) {
             "u8" => Type::U8,
             "i8" => Type::I8,
             "bool" => Type::Boolean,
@@ -72,7 +74,7 @@ impl<'ast> HirBuilder<'ast> {
         }
     }
 
-    pub fn lower_function(&mut self, function: &ast::FunctionDeclaration) -> FunctionId {
+    pub fn lower_function(&mut self, ctx: &Ctx, function: &ast::FunctionDeclaration) -> FunctionId {
         let id = FunctionId::new(self.hir.functions.len());
 
         let binding = self.scopes.declare_binding(function.name);
@@ -87,7 +89,7 @@ impl<'ast> HirBuilder<'ast> {
                 .map(|param| {
                     (
                         builder.scopes.declare_binding(param.name),
-                        builder.ident_to_type(param.ty),
+                        builder.ident_to_type(ctx, param.ty),
                     )
                 })
                 .collect();
@@ -108,7 +110,7 @@ impl<'ast> HirBuilder<'ast> {
             parameters,
             return_ty: function
                 .return_ty
-                .map(|ty| self.ident_to_type(ty))
+                .map(|ty| self.ident_to_type(ctx, ty))
                 .unwrap_or(Type::Unit),
             entry,
             bindings,
@@ -397,8 +399,8 @@ impl<'func, 'hir, 'ast> DerefMut for BlockBuilder<'func, 'hir, 'ast> {
     }
 }
 
-pub fn lower(ast: &ast::Ast) -> Hir {
-    HirBuilder::new(ast).build()
+pub fn lower(ctx: &Ctx, ast: &ast::Ast) -> Hir {
+    HirBuilder::new(ast).build(ctx)
 }
 
 #[derive(Clone, Debug)]

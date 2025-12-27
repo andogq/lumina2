@@ -13,7 +13,6 @@ pub use self::{
 #[derive(Clone, Debug)]
 pub struct Hir {
     pub functions: Vec<Function>,
-    pub strings: StringPool,
     pub binding_to_string: HashMap<BindingId, StringId>,
 }
 

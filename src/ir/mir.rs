@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ir::{
-    ast::{StringId, StringPool},
+    ast::StringId,
     hir::{BindingId, Type},
 };
 
@@ -12,7 +12,6 @@ pub use self::{
 #[derive(Clone, Debug)]
 pub struct Mir {
     pub functions: Vec<Function>,
-    pub strings: StringPool,
     pub binding_to_string: HashMap<BindingId, StringId>,
 }
 
@@ -20,7 +19,6 @@ impl Mir {
     pub fn new() -> Self {
         Self {
             functions: Vec::new(),
-            strings: StringPool::new(),
             binding_to_string: HashMap::new(),
         }
     }
