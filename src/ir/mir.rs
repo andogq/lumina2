@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::ir::{
-    ast::StringId,
     hir::{BindingId, Type},
+    id::StringId,
 };
 
 pub use self::{

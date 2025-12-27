@@ -190,7 +190,7 @@ mod test {
             });
             let function_id = FunctionId::new(ast.function_declarations.len());
             ast.function_declarations.push(ast::FunctionDeclaration {
-                name: ast::StringId::new(2),
+                name: ctx.strings.intern("main"),
                 params: Vec::new(),
                 return_ty: None,
                 body: ast::BlockId::new(block_id),

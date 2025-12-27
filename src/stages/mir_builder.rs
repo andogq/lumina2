@@ -4,9 +4,9 @@ use std::{
 };
 
 use crate::ir::{
-    ast::StringId,
     cst::UnaryOp,
     hir::{self, BindingId, Thir, Type, thir},
+    id::StringId,
     mir::*,
 };
 

@@ -1,6 +1,9 @@
-use crate::ir::cst::{BinaryOp, UnaryOp};
+use crate::ir::{
+    cst::{BinaryOp, UnaryOp},
+    id::*,
+};
 
-pub use self::{block::*, expr::*, function::*, statement::*, string_pool::*};
+pub use self::{block::*, expr::*, function::*, statement::*};
 
 #[derive(Clone, Debug)]
 pub struct Ast {
@@ -29,6 +32,7 @@ impl Ast {
 }
 
 mod function {
+
     use super::*;
 
     #[derive(Clone, Debug)]
@@ -187,46 +191,5 @@ mod expr {
         Call: Call,
         Block: BlockId,
         Variable: Variable,
-    }
-}
-
-mod string_pool {
-    use std::collections::HashMap;
-
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct StringId(usize);
-    impl StringId {
-        pub fn new(id: usize) -> Self {
-            Self(id)
-        }
-    }
-
-    #[derive(Clone, Debug, Default)]
-    pub struct StringPool {
-        lookup: HashMap<String, StringId>,
-        strings: Vec<String>,
-    }
-
-    impl StringPool {
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        pub fn intern(&mut self, s: impl ToString) -> StringId {
-            let s = s.to_string();
-
-            if let Some(id) = self.lookup.get(&s) {
-                return *id;
-            }
-
-            let id = StringId(self.strings.len());
-            self.strings.push(s.clone());
-            self.lookup.insert(s, id);
-            id
-        }
-
-        pub fn get(&self, index: StringId) -> &str {
-            &self.strings[index.0]
-        }
     }
 }

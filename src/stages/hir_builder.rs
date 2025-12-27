@@ -6,8 +6,9 @@ use std::{
 use crate::{
     ctx::Ctx,
     ir::{
-        ast::{self, StringId},
+        ast::{self},
         hir::*,
+        id::StringId,
     },
 };
 
@@ -521,12 +522,17 @@ impl Scopes {
 mod test {
     use super::*;
 
-    use crate::{ir::cst, lex::tok};
+    use crate::{
+        ir::{cst, id::Id},
+        lex::tok,
+    };
 
     use insta::*;
     use rstest::*;
 
     mod scopes {
+        use crate::ir::id::Id;
+
         use super::*;
 
         #[fixture]
@@ -536,7 +542,7 @@ mod test {
 
         #[fixture]
         fn string() -> StringId {
-            StringId::new(0)
+            StringId::from_id(0)
         }
 
         #[rstest]
@@ -599,13 +605,13 @@ mod test {
         let mut ast = ast::Ast::new();
         ast.expressions = vec![
             ast::Expr::Variable(ast::Variable {
-                variable: StringId::new(0),
+                variable: StringId::from_id(0),
             }),
             ast::Expr::Variable(ast::Variable {
-                variable: StringId::new(1),
+                variable: StringId::from_id(1),
             }),
             ast::Expr::Variable(ast::Variable {
-                variable: StringId::new(2),
+                variable: StringId::from_id(2),
             }),
         ];
         ast.blocks = vec![
@@ -641,7 +647,7 @@ mod test {
     fn builder(sample_ast: &'static ast::Ast) -> HirBuilder<'static> {
         let mut builder = HirBuilder::new(sample_ast);
         (0..3).for_each(|i| {
-            builder.scopes.declare_binding(StringId::new(i));
+            builder.scopes.declare_binding(StringId::from_id(i));
         });
         builder
     }
@@ -763,7 +769,7 @@ mod test {
         }
 
         #[rstest]
-        #[case("variable_simple", ast::Variable { variable: StringId::new(0) })]
+        #[case("variable_simple", ast::Variable { variable: StringId::from_id(0) })]
         fn lower_variable(
             mut builder: HirBuilder<'static>,
             #[case] name: &str,

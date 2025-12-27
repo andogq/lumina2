@@ -3,7 +3,7 @@ mod visitor;
 
 use std::collections::HashMap;
 
-use crate::ir::ast::{StringId, StringPool};
+use crate::ir::id::StringId;
 
 pub use self::{
     bindings::*, block::*, expr::*, functions::*, statement::*, thir::Thir, type_refs::*,

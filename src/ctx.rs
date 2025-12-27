@@ -1,6 +1,6 @@
 use crate::{
-    ir::{ast::StringPool, id::*},
-    util::indexed_vec::IndexedVec,
+    ir::id::*,
+    util::{indexed_vec::IndexedVec, string_pool::StringPool},
 };
 
 #[derive(Clone, Debug, Default)]
