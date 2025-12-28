@@ -150,12 +150,18 @@ mod test {
         // Finalise the AST.
         let mut ast = builder.build(&mut ctx);
 
+        // Variable which the expression will be assigned to.
+        let variable = ctx.strings.intern("output_variable");
+
         // HACK: Manually add a block to the AST with the expression. Then insert a
         // function declaration with the block as the body.
-        let function_id = {
+        {
             let statement_id = ast
                 .statements
-                .insert(ast::Statement::Expr(ast::ExprStatement { expr: expr_id }));
+                .insert(ast::Statement::Let(ast::LetStatement {
+                    variable,
+                    value: expr_id,
+                }));
             let block_id = ast.blocks.insert(ast::Block {
                 statements: vec![statement_id],
                 expression: None,
@@ -169,20 +175,26 @@ mod test {
         };
 
         // Lower the AST into the HIR.
-        let mut hir_builder = hir_builder::HirBuilder::new(&ast);
-        hir_builder.lower_functions(&mut ctx);
-
-        // Capture the new expression ID.
-        let expr_id = hir_builder.expr_mapping[&expr_id];
-
-        // Extract the HIR.
-        let hir = hir_builder.build(&mut ctx);
+        let hir = hir_builder::HirBuilder::new(&ast).build(&mut ctx);
 
         // Run type inference.
         let tys = solve(&hir);
 
-        // Fetch the expression type.
-        tys.get(&expr_id.into()).unwrap().clone()
+        // HACK: Search through all scopes to find the binding corresponding to `variable`.
+        let binding = {
+            let scopes = ctx.scopes.find_scope(variable);
+
+            assert_eq!(
+                scopes.len(),
+                1,
+                "only one scope can contain `output_variable`"
+            );
+
+            scopes[0].1
+        };
+
+        // The type of the binding will correspond with the type of the expression.
+        tys.get(&binding.into()).unwrap().clone()
     }
 
     #[rstest]

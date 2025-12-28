@@ -74,6 +74,14 @@ impl Scopes {
         }
     }
 
+    /// Search through all scopes for the provided string.
+    pub fn find_scope(&self, string: StringId) -> Vec<(ScopeId, BindingId)> {
+        self.scopes
+            .iter_pairs()
+            .filter_map(|(scope_id, scope)| Some((scope_id, *scope.bindings.get(&string)?)))
+            .collect()
+    }
+
     pub fn to_string(&self, binding: BindingId) -> StringId {
         self.bindings[binding].string
     }

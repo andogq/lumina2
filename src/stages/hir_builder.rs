@@ -11,9 +11,6 @@ pub struct HirBuilder<'ast> {
 
     /// Map of bindings to corresponding functions.
     function_bindings: HashMap<BindingId, FunctionId>,
-
-    /// Mappings from previous expression ID, to new expression ID.
-    pub expr_mapping: HashMap<ast::ExprId, ExprId>,
 }
 
 impl<'ast> HirBuilder<'ast> {
@@ -27,7 +24,6 @@ impl<'ast> HirBuilder<'ast> {
             },
             ast,
             function_bindings: HashMap::new(),
-            expr_mapping: HashMap::new(),
         }
     }
 
@@ -230,6 +226,7 @@ impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
     pub fn lower_statement(&mut self, ctx: &mut Ctx, scope: ScopeId, statement: &ast::Statement) {
         match statement {
             ast::Statement::Let(let_statement) => {
+                println!("declaring {}", ctx.strings.get(let_statement.variable));
                 let binding = ctx.scopes.declare(scope, let_statement.variable);
                 let value = self.lower_expr(ctx, scope, let_statement.value);
 
@@ -267,11 +264,7 @@ impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
             ast::Expr::Variable(variable) => self.lower_variable(ctx, scope, variable).into(),
         };
 
-        let id = self.add_expr(expr);
-
-        self.expr_mapping.insert(expr_id, id);
-
-        id
+        self.add_expr(expr)
     }
 
     fn lower_assign(&mut self, ctx: &mut Ctx, scope: ScopeId, assign: &ast::Assign) -> Assign {
