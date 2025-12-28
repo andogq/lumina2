@@ -11,8 +11,6 @@ pub struct HirBuilder<'ast> {
 
     /// Map of bindings to corresponding functions.
     function_bindings: HashMap<BindingId, FunctionId>,
-    /// Cached unit expression.
-    unit_expression: Option<ExprId>,
 
     /// Mappings from previous expression ID, to new expression ID.
     pub expr_mapping: HashMap<ast::ExprId, ExprId>,
@@ -29,7 +27,6 @@ impl<'ast> HirBuilder<'ast> {
             },
             ast,
             function_bindings: HashMap::new(),
-            unit_expression: None,
             expr_mapping: HashMap::new(),
         }
     }
@@ -157,19 +154,10 @@ impl<'hir, 'ast> FunctionBuilder<'hir, 'ast> {
             // Otherwise, if the final statement is `return` then add an unreachable marker.
             (None, Some(ast::Statement::Return(_))) => builder.add_expr(Expr::Unreachable),
             // Otherwise, assume unit.
-            (None, _) => builder.unit_expression(),
+            (None, _) => builder.add_expr(Expr::Literal(Literal::Unit)),
         };
 
         builder.terminate(expr)
-    }
-
-    fn unit_expression(&mut self) -> ExprId {
-        if let Some(expr) = self.unit_expression {
-            return expr;
-        }
-
-        let expr = self.add_expr(Expr::Literal(Literal::Unit));
-        *self.unit_expression.insert(expr)
     }
 
     fn add_block(&mut self, block: Block) -> BlockId {
