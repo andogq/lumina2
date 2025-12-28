@@ -16,7 +16,16 @@ pub fn lower(thir: &Thir) -> Mir {
 
 fn lower_function(thir: &Thir, builder: &mut Builder, function: hir::FunctionId) {
     let function = &thir[function];
-    let mut builder = builder.function(function);
+    let mut builder = builder.function(
+        function,
+        thir.functions.iter_pairs().map(|(id, f)| {
+            (
+                f.binding,
+                // HACK: Properly pre-declare functions.
+                FunctionId::from_id(id.into_id()),
+            )
+        }),
+    );
 
     let block = &thir[function.entry];
     let result = lower_block(thir, &mut builder, block);
@@ -230,8 +239,12 @@ impl Builder {
         Self { mir: Mir::new() }
     }
 
-    pub fn function(&mut self, function: &hir::Function) -> FunctionBuilder<'_> {
-        FunctionBuilder::new(self, function)
+    pub fn function(
+        &mut self,
+        function: &hir::Function,
+        functions: impl Iterator<Item = (BindingId, FunctionId)>,
+    ) -> FunctionBuilder<'_> {
+        FunctionBuilder::new(self, function, functions)
     }
 
     pub fn build(self) -> Mir {
@@ -282,25 +295,25 @@ struct FunctionBuilder<'b> {
 }
 
 impl<'b> FunctionBuilder<'b> {
-    fn new(builder: &'b mut Builder, function: &hir::Function) -> Self {
+    fn new(
+        builder: &'b mut Builder,
+        function: &hir::Function,
+        functions: impl Iterator<Item = (BindingId, FunctionId)>,
+    ) -> Self {
         let (bindings, locals) = {
             let mut bindings = HashMap::new();
             let mut locals = Vec::new();
 
             // Add bindings for function declarations.
-            bindings.extend(
-                builder
-                    .mir
-                    .functions
-                    .iter_pairs()
-                    .map(|(id, f)| (f.binding, (Binding::Function(id), false))),
-            );
+            bindings
+                .extend(functions.map(|(binding, id)| (binding, (Binding::Function(id), false))));
 
             // First local is the return value.
             locals.push((None, function.return_ty.clone()));
 
             // Add a local for each parameter, and register it against the binding.
-            for (i, (binding, ty)) in function.parameters.iter().enumerate() {
+            for (binding, ty) in function.parameters.iter() {
+                let i = locals.len();
                 locals.push((Some(*binding), ty.clone()));
                 bindings.insert(*binding, (Binding::Local(LocalId::new(i)), true));
             }

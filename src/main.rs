@@ -145,5 +145,33 @@ mod test {
                 123
             );
         }
+
+        #[test]
+        fn params() {
+            assert_eq!(
+                run("fn double(a: u8) -> u8 { a * 2 } fn main() -> u8 { double(3) }"),
+                6
+            );
+        }
+
+        #[test]
+        fn fib() {
+            assert_eq!(
+                run(r#"
+                    fn fib(n: u8) -> u8 {
+                        if n <= 1 {
+                            return n;
+                        }
+
+                        fib(n - 1) + fib(n - 2)
+                    }
+
+                    fn main() -> u8 {
+                        fib(12)
+                    }
+                "#),
+                144
+            );
+        }
     }
 }

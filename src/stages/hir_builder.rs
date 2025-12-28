@@ -49,6 +49,8 @@ impl<'ast> HirBuilder<'ast> {
         ctx: &mut Ctx,
         function: &ast::FunctionDeclaration,
     ) -> FunctionId {
+        let binding = ctx.scopes.declare_global(function.name);
+
         let entry_scope = ctx.scopes.nest_scope_global();
 
         let (parameters, entry, bindings, blocks, statements, expressions) = {
@@ -77,7 +79,6 @@ impl<'ast> HirBuilder<'ast> {
             )
         };
 
-        let binding = ctx.scopes.declare_global(function.name);
         self.hir.functions.insert(Function {
             binding,
             parameters,

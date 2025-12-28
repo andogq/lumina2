@@ -42,6 +42,15 @@ pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir) -> Module<'ink> {
             }
         }
 
+        // HACK: Store all of the parameter values into appropriate locals.
+        for (param, local_id) in codegen.function.get_param_iter().zip(1..) {
+            let local_id = LocalId::new(local_id);
+
+            let (_, ptr) = &codegen.locals[&local_id];
+
+            codegen.builder.build_store(*ptr, param).unwrap();
+        }
+
         lower_block(ctx, &mut codegen, mir, function, function.entry);
 
         // Unconditional jump to the first block.
