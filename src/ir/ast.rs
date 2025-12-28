@@ -1,7 +1,6 @@
-use crate::ir::{
-    cst::{BinaryOp, UnaryOp},
-    id::*,
-};
+use crate::prelude::*;
+
+use crate::ir::cst::{BinaryOp, UnaryOp};
 
 pub use self::{block::*, expr::*, function::*, statement::*};
 
@@ -32,7 +31,6 @@ impl Ast {
 }
 
 mod function {
-
     use super::*;
 
     #[derive(Clone, Debug)]

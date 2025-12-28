@@ -1,46 +1,4 @@
-use std::{
-    fmt::Display,
-    marker::PhantomData,
-    ops::{Deref, Index, IndexMut},
-};
-
-use crate::ir::id::Id;
-
-/// Helper macro to create a vec which is indexed by a new-typed value.
-#[macro_export]
-macro_rules! indexed_vec {
-    ($vis:vis key $key:ident) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
-        $vis struct $key($crate::util::indexed_vec::Key);
-
-        #[allow(unused)]
-        impl $key {
-            $vis fn zero() -> Self {
-                Self($crate::util::indexed_vec::Key::zero())
-            }
-
-            $vis fn of(n: usize) -> Self {
-                Self($crate::util::indexed_vec::Key::of(n))
-            }
-        }
-
-        impl From<$crate::util::indexed_vec::Key> for $key {
-            fn from(key: $crate::util::indexed_vec::Key) -> Self {
-                Self(key)
-            }
-        }
-
-        impl From<$key> for $crate::util::indexed_vec::Key {
-            fn from(key: $key) -> Self {
-                key.0
-            }
-        }
-    };
-
-    ($vis:vis $name:ident<$key:ident, $value:ty>) => {
-        $vis type $name = $crate::util::indexed_vec::IndexedVec<$key, $value>;
-    };
-}
+use crate::prelude::*;
 
 #[derive(Clone, Debug)]
 pub struct IndexedVec<K, V>(Vec<V>, PhantomData<fn() -> K>);
@@ -108,21 +66,35 @@ impl<K, V> Deref for IndexedVec<K, V> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Key(usize);
+/// Create a new-type ID, which implements the [`Id`] trait, suitable for use with [`IndexedVec`].
+///
+/// [`IndexedVec`]: crate::util::indexed_vec::IndexedVec
+#[macro_export]
+macro_rules! create_id {
+    ($id:ident) => {
+        #[derive(
+            ::core::clone::Clone,
+            ::core::marker::Copy,
+            ::core::fmt::Debug,
+            ::core::cmp::Eq,
+            ::core::cmp::PartialEq,
+            ::core::hash::Hash,
+        )]
+        pub struct $id(usize);
 
-impl Key {
-    pub fn zero() -> Self {
-        Self(0)
-    }
+        impl $crate::util::indexed_vec::Id for $id {
+            fn from_id(id: usize) -> Self {
+                Self(id)
+            }
 
-    pub fn of(n: usize) -> Self {
-        Self(n)
-    }
+            fn into_id(self) -> usize {
+                self.0
+            }
+        }
+    };
 }
 
-impl Display for Key {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.0, f)
-    }
+pub trait Id: Clone + Copy + Debug + Eq + PartialEq + Hash {
+    fn from_id(id: usize) -> Self;
+    fn into_id(self) -> usize;
 }

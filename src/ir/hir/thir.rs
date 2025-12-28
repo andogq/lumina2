@@ -1,7 +1,3 @@
-use std::collections::HashMap;
-
-use crate::stages::ty::TypeVarId;
-
 use super::*;
 
 #[derive(Clone, Debug)]

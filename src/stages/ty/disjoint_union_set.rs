@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use crate::stages::ty::TypeVarId;
+use crate::prelude::*;
 
 #[derive(Clone, Debug)]
 pub struct DisjointUnionSet(HashMap<TypeVarId, (TypeVarId, usize)>);
@@ -60,8 +58,6 @@ mod test {
     use crate::ir::hir::ExprId;
 
     use super::*;
-
-    use rstest::*;
 
     #[fixture]
     fn expr<const N: usize>() -> [TypeVarId; N] {

@@ -2,12 +2,12 @@ mod constraint_builder;
 mod disjoint_union_set;
 mod solver;
 
-use std::collections::HashMap;
+use crate::prelude::*;
 
 use self::disjoint_union_set::DisjointUnionSet;
 use crate::{
     enum_conversion,
-    ir::{hir::*, id::*},
+    ir::hir::*,
     stages::ty::{constraint_builder::ConstraintBuilder, solver::Solver},
 };
 
@@ -153,14 +153,7 @@ pub fn solve(hir: &Hir) -> HashMap<FunctionId, HashMap<TypeVarId, Type>> {
 mod test {
     use super::*;
 
-    use crate::{
-        ctx::Ctx,
-        ir::*,
-        lex::{Lexer, tok},
-        stages::{parse::Parse, *},
-    };
-
-    use rstest::*;
+    use crate::stages::{parse::Parse, *};
 
     fn get_ty(expr: &str) -> Type {
         let mut ctx = Ctx::default();

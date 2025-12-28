@@ -1,4 +1,4 @@
-use crate::lex::tok;
+use crate::prelude::*;
 
 pub use self::{expr::*, function::*, statement::*, util::*};
 

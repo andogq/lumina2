@@ -3,23 +3,24 @@
 mod ctx;
 mod ir;
 mod lex;
+mod prelude;
 mod stages;
 mod util;
 
-use crate::{ctx::Ctx, stages::parse::Parse};
+use crate::prelude::*;
 
-pub use self::lex::Tok;
+use crate::stages::parse::Parse;
 
 fn run(source: &str) -> u8 {
     let mut ctx = Ctx::default();
     let mut toks = lex::Lexer::new(source);
-    let cst = ir::cst::Program::parse(&mut toks);
+    let cst = cst::Program::parse(&mut toks);
     let ast = stages::ast_builder::build_ast(&mut ctx, &cst);
     let hir = stages::hir_builder::lower(&mut ctx, &ast);
     dbg!(&hir);
     let types = stages::ty::solve(&hir);
     dbg!(&types);
-    let thir = ir::hir::Thir::new(hir, types);
+    let thir = thir::Thir::new(hir, types);
     dbg!(&thir);
     let mir = stages::mir_builder::lower(&thir);
     dbg!(&mir);

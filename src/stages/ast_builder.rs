@@ -1,7 +1,6 @@
-use crate::{
-    ctx::Ctx,
-    ir::{ast::*, cst},
-};
+use crate::prelude::*;
+
+use ast::*;
 
 pub(crate) struct AstBuilder<'cst> {
     cst: &'cst cst::Program,
@@ -199,14 +198,9 @@ pub fn build_ast(ctx: &mut Ctx, cst: &cst::Program) -> Ast {
 
 #[cfg(test)]
 mod test {
-    use std::fmt::Debug;
-
-    use crate::{lex::Lexer, stages::parse::Parse};
+    use crate::stages::parse::Parse;
 
     use super::*;
-
-    use insta::*;
-    use rstest::*;
 
     #[fixture]
     fn builder() -> AstBuilder<'static> {

@@ -1,8 +1,6 @@
 use super::*;
 use crate::stages::ty::Literal;
 
-use std::collections::HashMap;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum MergeResult {
     /// Merge the nodes, and substitute the provided solution as the solution.
@@ -340,8 +338,6 @@ impl Solver {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    use rstest::*;
 
     #[fixture]
     fn expr<const N: usize>() -> [TypeVarId; N] {

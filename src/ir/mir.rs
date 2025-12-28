@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
-use crate::ir::{hir::Type, id::*};
+use crate::ir::hir::Type;
+use crate::prelude::*;
 
 pub use self::{
     basic_blocks::*, functions::*, operand::*, place::*, rvalue::*, statement::*, terminator::*,
@@ -20,7 +19,6 @@ impl Mir {
 }
 
 mod functions {
-
     use super::*;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

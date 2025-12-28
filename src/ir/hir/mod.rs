@@ -1,9 +1,7 @@
 pub mod thir;
 mod visitor;
 
-use std::collections::HashMap;
-
-use crate::ir::id::*;
+use crate::prelude::*;
 
 pub use self::{
     block::*, expr::*, functions::*, statement::*, thir::Thir, type_refs::*, visitor::*,

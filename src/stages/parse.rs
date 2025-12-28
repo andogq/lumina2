@@ -1,8 +1,6 @@
-use crate::{
-    Tok,
-    ir::cst::{self, PunctuatedList},
-    lex::Lexer,
-};
+use crate::prelude::*;
+
+use cst::PunctuatedList;
 
 pub trait Parse {
     fn parse(lexer: &mut Lexer<'_>) -> Self;
@@ -410,12 +408,7 @@ mod util {
 
 #[cfg(test)]
 mod test {
-    use crate::lex::tok;
-
     use super::*;
-
-    use insta::*;
-    use rstest::*;
 
     fn test_with_lexer(source: &str, test: impl FnOnce(&mut Lexer<'_>)) {
         let mut lexer = Lexer::new(source);

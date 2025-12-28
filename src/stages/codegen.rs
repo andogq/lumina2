@@ -1,4 +1,8 @@
-use std::{collections::HashMap, ops::Deref};
+use crate::prelude::*;
+
+use cst::{BinaryOp, UnaryOp};
+use hir::Type;
+use mir::*;
 
 use inkwell::{
     AddressSpace, IntPredicate,
@@ -8,15 +12,6 @@ use inkwell::{
     module::Module,
     types::{BasicType, BasicTypeEnum, FunctionType},
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
-};
-
-use crate::{
-    ctx::Ctx,
-    ir::{
-        cst::{BinaryOp, UnaryOp},
-        hir::Type,
-        mir::*,
-    },
 };
 
 pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir) -> Module<'ink> {

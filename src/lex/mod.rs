@@ -268,7 +268,7 @@ impl<'src> Lexer<'src> {
 mod test {
     use super::*;
 
-    use rstest::*;
+    use crate::prelude::*;
 
     #[rstest]
     #[case("(", &[Tok::LParen, Tok::Eof])]

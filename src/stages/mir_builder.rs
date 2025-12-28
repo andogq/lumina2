@@ -1,17 +1,8 @@
-use std::{
-    collections::HashMap,
-    ops::{Deref, DerefMut, Index, IndexMut},
-};
+use crate::prelude::*;
 
-use crate::{
-    ctx::Ctx,
-    ir::{
-        cst::UnaryOp,
-        hir::{self, Thir, Type, thir},
-        id::*,
-        mir::*,
-    },
-};
+use cst::UnaryOp;
+use hir::{self, Thir, Type, thir};
+use mir::*;
 
 pub fn lower(thir: &Thir) -> Mir {
     let mut builder = Builder::new();

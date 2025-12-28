@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use crate::prelude::*;
 
-use crate::{ir::id::StringId, util::indexed_vec::IndexedVec};
+crate::create_id!(StringId);
 
 #[derive(Clone, Debug, Default)]
 pub struct StringPool {

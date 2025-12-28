@@ -1,23 +1,20 @@
-use std::collections::HashMap;
+use crate::prelude::*;
 
-use crate::{
-    ir::{hir::TypeRefId, id::*},
-    util::indexed_vec::IndexedVec,
-};
+crate::create_id!(ScopeId);
 
 #[derive(Clone, Debug, Default)]
-pub struct Scope {
+struct Scope {
     parent: Option<ScopeId>,
     bindings: HashMap<StringId, BindingId>,
     types: HashMap<StringId, TypeRefId>,
 }
 
 impl Scope {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
 
-    pub fn new_with_parent(parent: ScopeId) -> Self {
+    fn new_with_parent(parent: ScopeId) -> Self {
         let mut scope = Self::new();
         scope.parent = Some(parent);
         scope
@@ -25,7 +22,7 @@ impl Scope {
 }
 
 #[derive(Clone, Debug)]
-pub struct BindingMeta {
+struct BindingMeta {
     scope: ScopeId,
     string: StringId,
 }
@@ -90,8 +87,6 @@ impl Default for Scopes {
 
 #[cfg(test)]
 mod test {
-    use rstest::*;
-
     use super::*;
 
     #[fixture]

@@ -1,16 +1,6 @@
-use std::{
-    collections::HashMap,
-    ops::{Deref, DerefMut},
-};
+use crate::prelude::*;
 
-use crate::{
-    ctx::Ctx,
-    ir::{
-        ast::{self},
-        hir::*,
-        id::*,
-    },
-};
+use hir::*;
 
 #[derive(Clone, Debug)]
 pub struct HirBuilder<'ast> {
@@ -401,14 +391,6 @@ pub fn lower(ctx: &mut Ctx, ast: &ast::Ast) -> Hir {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    use crate::{
-        ir::{cst, id::Id},
-        lex::tok,
-    };
-
-    use insta::*;
-    use rstest::*;
 
     #[fixture]
     #[once]

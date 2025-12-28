@@ -1,11 +1,9 @@
-use crate::{
-    ir::{
-        cst::{BinaryOp, UnaryOp},
-        hir::*,
-        id::*,
-    },
-    stages::ty::{Constraint, TypeVarId},
-};
+use crate::prelude::*;
+
+use cst::{BinaryOp, UnaryOp};
+use hir::*;
+
+use crate::stages::ty::Constraint;
 
 use super::IntegerKind;
 
@@ -253,14 +251,7 @@ fn constraint_from_literal(literal: &Literal) -> Constraint {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
-    use crate::lex::tok;
-
     use super::*;
-
-    use insta::*;
-    use rstest::*;
 
     #[fixture]
     fn function() -> Function {
