@@ -7,9 +7,49 @@ pub use self::{
     block::*, expr::*, functions::*, statement::*, thir::Thir, type_refs::*, visitor::*,
 };
 
+create_id!(BlockId);
+create_id!(ExprId);
+create_id!(FunctionId);
+create_id!(StatementId);
+
 #[derive(Clone, Debug)]
 pub struct Hir {
-    pub functions: Vec<Function>,
+    pub functions: IndexedVec<FunctionId, Function>,
+    pub blocks: IndexedVec<BlockId, Block>,
+    pub statements: IndexedVec<StatementId, Statement>,
+    pub exprs: IndexedVec<ExprId, Expr>,
+}
+
+impl Index<FunctionId> for Hir {
+    type Output = Function;
+
+    fn index(&self, index: FunctionId) -> &Self::Output {
+        &self.functions[index]
+    }
+}
+
+impl Index<BlockId> for Hir {
+    type Output = Block;
+
+    fn index(&self, index: BlockId) -> &Self::Output {
+        &self.blocks[index]
+    }
+}
+
+impl Index<StatementId> for Hir {
+    type Output = Statement;
+
+    fn index(&self, index: StatementId) -> &Self::Output {
+        &self.statements[index]
+    }
+}
+
+impl Index<ExprId> for Hir {
+    type Output = Expr;
+
+    fn index(&self, index: ExprId) -> &Self::Output {
+        &self.exprs[index]
+    }
 }
 
 mod functions {
@@ -22,44 +62,23 @@ mod functions {
         pub return_ty: Type,
         pub entry: BlockId,
 
+        /// All blocks contained within this function.
+        pub blocks: Vec<BlockId>,
+        /// All statements contained within this function.
+        pub statements: Vec<StatementId>,
+        /// All expressions contained within this function.
+        pub expressions: Vec<ExprId>,
+
         pub bindings: HashMap<BindingId, DeclarationTy>,
-        pub blocks: Vec<Block>,
-        pub exprs: Vec<Expr>,
-    }
-
-    impl Function {
-        pub fn get_expr(&self, expr: ExprId) -> &Expr {
-            &self.exprs[expr.0]
-        }
-
-        pub fn get_block(&self, block: BlockId) -> &Block {
-            &self.blocks[block.0]
-        }
-    }
-
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct FunctionId(usize);
-    impl FunctionId {
-        pub fn new(id: usize) -> Self {
-            Self(id)
-        }
     }
 }
 
 mod block {
     use super::*;
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct BlockId(pub usize);
-    impl BlockId {
-        pub fn new(id: usize) -> Self {
-            Self(id)
-        }
-    }
-
     #[derive(Clone, Debug)]
     pub struct Block {
-        pub statements: Vec<Statement>,
+        pub statements: Vec<StatementId>,
         pub expr: ExprId,
     }
 }
@@ -104,14 +123,6 @@ mod expr {
     };
 
     use super::*;
-
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct ExprId(pub usize);
-    impl ExprId {
-        pub fn new(id: usize) -> Self {
-            Self(id)
-        }
-    }
 
     #[derive(Clone, Debug)]
     pub enum Expr {

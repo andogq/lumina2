@@ -62,7 +62,7 @@ mod test {
     #[fixture]
     fn expr<const N: usize>() -> [TypeVarId; N] {
         (0..N)
-            .map(|i| TypeVarId::from(ExprId::new(i)))
+            .map(|i| TypeVarId::from(ExprId::from_id(i)))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap()

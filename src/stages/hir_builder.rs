@@ -22,7 +22,10 @@ impl<'ast> HirBuilder<'ast> {
     pub fn new(ast: &'ast ast::Ast) -> Self {
         Self {
             hir: Hir {
-                functions: Vec::new(),
+                functions: IndexedVec::new(),
+                blocks: IndexedVec::new(),
+                statements: IndexedVec::new(),
+                exprs: IndexedVec::new(),
             },
             ast,
             function_bindings: HashMap::new(),
@@ -57,14 +60,9 @@ impl<'ast> HirBuilder<'ast> {
         ctx: &mut Ctx,
         function: &ast::FunctionDeclaration,
     ) -> FunctionId {
-        let id = FunctionId::new(self.hir.functions.len());
-
-        let binding = ctx.scopes.declare_global(function.name);
-        self.function_bindings.insert(binding, id);
-
         let entry_scope = ctx.scopes.nest_scope_global();
 
-        let (parameters, entry, bindings, blocks, exprs) = {
+        let (parameters, entry, bindings, blocks, statements, expressions) = {
             let mut builder = FunctionBuilder::new(self);
 
             let parameters = function
@@ -85,11 +83,13 @@ impl<'ast> HirBuilder<'ast> {
                 entry,
                 builder.bindings,
                 builder.blocks,
+                builder.statements,
                 builder.exprs,
             )
         };
 
-        self.hir.functions.push(Function {
+        let binding = ctx.scopes.declare_global(function.name);
+        let id = self.hir.functions.insert(Function {
             binding,
             parameters,
             return_ty: function
@@ -99,8 +99,12 @@ impl<'ast> HirBuilder<'ast> {
             entry,
             bindings,
             blocks,
-            exprs,
+            statements,
+            expressions,
         });
+
+        // TODO: Should this be pre-declared?
+        self.function_bindings.insert(binding, id);
 
         id
     }
@@ -110,8 +114,9 @@ impl<'ast> HirBuilder<'ast> {
 struct FunctionBuilder<'hir, 'ast> {
     builder: &'hir mut HirBuilder<'ast>,
     bindings: HashMap<BindingId, DeclarationTy>,
-    blocks: Vec<Block>,
-    exprs: Vec<Expr>,
+    blocks: Vec<BlockId>,
+    statements: Vec<StatementId>,
+    exprs: Vec<ExprId>,
 }
 
 impl<'hir, 'ast> FunctionBuilder<'hir, 'ast> {
@@ -120,6 +125,7 @@ impl<'hir, 'ast> FunctionBuilder<'hir, 'ast> {
             builder,
             bindings: HashMap::new(),
             blocks: Vec::new(),
+            statements: Vec::new(),
             exprs: Vec::new(),
         }
     }
@@ -166,18 +172,26 @@ impl<'hir, 'ast> FunctionBuilder<'hir, 'ast> {
         *self.unit_expression.insert(expr)
     }
 
-    fn add_expr(&mut self, expr: Expr) -> ExprId {
-        let id = ExprId::new(self.exprs.len());
-        self.exprs.push(expr);
+    fn add_block(&mut self, block: Block) -> BlockId {
+        let id = self.hir.blocks.insert(block);
+        self.blocks.push(id);
         id
     }
 
-    fn get_expr(&self, expr: ExprId) -> &Expr {
-        &self.exprs[expr.0]
+    fn add_statement(&mut self, statement: Statement) -> StatementId {
+        let id = self.hir.statements.insert(statement);
+        self.statements.push(id);
+        id
+    }
+
+    fn add_expr(&mut self, expr: Expr) -> ExprId {
+        let id = self.hir.exprs.insert(expr);
+        self.exprs.push(id);
+        id
     }
 
     fn expr_as_block(&mut self, expr: ExprId) -> BlockId {
-        if let Expr::Block(block_id) = self.get_expr(expr) {
+        if let Expr::Block(block_id) = &self.hir[expr] {
             return *block_id;
         }
 
@@ -202,7 +216,7 @@ impl<'hir, 'ast> DerefMut for FunctionBuilder<'hir, 'ast> {
 #[derive(Debug)]
 struct BlockBuilder<'func, 'hir, 'ast> {
     builder: &'func mut FunctionBuilder<'hir, 'ast>,
-    statements: Vec<Statement>,
+    statements: Vec<StatementId>,
 }
 
 impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
@@ -214,16 +228,15 @@ impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
     }
 
     fn add_statement(&mut self, statement: Statement) {
-        self.statements.push(statement);
+        let id = self.builder.add_statement(statement);
+        self.statements.push(id);
     }
 
     fn terminate(self, expr: ExprId) -> BlockId {
-        let id = BlockId::new(self.builder.blocks.len());
-        self.builder.blocks.push(Block {
+        self.builder.add_block(Block {
             statements: self.statements,
             expr,
-        });
-        id
+        })
     }
 
     pub fn lower_statement(&mut self, ctx: &mut Ctx, scope: ScopeId, statement: &ast::Statement) {

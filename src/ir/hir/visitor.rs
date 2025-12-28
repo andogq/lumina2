@@ -21,12 +21,17 @@ pub trait HirFunctionVisitor {
     fn visit_unreachable(&mut self, id: ExprId) {}
 }
 
-impl Function {
-    pub fn visit(&self, visitor: &mut impl HirFunctionVisitor) {
+impl Hir {
+    pub fn visit_function(&self, function: FunctionId, visitor: &mut impl HirFunctionVisitor) {
+        let function = &self[function];
+
         // Visit each statement.
-        self.blocks
+        function
+            .blocks
             .iter()
+            .map(|block| &self[*block])
             .flat_map(|block| block.statements.iter())
+            .map(|statement| &self[*statement])
             .for_each(|statement| match statement {
                 Statement::Declare(declare_statement) => visitor.visit_variable_declaration(
                     declare_statement.binding,
@@ -42,10 +47,11 @@ impl Function {
                 Statement::Expr(_) => {}
             });
 
-        self.exprs.iter().enumerate().for_each(|(id, expr)| {
-            let id = ExprId::new(id);
-
-            match expr {
+        function
+            .expressions
+            .iter()
+            .map(|expr| (*expr, &self[*expr]))
+            .for_each(|(id, expr)| match expr {
                 Expr::Assign(assign) => visitor.visit_assign(id, assign),
                 Expr::Binary(binary) => visitor.visit_binary(id, binary),
                 Expr::Unary(unary) => visitor.visit_unary(id, unary),
@@ -55,16 +61,15 @@ impl Function {
                     switch
                         .branches
                         .iter()
-                        .map(|(value, block)| (value, self.get_block(*block)))
+                        .map(|(value, block)| (value, &self[*block]))
                         .collect(),
-                    switch.default.as_ref().map(|block| self.get_block(*block)),
+                    switch.default.as_ref().map(|block| &self[*block]),
                 ),
                 Expr::Literal(literal) => visitor.visit_literal(id, literal),
                 Expr::Call(call) => visitor.visit_call(id, call),
-                Expr::Block(block_id) => visitor.visit_block(id, self.get_block(*block_id)),
+                Expr::Block(block_id) => visitor.visit_block(id, &self[*block_id]),
                 Expr::Variable(variable) => visitor.visit_variable(id, variable.binding),
                 Expr::Unreachable => visitor.visit_unreachable(id),
-            }
-        });
+            });
     }
 }

@@ -113,40 +113,17 @@ impl IntegerKind {
     }
 }
 
-pub fn solve(hir: &Hir) -> HashMap<FunctionId, HashMap<TypeVarId, Type>> {
-    // Collect all function parameters.
-    let function_declarations = hir
-        .functions
-        .iter()
-        .map(|f| {
-            (
-                TypeVarId::Binding(f.binding),
-                Constraint::Eq(
-                    Type::Function {
-                        params: f.parameters.iter().map(|(_, ty)| ty.clone()).collect(),
-                        ret_ty: Box::new(f.return_ty.clone()),
-                    }
-                    .into(),
-                ),
-            )
-        })
-        .collect::<Vec<_>>();
-
+pub fn solve(hir: &Hir) -> HashMap<TypeVarId, Type> {
     // Run the solver for each function in isolation.
     hir.functions
-        .iter()
-        .enumerate()
-        .map(|(id, f)| {
-            (
-                FunctionId::new(id),
-                ConstraintBuilder::build(f, function_declarations.iter().cloned()),
-            )
+        .iter_pairs()
+        .map(|(id, _)| ConstraintBuilder::build(hir, id))
+        .map(|constraints| Solver::run(&constraints))
+        .reduce(|mut all, constraints| {
+            all.extend(constraints);
+            all
         })
-        .inspect(|(id, constraints)| {
-            dbg!(id, constraints);
-        })
-        .map(|(id, constraints)| (id, Solver::run(&constraints)))
-        .collect()
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -205,14 +182,7 @@ mod test {
         let tys = solve(&hir);
 
         // Fetch the expression type.
-        tys.get(
-            // HACK: Not guaranteed to be 0
-            &FunctionId::new(0),
-        )
-        .unwrap()
-        .get(&expr_id.into())
-        .unwrap()
-        .clone()
+        tys.get(&expr_id.into()).unwrap().clone()
     }
 
     #[rstest]

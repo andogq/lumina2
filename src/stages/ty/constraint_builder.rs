@@ -8,36 +8,37 @@ use crate::stages::ty::Constraint;
 use super::IntegerKind;
 
 pub struct ConstraintBuilder<'hir> {
-    function: &'hir Function,
+    hir: &'hir Hir,
     constraints: Vec<(TypeVarId, Constraint)>,
 }
 
 impl<'hir> ConstraintBuilder<'hir> {
     pub fn new(
-        function: &'hir Function,
+        hir: &'hir Hir,
         constraints: impl IntoIterator<Item = (TypeVarId, Constraint)>,
     ) -> Self {
         Self {
-            function,
+            hir,
             constraints: Vec::from_iter(constraints),
         }
     }
 
-    pub fn build(
-        function: &'hir Function,
-        constraints: impl IntoIterator<Item = (TypeVarId, Constraint)>,
-    ) -> Vec<(TypeVarId, Constraint)> {
-        let mut builder = Self::new(function, constraints);
-        builder.add_declaration();
-        function.visit(&mut builder);
+    /// Build constraints for a function.
+    pub fn build(hir: &'hir Hir, function: FunctionId) -> Vec<(TypeVarId, Constraint)> {
+        let mut builder = Self::new(hir, []);
+        builder.add_function_declarations();
+        builder.add_signature(function);
+        hir.visit_function(function, &mut builder);
         builder.constraints
     }
 
     /// Add constraints based on the declaration of this function.
-    fn add_declaration(&mut self) {
+    fn add_signature(&mut self, function: FunctionId) {
+        let function = &self.hir[function];
+
         // Constrain the parameter bindings.
         self.constraints.extend(
-            self.function
+            function
                 .parameters
                 .iter()
                 .map(|(binding, ty)| ((*binding).into(), Constraint::Eq(ty.clone().into()))),
@@ -47,28 +48,29 @@ impl<'hir> ConstraintBuilder<'hir> {
 
         // Ensure block expression yields the return type.
         self.constraints.push((
-            self.function.get_block(self.function.entry).expr.into(),
-            Constraint::Eq(self.function.return_ty.clone().into()),
+            self.hir[function.entry].expr.into(),
+            Constraint::Eq(function.return_ty.clone().into()),
         ));
     }
 
-    pub fn generate_function_declarations(
-        functions: impl Iterator<Item = &'hir Function>,
-    ) -> Vec<(TypeVarId, Constraint)> {
-        functions
-            .map(|f| {
+    fn add_function_declarations(&mut self) {
+        self.constraints
+            .extend(self.hir.functions.iter().map(|function| {
                 (
-                    TypeVarId::Binding(f.binding),
+                    TypeVarId::Binding(function.binding),
                     Constraint::Eq(
                         Type::Function {
-                            params: f.parameters.iter().map(|(_, ty)| ty.clone()).collect(),
-                            ret_ty: Box::new(f.return_ty.clone()),
+                            params: function
+                                .parameters
+                                .iter()
+                                .map(|(_, ty)| ty.clone())
+                                .collect(),
+                            ret_ty: Box::new(function.return_ty.clone()),
                         }
                         .into(),
                     ),
                 )
-            })
-            .collect()
+            }))
     }
 }
 
@@ -254,15 +256,29 @@ mod test {
     use super::*;
 
     #[fixture]
+    fn hir() -> Hir {
+        Hir {
+            functions: indexed_vec![],
+            blocks: indexed_vec![Block {
+                statements: vec![],
+                expr: ExprId::from_id(0),
+            }],
+            statements: indexed_vec![],
+            exprs: indexed_vec![],
+        }
+    }
+
+    #[fixture]
     fn function() -> Function {
         Function {
             binding: BindingId::from_id(0),
             parameters: vec![],
             return_ty: Type::Unit,
-            entry: BlockId::new(0),
+            entry: BlockId::from_id(0),
             bindings: HashMap::new(),
             blocks: vec![],
-            exprs: vec![],
+            statements: vec![],
+            expressions: vec![],
         }
     }
 
@@ -271,6 +287,7 @@ mod test {
     #[case("return int", [], Type::I8)]
     #[case("params", [(BindingId::from_id(1), Type::I8), (BindingId::from_id(2), Type::Boolean)], Type::Boolean)]
     fn function_expression(
+        mut hir: Hir,
         mut function: Function,
         #[case] name: &str,
         #[case] params: impl IntoIterator<Item = (BindingId, Type)>,
@@ -278,35 +295,33 @@ mod test {
     ) {
         function.parameters = params.into_iter().collect();
         function.return_ty = return_ty;
-        function.blocks.push(Block {
-            statements: Vec::new(),
-            expr: ExprId::new(0),
-        });
+        function.blocks.push(BlockId::from_id(0));
 
-        let mut builder = ConstraintBuilder::new(&function, []);
-        builder.add_declaration();
-        assert_debug_snapshot!(
-            name,
-            builder.constraints,
-            &format!("{:?} => {:?}", function.parameters, function.return_ty)
-        );
+        // Used for debugging.
+        let signature_str = format!("{:?} => {:?}", function.parameters, function.return_ty);
+
+        let function_id = hir.functions.insert(function);
+
+        let mut builder = ConstraintBuilder::new(&hir, []);
+        builder.add_signature(function_id);
+        assert_debug_snapshot!(name, builder.constraints, &signature_str);
     }
 
     #[rstest]
-    #[case("inferred", DeclarationTy::Inferred(ExprId::new(0)))]
+    #[case("inferred", DeclarationTy::Inferred(ExprId::from_id(0)))]
     #[case("with unit", DeclarationTy::Type(Type::Unit))]
     #[case("with type", DeclarationTy::Type(Type::I8))]
-    fn variable_declaration(function: Function, #[case] name: &str, #[case] ty: DeclarationTy) {
-        let mut builder = ConstraintBuilder::new(&function, []);
+    fn variable_declaration(hir: Hir, #[case] name: &str, #[case] ty: DeclarationTy) {
+        let mut builder = ConstraintBuilder::new(&hir, []);
         builder.visit_variable_declaration(BindingId::from_id(0), ty.clone());
         assert_debug_snapshot!(name, builder.constraints, &format!("{ty:?}"));
     }
 
     #[rstest]
-    #[case("assign", Assign { variable: ExprId::new(1), value: ExprId::new(2) })]
-    fn assign_constraint(function: Function, #[case] name: &str, #[case] assign: Assign) {
-        let mut builder = ConstraintBuilder::new(&function, []);
-        builder.visit_assign(ExprId::new(0), &assign);
+    #[case("assign", Assign { variable: ExprId::from_id(1), value: ExprId::from_id(2) })]
+    fn assign_constraint(hir: Hir, #[case] name: &str, #[case] assign: Assign) {
+        let mut builder = ConstraintBuilder::new(&hir, []);
+        builder.visit_assign(ExprId::from_id(0), &assign);
         assert_debug_snapshot!(name, builder.constraints, &format!("{assign:?}"));
     }
 
@@ -314,46 +329,46 @@ mod test {
     #[case(
         "plus",
         Binary {
-            lhs: ExprId::new(1),
+            lhs: ExprId::from_id(1),
             op: BinaryOp::Plus(tok::Plus),
-            rhs: ExprId::new(2),
+            rhs: ExprId::from_id(2),
         },
     )]
     #[case(
         "logical and",
         Binary {
-            lhs: ExprId::new(1),
+            lhs: ExprId::from_id(1),
             op: BinaryOp::LogicalAnd(tok::AmpAmp),
-            rhs: ExprId::new(2),
+            rhs: ExprId::from_id(2),
         },
     )]
     #[case(
         "equal",
         Binary {
-            lhs: ExprId::new(1),
+            lhs: ExprId::from_id(1),
             op: BinaryOp::Equal(tok::EqEq),
-            rhs: ExprId::new(2),
+            rhs: ExprId::from_id(2),
         },
     )]
     #[case(
         "greater",
         Binary {
-            lhs: ExprId::new(1),
+            lhs: ExprId::from_id(1),
             op: BinaryOp::Greater(tok::RAngle),
-            rhs: ExprId::new(2),
+            rhs: ExprId::from_id(2),
         },
     )]
-    fn binary_constraint(function: Function, #[case] name: &str, #[case] binary: Binary) {
-        let mut builder = ConstraintBuilder::new(&function, []);
-        builder.visit_binary(ExprId::new(0), &binary);
+    fn binary_constraint(hir: Hir, #[case] name: &str, #[case] binary: Binary) {
+        let mut builder = ConstraintBuilder::new(&hir, []);
+        builder.visit_binary(ExprId::from_id(0), &binary);
         assert_debug_snapshot!(name, builder.constraints, &format!("{binary:?}"));
     }
 
     #[rstest]
-    #[case("negative", Unary { op: UnaryOp::Negative(tok::Minus), value: ExprId::new(1) })]
-    fn unary_constraint(function: Function, #[case] name: &str, #[case] unary: Unary) {
-        let mut builder = ConstraintBuilder::new(&function, []);
-        builder.visit_unary(ExprId::new(0), &unary);
+    #[case("negative", Unary { op: UnaryOp::Negative(tok::Minus), value: ExprId::from_id(1) })]
+    fn unary_constraint(hir: Hir, #[case] name: &str, #[case] unary: Unary) {
+        let mut builder = ConstraintBuilder::new(&hir, []);
+        builder.visit_unary(ExprId::from_id(0), &unary);
         assert_debug_snapshot!(name, builder.constraints, &format!("{unary:?}"));
     }
 

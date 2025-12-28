@@ -1,29 +1,30 @@
 use crate::prelude::*;
 
 use cst::UnaryOp;
-use hir::{self, Thir, Type, thir};
+use hir::{Thir, Type};
 use mir::*;
 
 pub fn lower(thir: &Thir) -> Mir {
     let mut builder = Builder::new();
 
-    for function in &thir.functions {
+    for function in thir.functions.iter_keys() {
         lower_function(thir, &mut builder, function);
     }
 
     builder.build()
 }
 
-fn lower_function(thir: &Thir, builder: &mut Builder, function: &thir::Function) {
+fn lower_function(thir: &Thir, builder: &mut Builder, function: hir::FunctionId) {
+    let function = &thir[function];
     let mut builder = builder.function(function);
 
-    let block = function.get_block(function.entry);
-    let result = lower_block(thir, function, &mut builder, block);
+    let block = &thir[function.entry];
+    let result = lower_block(thir, &mut builder, block);
 
     // If the block resolves to a value of the same type as the return value, then it's an implicit
     // return.
     if let Some(result) = result
-        && function.get_expr_ty(block.expr) == &function.return_ty
+        && thir.type_of(block.expr) == &function.return_ty
     {
         builder.store(LocalId::new(0), RValue::Use(result));
     }
@@ -36,56 +37,54 @@ fn lower_function(thir: &Thir, builder: &mut Builder, function: &thir::Function)
 
 fn lower_block(
     thir: &Thir,
-    function: &thir::Function,
     builder: &mut FunctionBuilder<'_>,
     block: &hir::Block,
 ) -> Option<Operand> {
     for statement in &block.statements {
-        match statement {
+        match &thir[*statement] {
             hir::Statement::Declare(hir::DeclareStatement { binding, ty }) => {
                 builder.add_binding(
                     *binding,
                     match ty {
                         hir::DeclarationTy::Type(ty) => ty,
-                        hir::DeclarationTy::Inferred(expr) => function.get_expr_ty(*expr),
+                        hir::DeclarationTy::Inferred(expr) => thir.type_of(*expr),
                     }
                     .clone(),
                 );
             }
             hir::Statement::Return(hir::ReturnStatement { expr }) => {
-                if let Some(value) = lower_expr(thir, function, builder, *expr) {
+                if let Some(value) = lower_expr(thir, builder, *expr) {
                     builder.store(LocalId::new(0), RValue::Use(value));
                 }
                 builder.terminate(Terminator::Return);
             }
             hir::Statement::Expr(hir::ExprStatement { expr }) => {
-                lower_expr(thir, function, builder, *expr);
+                lower_expr(thir, builder, *expr);
             }
         }
     }
 
-    lower_expr(thir, function, builder, block.expr)
+    lower_expr(thir, builder, block.expr)
 }
 
 fn lower_expr(
     thir: &Thir,
-    function: &thir::Function,
     builder: &mut FunctionBuilder<'_>,
     expr: hir::ExprId,
 ) -> Option<Operand> {
-    Some(match function.get_expr(expr) {
+    Some(match &thir[expr] {
         hir::Expr::Assign(hir::Assign { variable, value }) => {
-            let value = lower_expr(thir, function, builder, *value)?;
-            let place = expr_to_place(thir, function, builder, *variable);
+            let value = lower_expr(thir, builder, *value)?;
+            let place = expr_to_place(thir, builder, *variable);
             builder.assign(place, RValue::Use(value));
 
             Operand::Constant(Constant::Unit)
         }
         hir::Expr::Binary(hir::Binary { lhs, op, rhs }) => {
-            let lhs = lower_expr(thir, function, builder, *lhs)?;
-            let rhs = lower_expr(thir, function, builder, *rhs)?;
+            let lhs = lower_expr(thir, builder, *lhs)?;
+            let rhs = lower_expr(thir, builder, *rhs)?;
 
-            let result = builder.add_local(None, function.get_expr_ty(expr).clone());
+            let result = builder.add_local(None, thir.type_of(expr).clone());
 
             builder.store(
                 result,
@@ -102,9 +101,9 @@ fn lower_expr(
             })
         }
         hir::Expr::Unary(hir::Unary { op, value }) => {
-            let value = lower_expr(thir, function, builder, *value)?;
+            let value = lower_expr(thir, builder, *value)?;
 
-            let result = builder.add_local(None, function.get_expr_ty(expr).clone());
+            let result = builder.add_local(None, thir.type_of(expr).clone());
 
             builder.store(
                 result,
@@ -124,12 +123,12 @@ fn lower_expr(
             branches,
             default,
         }) => {
-            let discriminator_ty = function.get_expr_ty(*discriminator);
-            let discriminator = lower_expr(thir, function, builder, *discriminator)?;
+            let discriminator_ty = thir.type_of(*discriminator);
+            let discriminator = lower_expr(thir, builder, *discriminator)?;
 
             let current_block = builder.block;
 
-            let switch_ty = function.get_expr_ty(expr);
+            let switch_ty = thir.type_of(expr);
             let switch_value = builder.add_local(None, switch_ty.clone());
             let end_block = builder.new_basic_block();
 
@@ -142,8 +141,7 @@ fn lower_expr(
                     builder.block = bb;
 
                     // Lower the block.
-                    if let Some(result) =
-                        lower_block(thir, function, builder, function.get_block(*block))
+                    if let Some(result) = lower_block(thir, builder, &thir[*block])
                         && !matches!(switch_ty, Type::Unit | Type::Never)
                     {
                         // Store the resulting block value in the switch value, and jump back to merge
@@ -166,7 +164,7 @@ fn lower_expr(
                 builder.block = bb;
 
                 // Lower the block.
-                let result = lower_block(thir, function, builder, function.get_block(*default))?;
+                let result = lower_block(thir, builder, &thir[*default])?;
 
                 // Store the resulting block value in the switch value, and jump back to merge
                 // block.
@@ -190,20 +188,20 @@ fn lower_expr(
             })
         }
         hir::Expr::Literal(literal) => {
-            Operand::Constant(literal_to_constant(literal, function.get_expr_ty(expr)))
+            Operand::Constant(literal_to_constant(literal, thir.type_of(expr)))
         }
         hir::Expr::Call(call) => {
             let result = Place {
-                local: builder.add_local(None, function.get_expr_ty(expr).clone()),
+                local: builder.add_local(None, thir.type_of(expr).clone()),
                 projection: Vec::new(),
             };
             let target = builder.new_basic_block();
 
-            let func = lower_expr(thir, function, builder, call.callee).unwrap();
+            let func = lower_expr(thir, builder, call.callee).unwrap();
             let args = call
                 .arguments
                 .iter()
-                .map(|expr| lower_expr(thir, function, builder, *expr).unwrap())
+                .map(|expr| lower_expr(thir, builder, *expr).unwrap())
                 .collect();
             builder.call(func, args, result.clone(), target);
 
@@ -211,9 +209,7 @@ fn lower_expr(
 
             Operand::Place(result)
         }
-        hir::Expr::Block(block_id) => {
-            lower_block(thir, function, builder, function.get_block(*block_id))?
-        }
+        hir::Expr::Block(block_id) => lower_block(thir, builder, &thir[*block_id])?,
         hir::Expr::Variable(hir::Variable { binding }) => match builder[*binding] {
             Binding::Local(local) => Operand::Place(Place {
                 local,
@@ -234,7 +230,7 @@ impl Builder {
         Self { mir: Mir::new() }
     }
 
-    pub fn function(&mut self, function: &thir::Function) -> FunctionBuilder<'_> {
+    pub fn function(&mut self, function: &hir::Function) -> FunctionBuilder<'_> {
         FunctionBuilder::new(self, function)
     }
 
@@ -286,7 +282,7 @@ struct FunctionBuilder<'b> {
 }
 
 impl<'b> FunctionBuilder<'b> {
-    fn new(builder: &'b mut Builder, function: &thir::Function) -> Self {
+    fn new(builder: &'b mut Builder, function: &hir::Function) -> Self {
         let (bindings, locals) =
             {
                 let mut bindings = HashMap::new();
@@ -481,13 +477,8 @@ fn literal_to_constant(literal: &hir::Literal, ty: &Type) -> Constant {
     }
 }
 
-fn expr_to_place(
-    thir: &Thir,
-    function: &thir::Function,
-    builder: &mut FunctionBuilder<'_>,
-    expr: hir::ExprId,
-) -> Place {
-    match function.get_expr(expr) {
+fn expr_to_place(thir: &Thir, builder: &mut FunctionBuilder<'_>, expr: hir::ExprId) -> Place {
+    match &thir[expr] {
         hir::Expr::Variable(hir::Variable { binding }) => Place {
             local: *builder[*binding].as_local(),
             projection: Vec::new(),
@@ -496,7 +487,7 @@ fn expr_to_place(
             op: UnaryOp::Deref(_),
             value,
         }) => {
-            let mut value = expr_to_place(thir, function, builder, *value);
+            let mut value = expr_to_place(thir, builder, *value);
             // TODO: Not sure if this is append or prepend.
             value.projection.push(Projection::Deref);
             value

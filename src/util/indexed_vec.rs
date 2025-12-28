@@ -32,8 +32,12 @@ where
         self.0.get_mut(key.into_id())
     }
 
-    pub fn iter_keys(&self) -> impl Iterator<Item = (K, &V)> {
+    pub fn iter_pairs(&self) -> impl Iterator<Item = (K, &V)> {
         self.0.iter().enumerate().map(|(i, v)| (K::from_id(i), v))
+    }
+
+    pub fn iter_keys(&self) -> impl Iterator<Item = K> {
+        self.iter_pairs().map(|(i, _)| i)
     }
 }
 
