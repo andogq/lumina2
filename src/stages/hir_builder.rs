@@ -8,9 +8,6 @@ pub struct HirBuilder<'ast> {
     hir: Hir,
     /// Reference AST.
     ast: &'ast ast::Ast,
-
-    /// Map of bindings to corresponding functions.
-    function_bindings: HashMap<BindingId, FunctionId>,
 }
 
 impl<'ast> HirBuilder<'ast> {
@@ -23,7 +20,6 @@ impl<'ast> HirBuilder<'ast> {
                 exprs: IndexedVec::new(),
             },
             ast,
-            function_bindings: HashMap::new(),
         }
     }
 
@@ -82,7 +78,7 @@ impl<'ast> HirBuilder<'ast> {
         };
 
         let binding = ctx.scopes.declare_global(function.name);
-        let id = self.hir.functions.insert(Function {
+        self.hir.functions.insert(Function {
             binding,
             parameters,
             return_ty: function
@@ -94,12 +90,7 @@ impl<'ast> HirBuilder<'ast> {
             blocks,
             statements,
             expressions,
-        });
-
-        // TODO: Should this be pre-declared?
-        self.function_bindings.insert(binding, id);
-
-        id
+        })
     }
 }
 
