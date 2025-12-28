@@ -18,8 +18,7 @@ pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir) -> Module<'ink> {
     let mut codegen = Codegen::new(ink);
 
     // Forward declare all functions.
-    for (i, function) in mir.functions.iter().enumerate() {
-        let id = FunctionId::new(i);
+    for (id, function) in mir.functions.iter_pairs() {
         codegen.declare_fn(
             id,
             function,
@@ -28,8 +27,7 @@ pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir) -> Module<'ink> {
     }
 
     // Lower each function.
-    for function_id in codegen.functions() {
-        let function = &mir.functions[function_id.0];
+    for (function_id, function) in mir.functions.iter_pairs() {
         let mut codegen = codegen.function(function_id);
 
         // Declare each local.
@@ -111,7 +109,7 @@ fn lower_block<'ink, 'codegen>(
                             function,
                             args.as_slice(),
                             ctx.strings
-                                .get(ctx.scopes.to_string(mir.functions[function_id.0].binding)),
+                                .get(ctx.scopes.to_string(mir[*function_id].binding)),
                         )
                         .unwrap()
                         .try_as_basic_value()

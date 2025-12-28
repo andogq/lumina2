@@ -276,50 +276,42 @@ impl Binding {
 
 struct FunctionBuilder<'b> {
     builder: &'b mut Builder,
-    function_i: usize,
+    function: FunctionId,
     bindings: HashMap<BindingId, (Binding, bool)>,
     block: BasicBlockId,
 }
 
 impl<'b> FunctionBuilder<'b> {
     fn new(builder: &'b mut Builder, function: &hir::Function) -> Self {
-        let (bindings, locals) =
-            {
-                let mut bindings = HashMap::new();
-                let mut locals = Vec::new();
+        let (bindings, locals) = {
+            let mut bindings = HashMap::new();
+            let mut locals = Vec::new();
 
-                // Add bindings for function declarations.
-                bindings.extend(
-                    builder.mir.functions.iter().enumerate().map(|(id, f)| {
-                        (f.binding, (Binding::Function(FunctionId::new(id)), false))
-                    }),
-                );
+            // Add bindings for function declarations.
+            bindings.extend(
+                builder
+                    .mir
+                    .functions
+                    .iter_pairs()
+                    .map(|(id, f)| (f.binding, (Binding::Function(id), false))),
+            );
 
-                // First local is the return value.
-                locals.push((None, function.return_ty.clone()));
+            // First local is the return value.
+            locals.push((None, function.return_ty.clone()));
 
-                // Add a local for each parameter, and register it against the binding.
-                for (i, (binding, ty)) in function.parameters.iter().enumerate() {
-                    locals.push((Some(*binding), ty.clone()));
-                    bindings.insert(*binding, (Binding::Local(LocalId::new(i)), true));
-                }
+            // Add a local for each parameter, and register it against the binding.
+            for (i, (binding, ty)) in function.parameters.iter().enumerate() {
+                locals.push((Some(*binding), ty.clone()));
+                bindings.insert(*binding, (Binding::Local(LocalId::new(i)), true));
+            }
 
-                (bindings, locals)
-            };
+            (bindings, locals)
+        };
 
         let temp_entry = BasicBlockId::new(0);
 
-        let function_i = builder.mir.functions.len();
-        let mut builder = Self {
-            builder,
-            function_i,
-            bindings,
-            // Temporary value for the current block,
-            block: temp_entry,
-        };
-
         // Register the function definition.
-        builder.mir.functions.push(Function {
+        let function_id = builder.mir.functions.insert(Function {
             binding: function.binding,
             locals,
             entry: temp_entry,
@@ -331,6 +323,14 @@ impl<'b> FunctionBuilder<'b> {
                 .collect(),
             basic_blocks: Vec::new(),
         });
+
+        let mut builder = Self {
+            builder,
+            function: function_id,
+            bindings,
+            // Temporary value for the current block,
+            block: temp_entry,
+        };
 
         // Actually create the entry basic block.
         let entry = builder.new_basic_block();
@@ -346,13 +346,12 @@ impl<'b> FunctionBuilder<'b> {
     }
 
     fn function(&self) -> &Function {
-        let i = self.function_i;
-        &self.mir.functions[i]
+        &self.mir[self.function]
     }
 
     fn function_mut(&mut self) -> &mut Function {
-        let i = self.function_i;
-        &mut self.mir.functions[i]
+        let id = self.function;
+        &mut self.mir[id]
     }
 
     pub fn new_basic_block(&mut self) -> BasicBlockId {

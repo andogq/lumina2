@@ -5,29 +5,37 @@ pub use self::{
     basic_blocks::*, functions::*, operand::*, place::*, rvalue::*, statement::*, terminator::*,
 };
 
+create_id!(FunctionId);
+
 #[derive(Clone, Debug)]
 pub struct Mir {
-    pub functions: Vec<Function>,
+    pub functions: IndexedVec<FunctionId, Function>,
 }
 
 impl Mir {
     pub fn new() -> Self {
         Self {
-            functions: Vec::new(),
+            functions: IndexedVec::new(),
         }
+    }
+}
+
+impl Index<FunctionId> for Mir {
+    type Output = Function;
+
+    fn index(&self, index: FunctionId) -> &Self::Output {
+        &self.functions[index]
+    }
+}
+
+impl IndexMut<FunctionId> for Mir {
+    fn index_mut(&mut self, index: FunctionId) -> &mut Self::Output {
+        &mut self.functions[index]
     }
 }
 
 mod functions {
     use super::*;
-
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct FunctionId(pub usize);
-    impl FunctionId {
-        pub fn new(id: usize) -> Self {
-            Self(id)
-        }
-    }
 
     #[derive(Clone, Debug)]
     pub struct Function {
