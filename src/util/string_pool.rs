@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-crate::create_id!(StringId);
+create_id!(StringId);
 
 #[derive(Clone, Debug, Default)]
 pub struct StringPool {

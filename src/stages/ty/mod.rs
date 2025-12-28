@@ -176,19 +176,16 @@ mod test {
         // HACK: Manually add a block to the AST with the expression. Then insert a
         // function declaration with the block as the body.
         let function_id = {
-            let block_id = ast.blocks.len();
-            ast.blocks.push(ast::Block {
+            let block_id = ast.blocks.insert(ast::Block {
                 statements: vec![ast::Statement::Expr(ast::ExprStatement { expr: expr_id })],
                 expression: None,
             });
-            let function_id = FunctionId::new(ast.function_declarations.len());
-            ast.function_declarations.push(ast::FunctionDeclaration {
+            ast.function_declarations.insert(ast::FunctionDeclaration {
                 name: ctx.strings.intern("main"),
                 params: Vec::new(),
                 return_ty: None,
-                body: ast::BlockId::new(block_id),
-            });
-            function_id
+                body: block_id,
+            })
         };
 
         // Lower the AST into the HIR.
@@ -205,11 +202,14 @@ mod test {
         let tys = solve(&hir);
 
         // Fetch the expression type.
-        tys.get(&function_id)
-            .unwrap()
-            .get(&expr_id.into())
-            .unwrap()
-            .clone()
+        tys.get(
+            // HACK: Not guaranteed to be 0
+            &FunctionId::new(0),
+        )
+        .unwrap()
+        .get(&expr_id.into())
+        .unwrap()
+        .clone()
     }
 
     #[rstest]

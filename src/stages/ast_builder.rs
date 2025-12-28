@@ -35,7 +35,7 @@ impl<'cst> AstBuilder<'cst> {
         &mut self,
         ctx: &mut Ctx,
         function_declaration: &cst::FunctionDeclaration,
-    ) {
+    ) -> FunctionId {
         let function_declaration = FunctionDeclaration {
             name: ctx.strings.intern(&function_declaration.name.0),
             params: function_declaration
@@ -52,7 +52,7 @@ impl<'cst> AstBuilder<'cst> {
                 .map(|ty| ctx.strings.intern(&ty.ty.0)),
             body: self.lower_block(ctx, &function_declaration.body),
         };
-        self.ast.function_declarations.push(function_declaration);
+        self.ast.function_declarations.insert(function_declaration)
     }
 
     fn lower_block(&mut self, ctx: &mut Ctx, block: &cst::Block) -> BlockId {
@@ -88,12 +88,10 @@ impl<'cst> AstBuilder<'cst> {
             }
         }
 
-        let id = BlockId::new(self.ast.blocks.len());
-        self.ast.blocks.push(Block {
+        self.ast.blocks.insert(Block {
             statements,
             expression,
-        });
-        id
+        })
     }
 
     pub fn lower_expr(&mut self, ctx: &mut Ctx, expr: &cst::Expr) -> ExprId {
@@ -109,9 +107,7 @@ impl<'cst> AstBuilder<'cst> {
             cst::Expr::Variable(variable) => self.lower_variable(ctx, variable).into(),
         };
 
-        let id = ExprId::new(self.ast.expressions.len());
-        self.ast.expressions.push(expr);
-        id
+        self.ast.expressions.insert(expr)
     }
 
     fn lower_assign(&mut self, ctx: &mut Ctx, assign: &cst::Assign) -> Assign {

@@ -4,29 +4,49 @@ use crate::ir::cst::{BinaryOp, UnaryOp};
 
 pub use self::{block::*, expr::*, function::*, statement::*};
 
+create_id!(BlockId);
+create_id!(ExprId);
+create_id!(FunctionId);
+
 #[derive(Clone, Debug)]
 pub struct Ast {
-    pub function_declarations: Vec<FunctionDeclaration>,
+    pub function_declarations: IndexedVec<FunctionId, FunctionDeclaration>,
 
-    pub blocks: Vec<Block>,
-    pub expressions: Vec<Expr>,
+    pub blocks: IndexedVec<BlockId, Block>,
+    pub expressions: IndexedVec<ExprId, Expr>,
 }
 
 impl Ast {
     pub fn new() -> Self {
         Self {
-            function_declarations: Vec::new(),
-            blocks: Vec::new(),
-            expressions: Vec::new(),
+            function_declarations: IndexedVec::new(),
+            blocks: IndexedVec::new(),
+            expressions: IndexedVec::new(),
         }
     }
+}
 
-    pub fn get_block(&self, block: BlockId) -> &Block {
-        &self.blocks[block.0]
+impl Index<BlockId> for Ast {
+    type Output = Block;
+
+    fn index(&self, index: BlockId) -> &Self::Output {
+        &self.blocks[index]
     }
+}
 
-    pub fn get_expr(&self, expr: ExprId) -> &Expr {
-        &self.expressions[expr.0]
+impl Index<ExprId> for Ast {
+    type Output = Expr;
+
+    fn index(&self, index: ExprId) -> &Self::Output {
+        &self.expressions[index]
+    }
+}
+
+impl Index<FunctionId> for Ast {
+    type Output = FunctionDeclaration;
+
+    fn index(&self, index: FunctionId) -> &Self::Output {
+        &self.function_declarations[index]
     }
 }
 
@@ -50,15 +70,6 @@ mod function {
 
 mod block {
     use super::*;
-
-    #[derive(Clone, Copy, Debug)]
-    pub struct BlockId(pub(super) usize);
-
-    impl BlockId {
-        pub fn new(id: usize) -> Self {
-            Self(id)
-        }
-    }
 
     #[derive(Clone, Debug)]
     pub struct Block {
@@ -114,15 +125,6 @@ mod expr {
     use crate::enum_conversion;
 
     use super::*;
-
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct ExprId(pub(super) usize);
-
-    impl ExprId {
-        pub fn new(id: usize) -> Self {
-            Self(id)
-        }
-    }
 
     #[derive(Clone, Debug)]
     pub enum Expr {

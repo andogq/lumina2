@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-crate::create_id!(BindingId);
+create_id!(BindingId);
 
 #[derive(Clone, Debug, Default)]
 pub struct Bindings {

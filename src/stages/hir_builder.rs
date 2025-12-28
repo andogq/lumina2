@@ -32,7 +32,7 @@ impl<'ast> HirBuilder<'ast> {
     }
 
     pub fn lower_functions(&mut self, ctx: &mut Ctx) {
-        for function in &self.ast.function_declarations {
+        for function in self.ast.function_declarations.iter() {
             self.lower_function(ctx, function);
         }
     }
@@ -131,7 +131,7 @@ impl<'hir, 'ast> FunctionBuilder<'hir, 'ast> {
         block: ast::BlockId,
     ) -> BlockId {
         let scope = ctx.scopes.nest_scope(parent_scope);
-        let block = self.ast.get_block(block);
+        let block = &self.ast[block];
 
         let mut builder = BlockBuilder::new(self);
 
@@ -206,13 +206,13 @@ impl<'hir, 'ast> Deref for FunctionBuilder<'hir, 'ast> {
     type Target = HirBuilder<'ast>;
 
     fn deref(&self) -> &Self::Target {
-        &self.builder
+        self.builder
     }
 }
 
 impl<'hir, 'ast> DerefMut for FunctionBuilder<'hir, 'ast> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.builder
+        self.builder
     }
 }
 
@@ -270,7 +270,7 @@ impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
     }
 
     pub fn lower_expr(&mut self, ctx: &mut Ctx, scope: ScopeId, expr_id: ast::ExprId) -> ExprId {
-        let expr = self.ast.get_expr(expr_id);
+        let expr = &self.ast[expr_id];
 
         let expr = match expr {
             ast::Expr::Assign(assign) => self.lower_assign(ctx, scope, assign).into(),
@@ -396,7 +396,7 @@ mod test {
     #[once]
     fn sample_ast() -> ast::Ast {
         let mut ast = ast::Ast::new();
-        ast.expressions = vec![
+        ast.expressions = indexed_vec![
             ast::Expr::Variable(ast::Variable {
                 variable: StringId::from_id(0),
             }),
@@ -407,7 +407,7 @@ mod test {
                 variable: StringId::from_id(2),
             }),
         ];
-        ast.blocks = vec![
+        ast.blocks = indexed_vec![
             // Empty block.
             ast::Block {
                 statements: vec![],
@@ -416,21 +416,21 @@ mod test {
             // Statement block.
             ast::Block {
                 statements: vec![ast::Statement::Expr(ast::ExprStatement {
-                    expr: ast::ExprId::new(0),
+                    expr: ast::ExprId::from_id(0),
                 })],
                 expression: None,
             },
             // Expression block.
             ast::Block {
                 statements: vec![],
-                expression: Some(ast::ExprId::new(0)),
+                expression: Some(ast::ExprId::from_id(0)),
             },
             // Everything block.
             ast::Block {
                 statements: vec![ast::Statement::Expr(ast::ExprStatement {
-                    expr: ast::ExprId::new(0),
+                    expr: ast::ExprId::from_id(0),
                 })],
-                expression: Some(ast::ExprId::new(0)),
+                expression: Some(ast::ExprId::from_id(0)),
             },
         ];
         ast
@@ -454,10 +454,10 @@ mod test {
     }
 
     #[rstest]
-    #[case("block_empty", ast::BlockId::new(0))]
-    #[case("block_statement", ast::BlockId::new(1))]
-    #[case("block_expression", ast::BlockId::new(2))]
-    #[case("block_everything", ast::BlockId::new(3))]
+    #[case("block_empty", ast::BlockId::from_id(0))]
+    #[case("block_statement", ast::BlockId::from_id(1))]
+    #[case("block_expression", ast::BlockId::from_id(2))]
+    #[case("block_everything", ast::BlockId::from_id(3))]
     fn lower_block(
         mut ctx: Ctx,
         mut builder: HirBuilder<'static>,
@@ -475,11 +475,11 @@ mod test {
         #[rstest]
         #[case(
             "assign_simple",
-            ast::Assign { variable: ast::ExprId::new(0), value: ast::ExprId::new(1) }
+            ast::Assign { variable: ast::ExprId::from_id(0), value: ast::ExprId::from_id(1) }
         )]
         #[case(
             "assign_reassign",
-            ast::Assign { variable: ast::ExprId::new(0), value: ast::ExprId::new(0) }
+            ast::Assign { variable: ast::ExprId::from_id(0), value: ast::ExprId::from_id(0) }
         )]
         fn lower_assign(
             mut ctx: Ctx,
@@ -496,7 +496,7 @@ mod test {
         #[rstest]
         #[case(
             "binary_simple",
-            ast::Binary{ lhs: ast::ExprId::new(0), op: cst::BinaryOp::Plus(tok::Plus), rhs: ast::ExprId::new(1) }
+            ast::Binary{ lhs: ast::ExprId::from_id(0), op: cst::BinaryOp::Plus(tok::Plus), rhs: ast::ExprId::from_id(1) }
         )]
         fn lower_binary(
             mut ctx: Ctx,
@@ -513,7 +513,7 @@ mod test {
         #[rstest]
         #[case(
             "unary_simple",
-            ast::Unary { value: ast::ExprId::new(0), op: cst::UnaryOp::Negative(tok::Minus) }
+            ast::Unary { value: ast::ExprId::from_id(0), op: cst::UnaryOp::Negative(tok::Minus) }
         )]
         fn lower_unary(
             mut ctx: Ctx,
@@ -530,15 +530,15 @@ mod test {
         #[rstest]
         #[case(
             "if_simple",
-            ast::If { conditions: vec![(ast::ExprId::new(0), ast::BlockId::new(0))], otherwise: None }
+            ast::If { conditions: vec![(ast::ExprId::from_id(0), ast::BlockId::from_id(0))], otherwise: None }
         )]
         #[case(
             "if_else",
-            ast::If { conditions: vec![(ast::ExprId::new(0), ast::BlockId::new(0))], otherwise: Some(ast::BlockId::new(1)) }
+            ast::If { conditions: vec![(ast::ExprId::from_id(0), ast::BlockId::from_id(0))], otherwise: Some(ast::BlockId::from_id(1)) }
         )]
         #[case(
             "if_else_if",
-            ast::If { conditions: vec![(ast::ExprId::new(0), ast::BlockId::new(0)), (ast::ExprId::new(1), ast::BlockId::new(1))], otherwise: None }
+            ast::If { conditions: vec![(ast::ExprId::from_id(0), ast::BlockId::from_id(0)), (ast::ExprId::from_id(1), ast::BlockId::from_id(1))], otherwise: None }
         )]
         fn lower_if(
             mut ctx: Ctx,
@@ -567,8 +567,8 @@ mod test {
         }
 
         #[rstest]
-        #[case("call_no_params", ast::Call { callee: ast::ExprId::new(0), arguments: vec![] })]
-        #[case("call_with_params", ast::Call { callee: ast::ExprId::new(0), arguments: vec![ast::ExprId::new(1), ast::ExprId::new(2)] })]
+        #[case("call_no_params", ast::Call { callee: ast::ExprId::from_id(0), arguments: vec![] })]
+        #[case("call_with_params", ast::Call { callee: ast::ExprId::from_id(0), arguments: vec![ast::ExprId::from_id(1), ast::ExprId::from_id(2)] })]
         fn lower_call(
             mut ctx: Ctx,
             mut builder: HirBuilder<'static>,

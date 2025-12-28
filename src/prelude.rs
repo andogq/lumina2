@@ -3,7 +3,9 @@ pub use crate::ir::{ast, cst, hir, hir::thir, mir};
 
 // Common items.
 pub use crate::{
+    create_id,
     ctx::Ctx,
+    indexed_vec,
     lex::{Lexer, Tok, tok},
     util::{bindings::Bindings, indexed_vec::IndexedVec, scopes::Scopes, string_pool::StringPool},
 };

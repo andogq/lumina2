@@ -7,6 +7,11 @@ impl<K, V> IndexedVec<K, V> {
     pub fn new() -> Self {
         Self(Vec::new(), PhantomData)
     }
+
+    #[doc(hidden)]
+    pub fn from_vec(vec: Vec<V>) -> Self {
+        Self(vec, PhantomData)
+    }
 }
 
 impl<K, V> IndexedVec<K, V>
@@ -64,6 +69,13 @@ impl<K, V> Deref for IndexedVec<K, V> {
     fn deref(&self) -> &Self::Target {
         self.0.deref()
     }
+}
+
+#[macro_export]
+macro_rules! indexed_vec {
+    ($($toks:tt)*) => (
+        $crate::util::indexed_vec::IndexedVec::from_vec(::std::vec![$($toks)*])
+    );
 }
 
 /// Create a new-type ID, which implements the [`Id`] trait, suitable for use with [`IndexedVec`].
