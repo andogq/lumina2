@@ -56,33 +56,37 @@ impl<'cst> AstBuilder<'cst> {
     }
 
     fn lower_block(&mut self, ctx: &mut Ctx, block: &cst::Block) -> BlockId {
-        let mut statements = Vec::new();
+        let mut statements = Vec::with_capacity(block.statements.len());
         let mut expression = None;
 
         for (i, statement) in block.statements.iter().enumerate() {
             let is_last = i == block.statements.len() - 1;
 
             match statement {
-                cst::Statement::Let(let_statement) => statements.push(
-                    LetStatement {
-                        variable: ctx.strings.intern(&let_statement.variable.0),
-                        value: self.lower_expr(ctx, &let_statement.value),
-                    }
-                    .into(),
-                ),
-                cst::Statement::Return(return_statement) => statements.push(
-                    ReturnStatement {
-                        expr: self.lower_expr(ctx, &return_statement.value),
-                    }
-                    .into(),
-                ),
+                cst::Statement::Let(let_statement) => {
+                    let value = self.lower_expr(ctx, &let_statement.value);
+
+                    statements.push(
+                        self.ast.statements.insert(
+                            LetStatement {
+                                variable: ctx.strings.intern(&let_statement.variable.0),
+                                value,
+                            }
+                            .into(),
+                        ),
+                    )
+                }
+                cst::Statement::Return(return_statement) => {
+                    let expr = self.lower_expr(ctx, &return_statement.value);
+                    statements.push(self.ast.statements.insert(ReturnStatement { expr }.into()))
+                }
                 cst::Statement::Expr(expr_statement) => {
                     let expr = self.lower_expr(ctx, &expr_statement.expr);
 
                     if is_last && expr_statement.tok_semicolon.is_none() {
                         expression = Some(expr);
                     } else {
-                        statements.push(ExprStatement { expr }.into());
+                        statements.push(self.ast.statements.insert(ExprStatement { expr }.into()));
                     }
                 }
             }

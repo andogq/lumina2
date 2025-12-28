@@ -7,12 +7,14 @@ pub use self::{block::*, expr::*, function::*, statement::*};
 create_id!(BlockId);
 create_id!(ExprId);
 create_id!(FunctionId);
+create_id!(StatementId);
 
 #[derive(Clone, Debug)]
 pub struct Ast {
     pub function_declarations: IndexedVec<FunctionId, FunctionDeclaration>,
 
     pub blocks: IndexedVec<BlockId, Block>,
+    pub statements: IndexedVec<StatementId, Statement>,
     pub expressions: IndexedVec<ExprId, Expr>,
 }
 
@@ -21,6 +23,7 @@ impl Ast {
         Self {
             function_declarations: IndexedVec::new(),
             blocks: IndexedVec::new(),
+            statements: IndexedVec::new(),
             expressions: IndexedVec::new(),
         }
     }
@@ -50,6 +53,14 @@ impl Index<FunctionId> for Ast {
     }
 }
 
+impl Index<StatementId> for Ast {
+    type Output = Statement;
+
+    fn index(&self, index: StatementId) -> &Self::Output {
+        &self.statements[index]
+    }
+}
+
 mod function {
     use super::*;
 
@@ -73,7 +84,7 @@ mod block {
 
     #[derive(Clone, Debug)]
     pub struct Block {
-        pub statements: Vec<Statement>,
+        pub statements: Vec<StatementId>,
         pub expression: Option<ExprId>,
     }
 }

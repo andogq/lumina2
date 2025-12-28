@@ -176,8 +176,11 @@ mod test {
         // HACK: Manually add a block to the AST with the expression. Then insert a
         // function declaration with the block as the body.
         let function_id = {
+            let statement_id = ast
+                .statements
+                .insert(ast::Statement::Expr(ast::ExprStatement { expr: expr_id }));
             let block_id = ast.blocks.insert(ast::Block {
-                statements: vec![ast::Statement::Expr(ast::ExprStatement { expr: expr_id })],
+                statements: vec![statement_id],
                 expression: None,
             });
             ast.function_declarations.insert(ast::FunctionDeclaration {

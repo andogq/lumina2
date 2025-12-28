@@ -136,26 +136,23 @@ impl<'hir, 'ast> FunctionBuilder<'hir, 'ast> {
         let mut builder = BlockBuilder::new(self);
 
         for statement in &block.statements {
-            builder.lower_statement(ctx, scope, statement);
+            builder.lower_statement(ctx, scope, &builder.ast[*statement]);
         }
 
-        let expr = block
-            .expression
+        let expr = match (
+            block.expression,
+            block
+                .statements
+                .last()
+                .map(|statement| &builder.ast.statements[*statement]),
+        ) {
             // Use the provided expression to end the block.
-            .map(|expr| builder.lower_expr(ctx, scope, expr))
-            .or_else(|| {
-                // Otherwise, if the final statement is `return` then add an unreachable
-                // marker.
-                block
-                    .statements
-                    .last()
-                    .and_then(|statement| {
-                        matches!(statement, ast::Statement::Return(_)).then_some(Expr::Unreachable)
-                    })
-                    .map(|expr| builder.add_expr(expr))
-            })
+            (Some(expr), _) => builder.lower_expr(ctx, scope, expr),
+            // Otherwise, if the final statement is `return` then add an unreachable marker.
+            (None, Some(ast::Statement::Return(_))) => builder.add_expr(Expr::Unreachable),
             // Otherwise, assume unit.
-            .unwrap_or_else(|| builder.unit_expression());
+            (None, _) => builder.unit_expression(),
+        };
 
         builder.terminate(expr)
     }
@@ -179,26 +176,12 @@ impl<'hir, 'ast> FunctionBuilder<'hir, 'ast> {
         &self.exprs[expr.0]
     }
 
-    fn get_block(&self, block: BlockId) -> &Block {
-        &self.blocks[block.0]
-    }
-
     fn expr_as_block(&mut self, expr: ExprId) -> BlockId {
         if let Expr::Block(block_id) = self.get_expr(expr) {
             return *block_id;
         }
 
         BlockBuilder::new(self).terminate(expr)
-    }
-
-    fn block_as_expr(&mut self, block: BlockId) -> ExprId {
-        let hir_block = self.get_block(block);
-
-        if hir_block.statements.is_empty() {
-            hir_block.expr
-        } else {
-            self.add_expr(Expr::Block(block))
-        }
     }
 }
 
@@ -407,6 +390,9 @@ mod test {
                 variable: StringId::from_id(2),
             }),
         ];
+        ast.statements = indexed_vec![ast::Statement::Expr(ast::ExprStatement {
+            expr: ast::ExprId::from_id(0),
+        })];
         ast.blocks = indexed_vec![
             // Empty block.
             ast::Block {
@@ -415,9 +401,7 @@ mod test {
             },
             // Statement block.
             ast::Block {
-                statements: vec![ast::Statement::Expr(ast::ExprStatement {
-                    expr: ast::ExprId::from_id(0),
-                })],
+                statements: vec![ast::StatementId::from_id(0)],
                 expression: None,
             },
             // Expression block.
@@ -427,9 +411,7 @@ mod test {
             },
             // Everything block.
             ast::Block {
-                statements: vec![ast::Statement::Expr(ast::ExprStatement {
-                    expr: ast::ExprId::from_id(0),
-                })],
+                statements: vec![ast::StatementId::from_id(0)],
                 expression: Some(ast::ExprId::from_id(0)),
             },
         ];
