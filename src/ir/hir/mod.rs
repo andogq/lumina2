@@ -3,17 +3,15 @@ mod visitor;
 
 use std::collections::HashMap;
 
-use crate::ir::id::StringId;
+use crate::ir::id::*;
 
 pub use self::{
-    bindings::*, block::*, expr::*, functions::*, statement::*, thir::Thir, type_refs::*,
-    visitor::*,
+    block::*, expr::*, functions::*, statement::*, thir::Thir, type_refs::*, visitor::*,
 };
 
 #[derive(Clone, Debug)]
 pub struct Hir {
     pub functions: Vec<Function>,
-    pub binding_to_string: HashMap<BindingId, StringId>,
 }
 
 mod functions {
@@ -221,16 +219,6 @@ mod type_refs {
     impl Type {
         pub fn is_integer(&self) -> bool {
             matches!(self, Self::U8 | Self::I8)
-        }
-    }
-}
-
-mod bindings {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct BindingId(usize);
-    impl BindingId {
-        pub fn new(id: usize) -> Self {
-            Self(id)
         }
     }
 }

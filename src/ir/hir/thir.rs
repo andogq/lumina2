@@ -7,7 +7,6 @@ use super::*;
 #[derive(Clone, Debug)]
 pub struct Thir {
     pub functions: Vec<Function>,
-    pub binding_to_string: HashMap<BindingId, StringId>,
 }
 
 impl Thir {
@@ -19,7 +18,6 @@ impl Thir {
                 .enumerate()
                 .map(|(id, function)| Function::from_hir(function, &types[&FunctionId::new(id)]))
                 .collect(),
-            binding_to_string: hir.binding_to_string,
         }
     }
 }

@@ -14,7 +14,7 @@ use crate::{
     ctx::Ctx,
     ir::{
         cst::{BinaryOp, UnaryOp},
-        hir::{BindingId, Type},
+        hir::Type,
         mir::*,
     },
 };
@@ -28,8 +28,7 @@ pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir) -> Module<'ink> {
         codegen.declare_fn(
             id,
             function,
-            ctx.strings
-                .get(*mir.binding_to_string.get(&function.binding).unwrap()),
+            ctx.strings.get(ctx.scopes.to_string(function.binding)),
         );
     }
 
@@ -44,8 +43,7 @@ pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir) -> Module<'ink> {
                 Some(binding) => codegen.declare_local(
                     LocalId::new(i),
                     ty,
-                    ctx.strings
-                        .get(*mir.binding_to_string.get(binding).unwrap()),
+                    ctx.strings.get(ctx.scopes.to_string(*binding)),
                 ),
                 None => codegen.declare_local(LocalId::new(i), ty, format!("local_{i}").as_str()),
             }
@@ -117,11 +115,8 @@ fn lower_block<'ink, 'codegen>(
                         .build_direct_call(
                             function,
                             args.as_slice(),
-                            ctx.strings.get(
-                                *mir.binding_to_string
-                                    .get(&mir.functions[function_id.0].binding)
-                                    .unwrap(),
-                            ),
+                            ctx.strings
+                                .get(ctx.scopes.to_string(mir.functions[function_id.0].binding)),
                         )
                         .unwrap()
                         .try_as_basic_value()

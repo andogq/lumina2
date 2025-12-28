@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use self::disjoint_union_set::DisjointUnionSet;
 use crate::{
     enum_conversion,
-    ir::hir::*,
+    ir::{hir::*, id::*},
     stages::ty::{constraint_builder::ConstraintBuilder, solver::Solver},
 };
 
@@ -200,13 +200,13 @@ mod test {
 
         // Lower the AST into the HIR.
         let mut hir_builder = hir_builder::HirBuilder::new(&ast);
-        hir_builder.lower_functions(&ctx);
+        hir_builder.lower_functions(&mut ctx);
 
         // Capture the new expression ID.
         let expr_id = hir_builder.expr_mapping[&expr_id];
 
         // Extract the HIR.
-        let hir = hir_builder.build(&ctx);
+        let hir = hir_builder.build(&mut ctx);
 
         // Run type inference.
         let tys = solve(&hir);

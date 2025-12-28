@@ -3,11 +3,14 @@ use std::{
     ops::{Deref, DerefMut, Index, IndexMut},
 };
 
-use crate::ir::{
-    cst::UnaryOp,
-    hir::{self, BindingId, Thir, Type, thir},
-    id::StringId,
-    mir::*,
+use crate::{
+    ctx::Ctx,
+    ir::{
+        cst::UnaryOp,
+        hir::{self, Thir, Type, thir},
+        id::*,
+        mir::*,
+    },
 };
 
 pub fn lower(thir: &Thir) -> Mir {
@@ -17,7 +20,7 @@ pub fn lower(thir: &Thir) -> Mir {
         lower_function(thir, &mut builder, function);
     }
 
-    builder.build(thir.binding_to_string.clone())
+    builder.build()
 }
 
 fn lower_function(thir: &Thir, builder: &mut Builder, function: &thir::Function) {
@@ -244,8 +247,7 @@ impl Builder {
         FunctionBuilder::new(self, function)
     }
 
-    pub fn build(mut self, binding_to_string: HashMap<BindingId, StringId>) -> Mir {
-        self.mir.binding_to_string = binding_to_string;
+    pub fn build(self) -> Mir {
         self.mir
     }
 }
@@ -288,7 +290,7 @@ impl Binding {
 struct FunctionBuilder<'b> {
     builder: &'b mut Builder,
     function_i: usize,
-    bindings: HashMap<hir::BindingId, (Binding, bool)>,
+    bindings: HashMap<BindingId, (Binding, bool)>,
     block: BasicBlockId,
 }
 
@@ -375,7 +377,7 @@ impl<'b> FunctionBuilder<'b> {
         id
     }
 
-    fn add_binding(&mut self, binding: hir::BindingId, ty: Type) -> LocalId {
+    fn add_binding(&mut self, binding: BindingId, ty: Type) -> LocalId {
         let local = self.add_local(Some(binding), ty);
         self.bindings
             .insert(binding, (Binding::Local(local), false));
@@ -456,10 +458,10 @@ impl IndexMut<BasicBlockId> for FunctionBuilder<'_> {
     }
 }
 
-impl Index<hir::BindingId> for FunctionBuilder<'_> {
+impl Index<BindingId> for FunctionBuilder<'_> {
     type Output = Binding;
 
-    fn index(&self, index: hir::BindingId) -> &Self::Output {
+    fn index(&self, index: BindingId) -> &Self::Output {
         &self.bindings[&index].0
     }
 }

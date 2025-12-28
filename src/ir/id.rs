@@ -17,6 +17,7 @@ macro_rules! create_id {
     };
 }
 
+create_id!(ScopeId);
 create_id!(StringId);
 create_id!(BindingId);
 

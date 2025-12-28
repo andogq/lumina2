@@ -1,12 +1,13 @@
 use crate::{
     ir::id::*,
-    util::{indexed_vec::IndexedVec, string_pool::StringPool},
+    util::{indexed_vec::IndexedVec, scopes::Scopes, string_pool::StringPool},
 };
 
 #[derive(Clone, Debug, Default)]
 pub struct Ctx {
     pub strings: StringPool,
     pub bindings: Bindings,
+    pub scopes: Scopes,
 }
 
 impl Ctx {

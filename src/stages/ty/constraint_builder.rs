@@ -2,6 +2,7 @@ use crate::{
     ir::{
         cst::{BinaryOp, UnaryOp},
         hir::*,
+        id::*,
     },
     stages::ty::{Constraint, TypeVarId},
 };
@@ -264,7 +265,7 @@ mod test {
     #[fixture]
     fn function() -> Function {
         Function {
-            binding: BindingId::new(0),
+            binding: BindingId::from_id(0),
             parameters: vec![],
             return_ty: Type::Unit,
             entry: BlockId::new(0),
@@ -277,7 +278,7 @@ mod test {
     #[rstest]
     #[case("simple", [], Type::Unit)]
     #[case("return int", [], Type::I8)]
-    #[case("params", [(BindingId::new(1), Type::I8), (BindingId::new(2), Type::Boolean)], Type::Boolean)]
+    #[case("params", [(BindingId::from_id(1), Type::I8), (BindingId::from_id(2), Type::Boolean)], Type::Boolean)]
     fn function_expression(
         mut function: Function,
         #[case] name: &str,
@@ -306,7 +307,7 @@ mod test {
     #[case("with type", DeclarationTy::Type(Type::I8))]
     fn variable_declaration(function: Function, #[case] name: &str, #[case] ty: DeclarationTy) {
         let mut builder = ConstraintBuilder::new(&function, []);
-        builder.visit_variable_declaration(BindingId::new(0), ty.clone());
+        builder.visit_variable_declaration(BindingId::from_id(0), ty.clone());
         assert_debug_snapshot!(name, builder.constraints, &format!("{ty:?}"));
     }
 

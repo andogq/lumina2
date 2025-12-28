@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ir::{
-    hir::{BindingId, Type},
-    id::StringId,
-};
+use crate::ir::{hir::Type, id::*};
 
 pub use self::{
     basic_blocks::*, functions::*, operand::*, place::*, rvalue::*, statement::*, terminator::*,
@@ -12,20 +9,17 @@ pub use self::{
 #[derive(Clone, Debug)]
 pub struct Mir {
     pub functions: Vec<Function>,
-    pub binding_to_string: HashMap<BindingId, StringId>,
 }
 
 impl Mir {
     pub fn new() -> Self {
         Self {
             functions: Vec::new(),
-            binding_to_string: HashMap::new(),
         }
     }
 }
 
 mod functions {
-    use crate::ir::hir::BindingId;
 
     use super::*;
 

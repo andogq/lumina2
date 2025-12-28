@@ -15,7 +15,7 @@ fn run(source: &str) -> u8 {
     let mut toks = lex::Lexer::new(source);
     let cst = ir::cst::Program::parse(&mut toks);
     let ast = stages::ast_builder::build_ast(&mut ctx, &cst);
-    let hir = stages::hir_builder::lower(&ctx, &ast);
+    let hir = stages::hir_builder::lower(&mut ctx, &ast);
     dbg!(&hir);
     let types = stages::ty::solve(&hir);
     dbg!(&types);
