@@ -16,6 +16,7 @@ fn run(source: &str) -> u8 {
     let mut toks = lex::Lexer::new(source);
     let cst = cst::Program::parse(&mut toks);
     let ast = stages::ast_builder::build_ast(&mut ctx, &cst);
+    dbg!(&ast);
     let hir = stages::hir_builder::lower(&mut ctx, &ast);
     dbg!(&hir);
     let types = stages::ty::solve(&hir);
@@ -39,9 +40,19 @@ fn run(source: &str) -> u8 {
 }
 
 fn main() {
-    let result = run(
-        "fn a() -> u8 { 123 } fn b() -> u8 { 99 } fn main() -> u8 { let func = if true { a } else { b }; func() }",
-    );
+    let result = run(r#"fn main() -> u8 {
+            let count = 0;
+
+            loop {
+                if count >= 3 {
+                    break;
+                }
+
+                count = count + 1;
+            }
+
+            count
+        }"#);
 
     dbg!(result);
 }
@@ -171,6 +182,16 @@ mod test {
                     }
                 "#),
                 144
+            );
+        }
+
+        #[test]
+        fn function_as_value() {
+            assert_eq!(
+                run(
+                    "fn a() -> u8 { 123 } fn b() -> u8 { 99 } fn main() -> u8 { let func = if true { a } else { b }; func() }"
+                ),
+                123
             );
         }
     }

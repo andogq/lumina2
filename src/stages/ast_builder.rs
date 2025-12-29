@@ -80,6 +80,13 @@ impl<'cst> AstBuilder<'cst> {
                     let expr = self.lower_expr(ctx, &return_statement.value);
                     statements.push(self.ast.statements.insert(ReturnStatement { expr }.into()))
                 }
+                cst::Statement::Break(break_statement) => {
+                    let expr = break_statement
+                        .value
+                        .as_ref()
+                        .map(|expr| self.lower_expr(ctx, expr));
+                    statements.push(self.ast.statements.insert(BreakStatement { expr }.into()))
+                }
                 cst::Statement::Expr(expr_statement) => {
                     let expr = self.lower_expr(ctx, &expr_statement.expr);
 
@@ -104,6 +111,7 @@ impl<'cst> AstBuilder<'cst> {
             cst::Expr::Binary(binary) => self.lower_binary(ctx, binary).into(),
             cst::Expr::Unary(unary) => self.lower_unary(ctx, unary).into(),
             cst::Expr::If(if_expr) => self.lower_if(ctx, if_expr).into(),
+            cst::Expr::Loop(loop_expr) => self.lower_loop(ctx, loop_expr).into(),
             cst::Expr::Literal(literal) => self.lower_literal(ctx, literal).into(),
             cst::Expr::Paren(paren) => return self.lower_expr(ctx, &paren.expr),
             cst::Expr::Call(call) => self.lower_call(ctx, call).into(),
@@ -164,6 +172,12 @@ impl<'cst> AstBuilder<'cst> {
         If {
             conditions,
             otherwise,
+        }
+    }
+
+    fn lower_loop(&mut self, ctx: &mut Ctx, loop_expr: &cst::Loop) -> Loop {
+        Loop {
+            body: self.lower_block(ctx, &loop_expr.body),
         }
     }
 

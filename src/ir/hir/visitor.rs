@@ -3,6 +3,7 @@ use super::*;
 pub trait HirFunctionVisitor {
     fn visit_variable_declaration(&mut self, binding: BindingId, ty: DeclarationTy) {}
     fn visit_return(&mut self, value: ExprId, return_ty: Type) {}
+    fn visit_break(&mut self, value: ExprId, loop_expr: ExprId) {}
     fn visit_assign(&mut self, id: ExprId, assign: &Assign) {}
     fn visit_binary(&mut self, id: ExprId, binary: &Binary) {}
     fn visit_unary(&mut self, id: ExprId, unary: &Unary) {}
@@ -14,6 +15,7 @@ pub trait HirFunctionVisitor {
         default: Option<&Block>,
     ) {
     }
+    fn visit_loop(&mut self, id: ExprId, body: &Block) {}
     fn visit_literal(&mut self, id: ExprId, literal: &Literal) {}
     fn visit_call(&mut self, id: ExprId, call: &Call) {}
     fn visit_block(&mut self, id: ExprId, block: &Block) {}
@@ -37,12 +39,17 @@ impl Hir {
                     declare_statement.binding,
                     declare_statement.ty.clone(),
                 ),
-                Statement::Return(return_statement) => visitor.visit_return(
-                    return_statement.expr,
-                    // HACK: This should be the return type of each individual function. Currently
-                    // not possible as blocks aren't linked back to their function.
-                    Type::U8,
-                ),
+                Statement::Return(return_statement) => {
+                    visitor.visit_return(return_statement.expr, function.return_ty.clone())
+                }
+                Statement::Break(break_statement) => {
+                    visitor.visit_break(
+                        break_statement.expr,
+                        // WARN: This should be the containing loop expression, however it's not
+                        // currently possible to query the HIR for required information.
+                        break_statement.expr,
+                    )
+                }
                 // Exprs will be handled separately.
                 Statement::Expr(_) => {}
             });
@@ -65,6 +72,7 @@ impl Hir {
                         .collect(),
                     switch.default.as_ref().map(|block| &self[*block]),
                 ),
+                Expr::Loop(loop_expr) => visitor.visit_loop(id, &self[loop_expr.body]),
                 Expr::Literal(literal) => visitor.visit_literal(id, literal),
                 Expr::Call(call) => visitor.visit_call(id, call),
                 Expr::Block(block_id) => visitor.visit_block(id, &self[*block_id]),

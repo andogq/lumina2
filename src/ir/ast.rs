@@ -90,12 +90,15 @@ mod block {
 }
 
 mod statement {
+    use crate::enum_conversion;
+
     use super::*;
 
     #[derive(Clone, Debug)]
     pub enum Statement {
         Let(LetStatement),
         Return(ReturnStatement),
+        Break(BreakStatement),
         Expr(ExprStatement),
     }
 
@@ -111,24 +114,21 @@ mod statement {
     }
 
     #[derive(Clone, Debug)]
+    pub struct BreakStatement {
+        pub expr: Option<ExprId>,
+    }
+
+    #[derive(Clone, Debug)]
     pub struct ExprStatement {
         pub expr: ExprId,
     }
 
-    impl From<LetStatement> for Statement {
-        fn from(value: LetStatement) -> Self {
-            Self::Let(value)
-        }
-    }
-    impl From<ReturnStatement> for Statement {
-        fn from(value: ReturnStatement) -> Self {
-            Self::Return(value)
-        }
-    }
-    impl From<ExprStatement> for Statement {
-        fn from(value: ExprStatement) -> Self {
-            Self::Expr(value)
-        }
+    enum_conversion! {
+        [Statement]
+        Let: LetStatement,
+        Return: ReturnStatement,
+        Break: BreakStatement,
+        Expr: ExprStatement,
     }
 }
 
@@ -143,6 +143,7 @@ mod expr {
         Binary(Binary),
         Unary(Unary),
         If(If),
+        Loop(Loop),
         Literal(Literal),
         Call(Call),
         Block(BlockId),
@@ -175,6 +176,11 @@ mod expr {
     }
 
     #[derive(Clone, Debug)]
+    pub struct Loop {
+        pub body: BlockId,
+    }
+
+    #[derive(Clone, Debug)]
     pub enum Literal {
         Integer(usize),
         Boolean(bool),
@@ -198,6 +204,7 @@ mod expr {
         Binary: Binary,
         Unary: Unary,
         If: If,
+        Loop: Loop,
         Literal: Literal,
         Call: Call,
         Block: BlockId,

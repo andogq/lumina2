@@ -96,6 +96,7 @@ mod statement {
     pub enum Statement {
         Let(LetStatement),
         Return(ReturnStatement),
+        Break(BreakStatement),
         Expr(ExprStatement),
     }
 
@@ -120,6 +121,13 @@ mod statement {
         pub tok_semicolon: tok::SemiColon,
     }
 
+    #[derive(Clone, Debug)]
+    pub struct BreakStatement {
+        pub tok_break: tok::Break,
+        pub value: Option<Expr>,
+        pub tok_semicolon: tok::SemiColon,
+    }
+
     /// An in-place expression, followed by an optional semicolon.
     #[derive(Clone, Debug)]
     pub struct ExprStatement {
@@ -133,6 +141,7 @@ mod statement {
         [Statement]
         Let: LetStatement,
         Return: ReturnStatement,
+        Break: BreakStatement,
         Expr: ExprStatement,
     }
 }
@@ -149,6 +158,8 @@ mod expr {
         Binary(Binary),
         Unary(Unary),
         If(If),
+        // While(While),
+        Loop(Loop),
         Literal(Literal),
         Paren(Paren),
         Call(Call),
@@ -259,6 +270,19 @@ mod expr {
         }
     }
 
+    #[derive(Clone, Debug)]
+    pub struct Loop {
+        pub tok_loop: tok::Loop,
+        pub body: Block,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct While {
+        pub tok_while: tok::While,
+        pub condition: Box<Expr>,
+        pub body: Block,
+    }
+
     /// Any kind of literal.
     #[derive(Clone, Debug)]
     pub enum Literal {
@@ -333,6 +357,7 @@ mod expr {
         Binary: Binary,
         Unary: Unary,
         If: If,
+        Loop: Loop,
         Literal: Literal,
         Paren: Paren,
         Call: Call,

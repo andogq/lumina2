@@ -124,9 +124,12 @@ toks! {
 
     Fn => "fn",
     Let => "let",
+    Break => "break",
     Return => "return",
     If => "if",
     Else => "else",
+    Loop => "loop",
+    While => "while",
 
     Eof => "<Eof>",
 

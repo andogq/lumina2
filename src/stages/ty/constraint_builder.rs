@@ -93,6 +93,13 @@ impl<'hir> HirFunctionVisitor for ConstraintBuilder<'hir> {
             .push((value.into(), Constraint::Eq(return_ty.into())));
     }
 
+    fn visit_break(&mut self, value: ExprId, _loop_expr: ExprId) {
+        // HACK: Until it's possible to query the type of the enclosing loop expression, enforce
+        // all `break` values are unit.
+        self.constraints
+            .push((value.into(), Constraint::Eq(Type::Unit.into())));
+    }
+
     fn visit_assign(&mut self, id: ExprId, assign: &Assign) {
         self.constraints.extend([
             // Value must match variable.
@@ -210,6 +217,19 @@ impl<'hir> HirFunctionVisitor for ConstraintBuilder<'hir> {
                 None => Type::Unit.into(),
             }),
         ));
+    }
+
+    fn visit_loop(&mut self, id: ExprId, body: &Block) {
+        // WARN: Until `break` statements can be correctly type-checked, loop expressions will
+        // result in a `Unit` type.
+        // TODO: A loop that doesn't terminate (contains no `break`?) should result in `Never`
+        // type.
+        self.constraints
+            .push((id.into(), Constraint::Eq(Type::Unit.into())));
+
+        // The body of a loop cannot yield any expression.
+        self.constraints
+            .push((body.expr.into(), Constraint::Eq(Type::Unit.into())));
     }
 
     fn visit_literal(&mut self, id: ExprId, literal: &Literal) {

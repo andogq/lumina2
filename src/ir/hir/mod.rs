@@ -90,6 +90,7 @@ mod statement {
     pub enum Statement {
         Declare(DeclareStatement),
         Return(ReturnStatement),
+        Break(BreakStatement),
         Expr(ExprStatement),
     }
 
@@ -107,6 +108,11 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub struct ReturnStatement {
+        pub expr: ExprId,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct BreakStatement {
         pub expr: ExprId,
     }
 
@@ -130,6 +136,7 @@ mod expr {
         Binary(Binary),
         Unary(Unary),
         Switch(Switch),
+        Loop(Loop),
         Literal(Literal),
         Call(Call),
         Block(BlockId),
@@ -164,6 +171,11 @@ mod expr {
     }
 
     #[derive(Clone, Debug)]
+    pub struct Loop {
+        pub body: BlockId,
+    }
+
+    #[derive(Clone, Debug)]
     pub enum Literal {
         Integer(usize),
         Boolean(bool),
@@ -187,6 +199,7 @@ mod expr {
         Binary: Binary,
         Unary: Unary,
         Switch: Switch,
+        Loop: Loop,
         Literal: Literal,
         Call: Call,
         Block: BlockId,

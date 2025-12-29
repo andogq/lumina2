@@ -218,7 +218,6 @@ impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
     pub fn lower_statement(&mut self, ctx: &mut Ctx, scope: ScopeId, statement: &ast::Statement) {
         match statement {
             ast::Statement::Let(let_statement) => {
-                println!("declaring {}", ctx.strings.get(let_statement.variable));
                 let binding = ctx.scopes.declare(scope, let_statement.variable);
                 let value = self.lower_expr(ctx, scope, let_statement.value);
 
@@ -235,6 +234,13 @@ impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
                 let expr = self.lower_expr(ctx, scope, return_statement.expr);
                 self.add_statement(Statement::Return(ReturnStatement { expr }));
             }
+            ast::Statement::Break(break_statement) => {
+                let expr = break_statement
+                    .expr
+                    .map(|expr| self.lower_expr(ctx, scope, expr))
+                    .unwrap_or_else(|| self.add_expr(Expr::Literal(Literal::Unit)));
+                self.add_statement(Statement::Break(BreakStatement { expr }));
+            }
             ast::Statement::Expr(expr_statement) => {
                 let expr = self.lower_expr(ctx, scope, expr_statement.expr);
                 self.add_statement(Statement::Expr(ExprStatement { expr }));
@@ -250,6 +256,7 @@ impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
             ast::Expr::Binary(binary) => self.lower_binary(ctx, scope, binary).into(),
             ast::Expr::Unary(unary) => self.lower_unary(ctx, scope, unary).into(),
             ast::Expr::If(if_expr) => self.lower_if(ctx, scope, if_expr).into(),
+            ast::Expr::Loop(loop_expr) => self.lower_loop(ctx, scope, loop_expr).into(),
             ast::Expr::Literal(literal) => self.lower_literal(literal).into(),
             ast::Expr::Call(call) => self.lower_call(ctx, scope, call).into(),
             ast::Expr::Block(block) => self.lower_block(ctx, scope, *block).into(),
@@ -306,6 +313,11 @@ impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
         }
 
         switch.expect("if expression with at least one block")
+    }
+
+    fn lower_loop(&mut self, ctx: &mut Ctx, scope: ScopeId, loop_expr: &ast::Loop) -> Loop {
+        let body = self.lower_block(ctx, scope, loop_expr.body);
+        Loop { body }
     }
 
     fn lower_literal(&mut self, literal: &ast::Literal) -> Literal {

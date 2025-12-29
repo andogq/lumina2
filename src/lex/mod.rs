@@ -248,6 +248,9 @@ impl<'src> Lexer<'src> {
                     "return" => Tok::Return,
                     "else" => Tok::Else,
                     "if" => Tok::If,
+                    "loop" => Tok::Loop,
+                    "break" => Tok::Break,
+                    "while" => Tok::While,
                     _ => Tok::Ident(ident),
                 }
             }
@@ -300,8 +303,11 @@ mod test {
     #[case("false", &[Tok::False, Tok::Eof])]
     #[case("fn", &[Tok::Fn, Tok::Eof])]
     #[case("let", &[Tok::Let, Tok::Eof])]
+    #[case("break", &[Tok::Break, Tok::Eof])]
     #[case("return", &[Tok::Return, Tok::Eof])]
     #[case("if", &[Tok::If, Tok::Eof])]
+    #[case("loop", &[Tok::Loop, Tok::Eof])]
+    #[case("while", &[Tok::While, Tok::Eof])]
     #[case("some_ident", &[Tok::Ident("some_ident".to_string()), Tok::Eof])]
     #[case("u32", &[Tok::Ident("u32".to_string()), Tok::Eof])]
     #[case("123", &[Tok::IntLit(123), Tok::Eof])]

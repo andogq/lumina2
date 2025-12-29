@@ -67,6 +67,14 @@ fn lower_block(
                 }
                 builder.terminate(Terminator::Return);
             }
+            hir::Statement::Break(hir::BreakStatement { expr }) => {
+                if let Some(value) = lower_expr(thir, builder, *expr) {
+                    // TODO: Store resulting expression in the local for the current loop.
+                    unimplemented!()
+                }
+
+                builder.terminate(Terminator::Goto(todo!("work out which block to jump to")));
+            }
             hir::Statement::Expr(hir::ExprStatement { expr }) => {
                 lower_expr(thir, builder, *expr);
             }
@@ -195,6 +203,27 @@ fn lower_expr(
                 local: switch_value,
                 projection: Vec::new(),
             })
+        }
+        hir::Expr::Loop(hir::Loop { body }) => {
+            // Create the basic block containing the loop body.
+            let loop_block = builder.new_basic_block();
+
+            // Jump into the loop body.
+            builder.goto(loop_block);
+
+            // Lower the body.
+            builder.block = loop_block;
+            assert!(lower_block(thir, builder, &thir[*body]).is_none());
+
+            // If the lowered body has no terminator, jump back to the beginning of the loop body.
+            if matches!(builder.current_block().terminator, Terminator::Unterminated) {
+                builder.goto(loop_block);
+            }
+
+            // Loop body doesn't yield anything.
+            // TODO: When break expressions are supported, a `Local` for the expression must be
+            // provided here.
+            Operand::Constant(Constant::Unit)
         }
         hir::Expr::Literal(literal) => {
             Operand::Constant(literal_to_constant(literal, thir.type_of(expr)))

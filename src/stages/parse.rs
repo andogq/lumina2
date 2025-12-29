@@ -89,6 +89,7 @@ mod statement {
             match lexer.peek() {
                 Tok::Let => cst::LetStatement::parse(lexer).into(),
                 Tok::Return => cst::ReturnStatement::parse(lexer).into(),
+                Tok::Break => cst::BreakStatement::parse(lexer).into(),
                 _ => cst::ExprStatement::parse(lexer).into(),
             }
         }
@@ -111,6 +112,17 @@ mod statement {
             Self {
                 tok_return: lexer.expect().unwrap(),
                 value: cst::Expr::parse(lexer),
+                tok_semicolon: lexer.expect().unwrap(),
+            }
+        }
+    }
+
+    impl Parse for cst::BreakStatement {
+        fn parse(lexer: &mut Lexer<'_>) -> Self {
+            Self {
+                tok_break: lexer.expect().unwrap(),
+                // If the next token isn't a semicolon, continue parsing.
+                value: (!matches!(lexer.peek(), Tok::SemiColon)).then(|| cst::Expr::parse(lexer)),
                 tok_semicolon: lexer.expect().unwrap(),
             }
         }
@@ -212,6 +224,7 @@ mod expr {
                 Tok::LBrace => cst::Block::parse(lexer).into(),
                 Tok::LParen => cst::Paren::parse(lexer).into(),
                 Tok::If => cst::If::parse(lexer).into(),
+                Tok::Loop => cst::Loop::parse(lexer).into(),
                 tok => panic!("unexpected tok: {tok}"),
             }
         }
@@ -325,6 +338,15 @@ mod expr {
                 Tok::If => cst::If::parse(lexer).into(),
                 Tok::LBrace => cst::Block::parse(lexer).into(),
                 tok => panic!("expected if or block, found: {tok}"),
+            }
+        }
+    }
+
+    impl Parse for cst::Loop {
+        fn parse(lexer: &mut Lexer<'_>) -> Self {
+            Self {
+                tok_loop: lexer.expect().unwrap(),
+                body: cst::Block::parse(lexer),
             }
         }
     }
