@@ -3,14 +3,15 @@ pub use crate::ir::{ast, cst, hir, hir::thir, mir};
 
 // Common items.
 pub use crate::{
-    create_id,
     ctx::Ctx,
-    error::{CError, CErrorId, CErrorKind, CErrorList, CResult},
-    indexed_vec,
+    error::{CError, CErrorId, CErrorKind, CErrorList, CResult, ErrorMeta},
     lex::{Lexer, Tok, tok},
     passes::{Pass, PassResult, PassSuccess},
     util::{bindings::Bindings, indexed_vec::IndexedVec, scopes::Scopes, string_pool::StringPool},
 };
+
+// Macros
+pub use crate::{create_id, indexed_vec, run_and_report};
 
 // IDs and associated traits.
 pub use crate::{

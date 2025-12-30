@@ -16,8 +16,6 @@ pub struct HirGen<'ctx, 'ast> {
     ast: &'ast ast::Ast,
     /// HIR that is being generated.
     hir: Hir,
-    /// Errors generated throughout this pass.
-    errors: Vec<CErrorId>,
 }
 
 impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
@@ -27,12 +25,15 @@ impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
     fn run(ctx: &'ctx mut Ctx, ast: &'ast Self::Input) -> PassResult<Self::Output> {
         let mut hir_gen = Self::new(ctx, ast);
 
+        // Errors generated throughout this pass.
+        let mut errors = Vec::new();
+
         // Lower each function.
         for function in ast.function_declarations.iter() {
-            let _ = hir_gen.can_fail(|hir_gen| hir_gen.lower_function(function));
+            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen.lower_function(function));
         }
 
-        Ok(PassSuccess::new(hir_gen.hir, hir_gen.errors))
+        Ok(PassSuccess::new(hir_gen.hir, errors))
     }
 }
 
@@ -43,7 +44,6 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             ctx,
             ast,
             hir: Hir::default(),
-            errors: Vec::new(),
         }
     }
 
@@ -263,29 +263,6 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             ty => panic!("unknown type: {ty}"),
         }
     }
-
-    /// Report the provided error, ensuring that it's tracked for later reporting.
-    pub fn report(&mut self, error: impl Into<CError>) -> CErrorId {
-        let id = self.ctx.errors.report(error.into());
-        self.errors.push(id);
-        id
-    }
-
-    /// Run the provided closure, marking and reporting any occurring errors as fatal.
-    pub fn must_succeed<T>(&mut self, f: impl FnOnce(&mut Self) -> CResult<T>) -> PassResult<T> {
-        match f(self) {
-            Ok(value) => Ok(value.into()),
-            Err(err) => Err(self.report(err.fatal())),
-        }
-    }
-
-    /// Run the provided closure, reporting the error if any occurs.
-    pub fn can_fail<T>(&mut self, f: impl FnOnce(&mut Self) -> CResult<T>) -> Result<T, CErrorId> {
-        match f(self) {
-            Ok(value) => Ok(value),
-            Err(err) => Err(self.report(err)),
-        }
-    }
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -372,7 +349,6 @@ mod test {
         let mut pass = HirGen::new(&mut ctx, sample_ast);
         let block_id = pass.lower_block(&block, scope).unwrap();
         assert_debug_snapshot!(name, &pass.hir[block_id], &format!("{block:?}"));
-        assert!(pass.errors.is_empty());
     }
 
     #[rstest]
@@ -442,6 +418,5 @@ mod test {
         let mut pass = HirGen::new(&mut ctx, sample_ast);
         let expr_id = pass.lower_expr(&expr, scope).unwrap();
         assert_debug_snapshot!(name, &pass.hir[expr_id], &format!("{expr:?}"));
-        assert!(pass.errors.is_empty());
     }
 }

@@ -26,20 +26,6 @@ pub struct CError {
     fatal: bool,
 }
 
-impl CError {
-    /// Mark this error as fatal.
-    pub fn fatal(mut self) -> Self {
-        self.fatal = true;
-        self
-    }
-
-    /// Add the following message to the error.
-    pub fn with_message(mut self, message: impl ToString) -> Self {
-        self.message = Some(message.to_string());
-        self
-    }
-}
-
 impl Deref for CError {
     type Target = CErrorKind;
 
@@ -111,4 +97,62 @@ impl Index<CErrorId> for CErrorList {
     fn index(&self, index: CErrorId) -> &Self::Output {
         &self.0[index]
     }
+}
+
+/// Methods available on error-like items, to annotate them with additional metadata.
+pub trait ErrorMeta {
+    /// Mark this error as fatal.
+    fn fatal(self) -> Self;
+
+    /// Add the following message to the error.
+    fn with_message(self, message: impl ToString) -> Self;
+}
+
+/// Metadata methods can be directly implemented on [`CError`], to set the underlying struct
+/// values.
+impl ErrorMeta for CError {
+    fn fatal(mut self) -> Self {
+        self.fatal = true;
+        self
+    }
+
+    fn with_message(mut self, message: impl ToString) -> Self {
+        self.message = Some(message.to_string());
+        self
+    }
+}
+
+/// Metadata methods can be passed through to the error value, if present.
+impl<T> ErrorMeta for CResult<T> {
+    fn fatal(self) -> Self {
+        self.map_err(|err| err.fatal())
+    }
+
+    fn with_message(self, message: impl ToString) -> Self {
+        self.map_err(|err| err.with_message(message))
+    }
+}
+
+/// Run the provided closure, report the error, and add the resulting ID to a collection.
+///
+/// ```
+/// # use crate::prelude::{Ctx, CResult};
+/// # fn something_that_errors() -> CResult<()> {
+/// #     Ok(())
+/// # }
+/// let mut ctx = Ctx::default();
+/// let mut errors = Vec::new();
+///
+/// run_and_report!(ctx, errors, || something_that_errors());
+///
+/// assert_eq!(errors.len(), 1);
+/// ```
+#[macro_export]
+macro_rules! run_and_report {
+    ($ctx:expr, $errors:expr, $f:expr) => {
+        $f().map_err(|err| $ctx.errors.report(err)).map_err(|err| {
+            $errors.push(err);
+            err
+        })
+    };
 }
