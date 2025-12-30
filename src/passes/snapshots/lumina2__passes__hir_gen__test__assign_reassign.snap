@@ -1,0 +1,14 @@
+---
+source: src/passes/hir_gen.rs
+expression: "Assign(Assign { variable: ExprId(0), value: ExprId(1) })"
+---
+Assign(
+    Assign {
+        variable: ExprId(
+            0,
+        ),
+        value: ExprId(
+            1,
+        ),
+    },
+)

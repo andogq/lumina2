@@ -1,0 +1,26 @@
+---
+source: src/passes/hir_gen.rs
+expression: "If(If { conditions: [(ExprId(0), BlockId(0))], otherwise: Some(BlockId(1)) })"
+---
+Switch(
+    Switch {
+        discriminator: ExprId(
+            1,
+        ),
+        branches: [
+            (
+                Boolean(
+                    true,
+                ),
+                BlockId(
+                    1,
+                ),
+            ),
+        ],
+        default: Some(
+            BlockId(
+                2,
+            ),
+        ),
+    },
+)

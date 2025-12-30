@@ -5,8 +5,10 @@ pub use crate::ir::{ast, cst, hir, hir::thir, mir};
 pub use crate::{
     create_id,
     ctx::Ctx,
+    error::{CError, CErrorId, CErrorKind, CErrorList, CResult},
     indexed_vec,
     lex::{Lexer, Tok, tok},
+    passes::{Pass, PassResult, PassSuccess},
     util::{bindings::Bindings, indexed_vec::IndexedVec, scopes::Scopes, string_pool::StringPool},
 };
 
@@ -22,7 +24,7 @@ pub use crate::{
 // Common items from standard library.
 pub use ::std::{
     collections::HashMap,
-    fmt::Debug,
+    fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
     ops::{Deref, DerefMut, Index, IndexMut},

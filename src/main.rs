@@ -1,8 +1,10 @@
 #![recursion_limit = "256"]
 
 mod ctx;
+mod error;
 mod ir;
 mod lex;
+mod passes;
 mod prelude;
 mod stages;
 mod util;

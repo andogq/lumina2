@@ -1,0 +1,11 @@
+---
+source: src/passes/hir_gen.rs
+expression: "Variable(Variable { variable: StringId(0) })"
+---
+Variable(
+    Variable {
+        binding: BindingId(
+            0,
+        ),
+    },
+)

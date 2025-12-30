@@ -62,6 +62,7 @@ mod functions {
         pub return_ty: Type,
         pub entry: BlockId,
 
+        // TODO: Delete all these
         /// All blocks contained within this function.
         pub blocks: Vec<BlockId>,
         /// All statements contained within this function.
