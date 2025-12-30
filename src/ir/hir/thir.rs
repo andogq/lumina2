@@ -14,13 +14,6 @@ impl Thir {
     pub fn type_of(&self, id: impl Into<TypeVarId>) -> &Type {
         &self.types[&id.into()]
     }
-
-    pub fn binding_type(&self, function: FunctionId, binding: BindingId) -> &Type {
-        match &self[function].bindings[&binding] {
-            DeclarationTy::Type(ty) => ty,
-            DeclarationTy::Inferred(expr) => self.type_of(*expr),
-        }
-    }
 }
 
 impl Deref for Thir {

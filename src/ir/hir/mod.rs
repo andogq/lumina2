@@ -12,7 +12,7 @@ create_id!(ExprId);
 create_id!(FunctionId);
 create_id!(StatementId);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Hir {
     pub functions: IndexedVec<FunctionId, Function>,
     pub blocks: IndexedVec<BlockId, Block>,
@@ -68,8 +68,6 @@ mod functions {
         pub statements: Vec<StatementId>,
         /// All expressions contained within this function.
         pub expressions: Vec<ExprId>,
-
-        pub bindings: HashMap<BindingId, DeclarationTy>,
     }
 }
 

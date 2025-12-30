@@ -53,7 +53,7 @@ impl<'ast> HirBuilder<'ast> {
 
         let entry_scope = ctx.scopes.nest_scope_global();
 
-        let (parameters, entry, bindings, blocks, statements, expressions) = {
+        let (parameters, entry, blocks, statements, expressions) = {
             let mut builder = FunctionBuilder::new(self);
 
             let parameters = function
@@ -72,7 +72,6 @@ impl<'ast> HirBuilder<'ast> {
             (
                 parameters,
                 entry,
-                builder.bindings,
                 builder.blocks,
                 builder.statements,
                 builder.exprs,
@@ -87,7 +86,6 @@ impl<'ast> HirBuilder<'ast> {
                 .map(|ty| self.ident_to_type(ctx, ty))
                 .unwrap_or(Type::Unit),
             entry,
-            bindings,
             blocks,
             statements,
             expressions,
@@ -98,7 +96,6 @@ impl<'ast> HirBuilder<'ast> {
 #[derive(Debug)]
 struct FunctionBuilder<'hir, 'ast> {
     builder: &'hir mut HirBuilder<'ast>,
-    bindings: HashMap<BindingId, DeclarationTy>,
     blocks: Vec<BlockId>,
     statements: Vec<StatementId>,
     exprs: Vec<ExprId>,
@@ -108,7 +105,6 @@ impl<'hir, 'ast> FunctionBuilder<'hir, 'ast> {
     pub fn new(builder: &'hir mut HirBuilder<'ast>) -> Self {
         Self {
             builder,
-            bindings: HashMap::new(),
             blocks: Vec::new(),
             statements: Vec::new(),
             exprs: Vec::new(),
@@ -223,7 +219,6 @@ impl<'func, 'hir, 'ast> BlockBuilder<'func, 'hir, 'ast> {
 
                 // TODO: Unsure when to create this, should optionally be annotated type.
                 let ty = DeclarationTy::Inferred(value);
-                self.bindings.insert(binding, ty.clone());
                 self.add_statement(Statement::Declare(DeclareStatement { binding, ty }));
 
                 let variable = self.add_expr(Expr::Variable(Variable { binding }));

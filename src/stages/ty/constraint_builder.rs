@@ -295,7 +295,6 @@ mod test {
             parameters: vec![],
             return_ty: Type::Unit,
             entry: BlockId::from_id(0),
-            bindings: HashMap::new(),
             blocks: vec![],
             statements: vec![],
             expressions: vec![],
