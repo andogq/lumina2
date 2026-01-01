@@ -11,14 +11,11 @@ mod util;
 
 use crate::prelude::*;
 
-use crate::stages::parse::Parse;
-
 fn run(source: &str) -> u8 {
     let mut ctx = Ctx::default();
-    let mut toks = passes::tok_gen::TokGen::run(&mut ctx, source)
+    let cst = passes::cst_gen::CstGen::run(&mut ctx, source)
         .unwrap()
         .into_outcome();
-    let cst = cst::Program::parse(&mut toks);
     let ast = passes::ast_gen::AstGen::run(&mut ctx, &cst)
         .unwrap()
         .into_outcome();

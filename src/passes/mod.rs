@@ -1,8 +1,8 @@
 pub mod ast_gen;
+pub mod cst_gen;
 pub mod hir_gen;
 pub mod mir_gen;
 pub mod thir_gen;
-pub mod tok_gen;
 
 use crate::prelude::*;
 
