@@ -11,26 +11,58 @@ mod util;
 
 use crate::prelude::*;
 
+/// Helper to define a compiler pipeline.
+///
+/// A mutable reference to [`Ctx`] is passed within `[]` (`&mut ctx`), and the input for the
+/// pipeline is provided on the left of `=>` (`source`). Then, a list of 'steps' in the form of
+/// types which implement [`Pass`] are listed within `{}`. Each step accepts extra information
+/// within `[]`, including:
+///
+/// - `[debug]`: debug print the output of this step upon completion.
+///
+/// ```
+/// let mut ctx = Ctx::new();
+/// let source = "fn main() -> u8 { 1 }";
+///
+/// let hir = pipeline! {
+///     [&mut ctx]
+///     source => {
+///         |> passes::cst_gen::CstGen
+///         |> passes::ast_gen::AstGen [debug]
+///         |> passes::hir_gen::HirGen
+///     }
+/// };
+/// ```
+macro_rules! pipeline {
+    ([$ctx:expr] $input:expr => { $(|> $pass:ty $([$($extra:tt)+])*)* }) => {{
+        let input = $input;
+
+        $(
+            let input = <$pass>::run($ctx, &input).unwrap().into_outcome();
+
+            $(pipeline!(@extra [input, $pass] $($extra)*);)*
+        )*
+
+        input
+    }};
+
+    (@extra [$input:ident, $pass:ty] debug) => {
+        eprintln!("{} => {:#?}", stringify!($pass), $input);
+    };
+}
+
 fn run(source: &str) -> u8 {
     let mut ctx = Ctx::default();
-    let cst = passes::cst_gen::CstGen::run(&mut ctx, source)
-        .unwrap()
-        .into_outcome();
-    let ast = passes::ast_gen::AstGen::run(&mut ctx, &cst)
-        .unwrap()
-        .into_outcome();
-    dbg!(&ast);
-    let hir = passes::hir_gen::HirGen::run(&mut ctx, &ast)
-        .unwrap()
-        .into_outcome();
-    dbg!(&hir);
-    let thir = passes::thir_gen::ThirGen::run(&mut ctx, &hir)
-        .unwrap()
-        .into_outcome();
-    let mir = passes::mir_gen::MirGen::run(&mut ctx, &thir)
-        .unwrap()
-        .into_outcome();
-    dbg!(&mir);
+    let mir = pipeline! {
+        [&mut ctx]
+        source => {
+            |> passes::cst_gen::CstGen
+            |> passes::ast_gen::AstGen
+            |> passes::hir_gen::HirGen
+            |> passes::thir_gen::ThirGen
+            |> passes::mir_gen::MirGen
+        }
+    };
 
     let ink = inkwell::context::Context::create();
     let module = stages::codegen::codegen(&ctx, &ink, &mir);
