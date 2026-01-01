@@ -1,0 +1,9 @@
+---
+source: src/passes/ast_gen.rs
+expression: "true"
+---
+Literal(
+    Boolean(
+        true,
+    ),
+)

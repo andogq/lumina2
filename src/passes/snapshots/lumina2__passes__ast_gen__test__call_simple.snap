@@ -1,0 +1,12 @@
+---
+source: src/passes/ast_gen.rs
+expression: some_ident()
+---
+Call(
+    Call {
+        callee: ExprId(
+            0,
+        ),
+        arguments: [],
+    },
+)

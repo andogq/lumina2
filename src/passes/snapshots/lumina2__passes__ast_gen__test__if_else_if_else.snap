@@ -1,0 +1,31 @@
+---
+source: src/passes/ast_gen.rs
+expression: "if condition { then } else if thing { then_2 } else { otherwise }"
+---
+If(
+    If {
+        conditions: [
+            (
+                ExprId(
+                    0,
+                ),
+                BlockId(
+                    0,
+                ),
+            ),
+            (
+                ExprId(
+                    2,
+                ),
+                BlockId(
+                    1,
+                ),
+            ),
+        ],
+        otherwise: Some(
+            BlockId(
+                2,
+            ),
+        ),
+    },
+)

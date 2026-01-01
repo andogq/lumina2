@@ -1,0 +1,14 @@
+---
+source: src/passes/ast_gen.rs
+expression: "-1"
+---
+Unary(
+    Unary {
+        op: Negative(
+            Minus,
+        ),
+        value: ExprId(
+            0,
+        ),
+    },
+)

@@ -17,7 +17,9 @@ fn run(source: &str) -> u8 {
     let mut ctx = Ctx::default();
     let mut toks = lex::Lexer::new(source);
     let cst = cst::Program::parse(&mut toks);
-    let ast = stages::ast_builder::build_ast(&mut ctx, &cst);
+    let ast = passes::ast_gen::AstGen::run(&mut ctx, &cst)
+        .unwrap()
+        .into_outcome();
     dbg!(&ast);
     let hir = passes::hir_gen::HirGen::run(&mut ctx, &ast)
         .unwrap()

@@ -1,0 +1,17 @@
+---
+source: src/passes/ast_gen.rs
+expression: true && false
+---
+Binary(
+    Binary {
+        lhs: ExprId(
+            0,
+        ),
+        op: LogicalAnd(
+            AmpAmp,
+        ),
+        rhs: ExprId(
+            1,
+        ),
+    },
+)

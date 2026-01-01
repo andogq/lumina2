@@ -1,0 +1,14 @@
+---
+source: src/passes/ast_gen.rs
+expression: "!true"
+---
+Unary(
+    Unary {
+        op: Not(
+            Bang,
+        ),
+        value: ExprId(
+            0,
+        ),
+    },
+)
