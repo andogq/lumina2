@@ -1,0 +1,514 @@
+use crate::prelude::*;
+
+use hir::Type;
+use mir::*;
+use thir::Thir2;
+
+pub struct MirGen<'ctx, 'hir, 'thir> {
+    ctx: &'ctx mut Ctx,
+    thir: &'thir Thir2<'hir>,
+
+    mir: Mir2,
+
+    bindings: HashMap<BindingId, Binding>,
+    locals: FunctionLocals,
+}
+
+impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'ctx, 'hir, 'thir> {
+    type Input = Thir2<'hir>;
+    type Output = Mir2;
+
+    fn run(ctx: &'ctx mut Ctx, thir: &'thir Self::Input) -> PassResult<Self::Output> {
+        let mut mir_gen = Self::new(ctx, thir);
+
+        let mut errors = Vec::new();
+
+        // Declare all functions.
+        for function in mir_gen.thir.functions.iter_keys() {
+            mir_gen.declare_function(function);
+        }
+
+        // Lower each function.
+        for function in mir_gen.thir.functions.iter_keys() {
+            mir_gen.lower_function(function);
+        }
+
+        Ok(PassSuccess::new(mir_gen.mir, errors))
+    }
+}
+
+impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
+    /// Create a new instance.
+    pub fn new(ctx: &'ctx mut Ctx, thir: &'thir Thir2<'hir>) -> Self {
+        Self {
+            ctx,
+            thir,
+            mir: Mir2::new(),
+            bindings: HashMap::new(),
+            locals: FunctionLocals::new(),
+        }
+    }
+
+    /// Declare a function by creating a new binding.
+    fn declare_function(&mut self, function_id: FunctionId) {
+        let function = &self.thir[function_id];
+        self.bindings
+            .insert(function.binding, Binding::Function(function_id));
+    }
+
+    /// Lower a function.
+    fn lower_function(&mut self, function_id: FunctionId) {
+        let function = &self.thir[function_id];
+
+        // Create local for return value, as it must be the first.
+        // TODO: Store this local in some context somewhere, to use it as the return local.
+        let ret_local = self.locals.create(function_id, function.return_ty.clone());
+
+        // Following locals are all for the parameters.
+        for (binding, ty) in &function.parameters {
+            let local = self.locals.create(function_id, ty.clone());
+            self.bindings.insert(*binding, Binding::Local(local));
+        }
+
+        // Lower the entry block.
+        let (entry, exit, result) = self.lower_block(function_id, function.entry);
+
+        // If the block resolves to a value of the same type as the return value, then it's an
+        // implicit return.
+        let body = &self.thir[function.entry];
+        if let Some(result) = result
+            && self.thir.type_of(body.expr) == &function.return_ty
+        {
+            self.mir[exit].statements.push(Statement::Assign(Assign {
+                place: Place {
+                    local: ret_local,
+                    projection: Vec::new(),
+                },
+                rvalue: RValue::Use(result),
+            }));
+        }
+
+        // Function block must always terminate with a return.
+        let terminator = &mut self.mir[exit].terminator;
+        if matches!(terminator, Terminator::Unterminated) {
+            *terminator = Terminator::Return;
+        }
+
+        self.mir.functions.insert(Function2 {
+            ret_ty: function.return_ty.clone(),
+            params: function
+                .parameters
+                .iter()
+                .map(|(_, ty)| ty.clone())
+                .collect(),
+            binding: function.binding,
+            locals: self.locals.generate_locals(function_id),
+            entry,
+        });
+    }
+
+    fn lower_block(
+        &mut self,
+        function: FunctionId,
+        block_id: hir::BlockId,
+    ) -> (BasicBlockId, BasicBlockId, Option<Operand>) {
+        let block = &self.thir[block_id];
+
+        // Create a new (empty) basic block to lower into.
+        let basic_block = self.mir.basic_blocks.insert(BasicBlock {
+            statements: Vec::new(),
+            terminator: Terminator::Unterminated,
+        });
+
+        let mut current_basic_block = basic_block;
+
+        for statement in &block.statements {
+            match &self.thir[*statement] {
+                hir::Statement::Declare(hir::DeclareStatement { binding, .. }) => {
+                    // Fetch the type of the binding.
+                    let ty = self.thir.type_of(*binding);
+
+                    // Create a local for the binding.
+                    let local = self.locals.create(function, ty.clone());
+
+                    // Register the local against the binding.
+                    self.bindings.insert(*binding, Binding::Local(local));
+                }
+                hir::Statement::Return(hir::ReturnStatement { expr }) => {
+                    // If a value is present, store it within the return local.
+                    if let Some(value) = self.lower_expr(function, &mut current_basic_block, *expr)
+                    {
+                        self.mir[basic_block]
+                            .statements
+                            .push(Statement::Assign(Assign {
+                                place: Place {
+                                    local: self.locals.return_local(function),
+                                    projection: Vec::new(),
+                                },
+                                rvalue: RValue::Use(value),
+                            }));
+                    }
+
+                    self.mir[basic_block].terminator = Terminator::Return;
+                }
+                hir::Statement::Break(hir::BreakStatement { expr }) => {
+                    if let Some(value) = self.lower_expr(function, &mut current_basic_block, *expr)
+                    {
+                        // TODO: Store resulting expression in the local for the current loop.
+                        unimplemented!();
+                    }
+
+                    self.mir[basic_block].terminator =
+                        Terminator::Goto(todo!("work out which block to jump to"));
+                }
+                hir::Statement::Expr(hir::ExprStatement { expr }) => {
+                    self.lower_expr(function, &mut current_basic_block, *expr);
+                }
+            }
+        }
+
+        let value = self.lower_expr(function, &mut current_basic_block, block.expr);
+
+        (basic_block, current_basic_block, value)
+    }
+
+    fn lower_expr(
+        &mut self,
+        function: FunctionId,
+        basic_block: &mut BasicBlockId,
+        expr_id: hir::ExprId,
+    ) -> Option<Operand> {
+        Some(match &self.thir[expr_id] {
+            hir::Expr::Assign(hir::Assign { variable, value }) => {
+                let value = self.lower_expr(function, basic_block, *value)?;
+                let place = self.expr_to_place(*variable);
+
+                self.mir[*basic_block]
+                    .statements
+                    .push(Statement::Assign(Assign {
+                        place,
+                        rvalue: RValue::Use(value),
+                    }));
+
+                Operand::Constant(Constant::Unit)
+            }
+            hir::Expr::Binary(hir::Binary { lhs, op, rhs }) => {
+                let lhs = self.lower_expr(function, basic_block, *lhs)?;
+                let rhs = self.lower_expr(function, basic_block, *rhs)?;
+
+                let result = self
+                    .locals
+                    .create(function, self.thir.type_of(expr_id).clone());
+                let result_place = Place {
+                    local: result,
+                    projection: Vec::new(),
+                };
+
+                self.mir[*basic_block]
+                    .statements
+                    .push(Statement::Assign(Assign {
+                        place: result_place.clone(),
+                        rvalue: RValue::Binary(Binary {
+                            lhs,
+                            op: op.clone(),
+                            rhs,
+                        }),
+                    }));
+
+                Operand::Place(result_place)
+            }
+            hir::Expr::Unary(hir::Unary { op, value }) => {
+                let value = self.lower_expr(function, basic_block, *value)?;
+
+                let result = self
+                    .locals
+                    .create(function, self.thir.type_of(expr_id).clone());
+                let result_place = Place {
+                    local: result,
+                    projection: Vec::new(),
+                };
+
+                self.mir[*basic_block]
+                    .statements
+                    .push(Statement::Assign(Assign {
+                        place: result_place.clone(),
+                        rvalue: RValue::Unary(Unary {
+                            op: op.clone(),
+                            value,
+                        }),
+                    }));
+
+                Operand::Place(result_place)
+            }
+            hir::Expr::Switch(hir::Switch {
+                discriminator,
+                branches,
+                default,
+            }) => {
+                let discriminator_ty = self.thir.type_of(*discriminator);
+                let discriminator = self.lower_expr(function, basic_block, *discriminator)?;
+
+                let switch_ty = self.thir.type_of(expr_id);
+                let switch_value = self.locals.create(function, switch_ty.clone());
+                let switch_place = Place {
+                    local: switch_value,
+                    projection: Vec::new(),
+                };
+
+                let end_block = self.mir.basic_blocks.insert(BasicBlock {
+                    statements: Vec::new(),
+                    terminator: Terminator::Unterminated,
+                });
+
+                // Lower all of the branches.
+                let targets = branches
+                    .iter()
+                    .map(|(target, block)| {
+                        // Lower the block.
+                        let (basic_block_entry, basic_block_exit, result) =
+                            self.lower_block(function, *block);
+
+                        // Store the resulting block value.
+                        if let Some(result) = result
+                            && !matches!(switch_ty, Type::Unit | Type::Never)
+                        {
+                            self.mir[basic_block_exit]
+                                .statements
+                                .push(Statement::Assign(Assign {
+                                    place: switch_place.clone(),
+                                    rvalue: RValue::Use(result),
+                                }));
+                        }
+
+                        // If required, jump to the ending basic block.
+                        let terminator = &mut self.mir[basic_block_exit].terminator;
+                        if matches!(terminator, Terminator::Unterminated) {
+                            *terminator = Terminator::Goto(Goto {
+                                basic_block: end_block,
+                            });
+                        }
+
+                        (
+                            literal_to_constant(target, discriminator_ty),
+                            basic_block_entry,
+                        )
+                    })
+                    .collect();
+
+                // Generate the otherwise branch.
+                let otherwise = if let Some(default) = default {
+                    // Lower the block.
+                    let (basic_block_entry, basic_block_exit, result) =
+                        self.lower_block(function, *default);
+
+                    // Store the resulting block value.
+                    if let Some(result) = result
+                        && !matches!(switch_ty, Type::Unit | Type::Never)
+                    {
+                        self.mir[basic_block_exit]
+                            .statements
+                            .push(Statement::Assign(Assign {
+                                place: switch_place.clone(),
+                                rvalue: RValue::Use(result),
+                            }));
+                    }
+
+                    // If required, jump to the ending basic block.
+                    let terminator = &mut self.mir[basic_block_exit].terminator;
+                    if matches!(terminator, Terminator::Unterminated) {
+                        *terminator = Terminator::Goto(Goto {
+                            basic_block: end_block,
+                        });
+                    }
+
+                    basic_block_entry
+                } else {
+                    end_block
+                };
+
+                // Terminate the current block.
+                self.mir[*basic_block].terminator = Terminator::SwitchInt(SwitchInt {
+                    discriminator,
+                    targets,
+                    otherwise,
+                });
+
+                // Update the current basic block to be pointing to the new end block.
+                *basic_block = end_block;
+
+                Operand::Place(switch_place)
+            }
+            hir::Expr::Loop(hir::Loop { body }) => {
+                // TODO: Create a new local for the loop break value, and register it somewhere.
+
+                // Lower the loop body.
+                let (loop_entry, loop_exit, loop_value) = self.lower_block(function, *body);
+                assert!(loop_value.is_none());
+
+                // If the loop exits unterminated, loop back to the entry.
+                let terminator = &mut self.mir[loop_exit].terminator;
+                if matches!(terminator, Terminator::Unterminated) {
+                    *terminator = Terminator::Goto(Goto {
+                        basic_block: loop_entry,
+                    });
+                }
+
+                // Jump to the loop entry.
+                self.mir[*basic_block].terminator = Terminator::Goto(Goto {
+                    basic_block: loop_entry,
+                });
+
+                // TODO: When break expressions are supported, produce the local here.
+                Operand::Constant(Constant::Unit)
+            }
+            hir::Expr::Literal(literal) => {
+                Operand::Constant(literal_to_constant(literal, self.thir.type_of(expr_id)))
+            }
+            hir::Expr::Call(hir::Call { callee, arguments }) => {
+                // Create a local to store the resulting value.
+                let result = Place {
+                    local: self
+                        .locals
+                        .create(function, self.thir.type_of(expr_id).clone()),
+                    projection: Vec::new(),
+                };
+                // Create a basic block to return to after the function returns.
+                let target = self.mir.basic_blocks.insert(BasicBlock {
+                    statements: Vec::new(),
+                    terminator: Terminator::Unterminated,
+                });
+
+                // Lower function expression and arguments.
+                let func = self.lower_expr(function, basic_block, *callee).unwrap();
+                let args = arguments
+                    .iter()
+                    .map(|expr| self.lower_expr(function, basic_block, *expr).unwrap())
+                    .collect();
+
+                // Terminate the current block.
+                self.mir[*basic_block].terminator = Terminator::Call(Call {
+                    func,
+                    args,
+                    destination: result.clone(),
+                    target,
+                });
+
+                // Update the cursor to point at the returning block.
+                *basic_block = target;
+
+                // Produce the value of this function.
+                Operand::Place(result)
+            }
+            hir::Expr::Block(block_id) => {
+                // Lower the block
+                let (entry, exit, value) = self.lower_block(function, *block_id);
+
+                // Jump to the block's entry.
+                self.mir[*basic_block].terminator = Terminator::Goto(Goto { basic_block: entry });
+
+                // Update cursor to basic block's exit.
+                *basic_block = exit;
+
+                // Yield the block's value.
+                value?
+            }
+            hir::Expr::Variable(hir::Variable { binding }) => match self.bindings[binding] {
+                Binding::Local(local) => Operand::Place(Place {
+                    local,
+                    projection: Vec::new(),
+                }),
+                Binding::Function(function_id) => {
+                    Operand::Constant(Constant::Function(function_id))
+                }
+            },
+            hir::Expr::Unreachable => return None,
+        })
+    }
+
+    fn expr_to_place(&mut self, expr_id: hir::ExprId) -> Place {
+        match &self.thir[expr_id] {
+            hir::Expr::Variable(hir::Variable { binding }) => Place {
+                local: self.bindings[binding].clone().as_local(),
+                projection: Vec::new(),
+            },
+            hir::Expr::Unary(hir::Unary {
+                op: cst::UnaryOp::Deref(_),
+                value,
+            }) => {
+                let mut value = self.expr_to_place(*value);
+                // TODO: Not sure if this is append or prepend.
+                value.projection.push(Projection::Deref);
+                value
+            }
+            expr => panic!("invalid lhs: {expr:?}"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum Binding {
+    Local(LocalId),
+    Function(FunctionId),
+}
+
+impl Binding {
+    pub fn as_local(self) -> LocalId {
+        match self {
+            Self::Local(local) => local,
+            _ => panic!("expected local"),
+        }
+    }
+}
+
+/// Track available locals within a function.
+#[derive(Clone, Debug, Default)]
+struct FunctionLocals(HashMap<FunctionId, IndexedVec<LocalId, (Type, Option<BindingId>)>>);
+impl FunctionLocals {
+    /// Create a new instance.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a new local in the provided function, with the provided type.
+    pub fn create(&mut self, function: FunctionId, ty: Type) -> LocalId {
+        self.0.entry(function).or_default().insert((ty, None))
+    }
+
+    pub fn create_with_binding(
+        &mut self,
+        function: FunctionId,
+        ty: Type,
+        binding: BindingId,
+    ) -> LocalId {
+        self.0
+            .entry(function)
+            .or_default()
+            .insert((ty, Some(binding)))
+    }
+
+    pub fn generate_locals(&self, function: FunctionId) -> Vec<(Option<BindingId>, Type)> {
+        match self.0.get(&function) {
+            Some(locals) => locals
+                .iter()
+                .map(|(ty, binding)| (binding.clone(), ty.clone()))
+                .collect(),
+            None => Vec::new(),
+        }
+    }
+
+    /// Fetch the local corresponding with the return value for a given function.
+    pub fn return_local(&self, function: FunctionId) -> LocalId {
+        // HACK: Not ideal to be manually creating this.
+        LocalId::from_id(0)
+    }
+}
+
+fn literal_to_constant(literal: &hir::Literal, ty: &Type) -> Constant {
+    match (literal, ty) {
+        (hir::Literal::Integer(value), Type::I8) => Constant::I8(*value as i8),
+        (hir::Literal::Integer(value), Type::U8) => Constant::U8(*value as u8),
+        (hir::Literal::Boolean(value), Type::Boolean) => Constant::Boolean(*value),
+        (hir::Literal::Unit, Type::Unit) => Constant::Unit,
+        (literal, ty) => panic!("invalid literal {literal:?} for type {ty:?}"),
+    }
+}

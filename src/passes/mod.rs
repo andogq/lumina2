@@ -1,4 +1,5 @@
 pub mod hir_gen;
+pub mod mir_gen;
 pub mod thir_gen;
 
 use crate::prelude::*;
