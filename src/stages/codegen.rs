@@ -14,7 +14,7 @@ use inkwell::{
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
-pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir) -> Module<'ink> {
+pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir2) -> Module<'ink> {
     let mut codegen = Codegen::new(ink);
 
     // Forward declare all functions.
@@ -34,24 +34,26 @@ pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir) -> Module<'ink> {
         for (i, (binding, ty)) in function.locals.iter().enumerate() {
             match binding {
                 Some(binding) => codegen.declare_local(
-                    LocalId::new(i),
+                    LocalId::from_id(i),
                     ty,
                     ctx.strings.get(ctx.scopes.to_string(*binding)),
                 ),
-                None => codegen.declare_local(LocalId::new(i), ty, format!("local_{i}").as_str()),
+                None => {
+                    codegen.declare_local(LocalId::from_id(i), ty, format!("local_{i}").as_str())
+                }
             }
         }
 
         // HACK: Store all of the parameter values into appropriate locals.
         for (param, local_id) in codegen.function.get_param_iter().zip(1..) {
-            let local_id = LocalId::new(local_id);
+            let local_id = LocalId::from_id(local_id);
 
             let (_, ptr) = &codegen.locals[&local_id];
 
             codegen.builder.build_store(*ptr, param).unwrap();
         }
 
-        lower_block(ctx, &mut codegen, mir, function, function.entry);
+        lower_block(ctx, &mut codegen, mir, function.entry);
 
         // Unconditional jump to the first block.
         let user_entry = codegen.get_basic_block(function.entry);
@@ -71,11 +73,10 @@ pub fn codegen<'ink>(ctx: &Ctx, ink: &'ink Context, mir: &Mir) -> Module<'ink> {
 fn lower_block<'ink, 'codegen>(
     ctx: &Ctx,
     codegen: &mut FunctionCodegen<'ink, 'codegen>,
-    mir: &Mir,
-    function: &Function,
+    mir: &Mir2,
     block_id: BasicBlockId,
 ) -> IBasicBlock<'ink> {
-    let block = &function.basic_blocks[block_id.0];
+    let block = &mir.basic_blocks[block_id];
     let bb = codegen.get_basic_block(block_id);
 
     if bb.get_terminator().is_some() {
@@ -153,14 +154,14 @@ fn lower_block<'ink, 'codegen>(
                 .build_store(ret_value_address, ret_value)
                 .unwrap();
 
-            let basic_block = lower_block(ctx, codegen, mir, function, call.target);
+            let basic_block = lower_block(ctx, codegen, mir, call.target);
             codegen
                 .builder
                 .build_unconditional_branch(basic_block)
                 .unwrap();
         }
         Terminator::Goto(Goto { basic_block }) => {
-            let basic_block = lower_block(ctx, codegen, mir, function, *basic_block);
+            let basic_block = lower_block(ctx, codegen, mir, *basic_block);
 
             codegen
                 .builder
@@ -168,7 +169,7 @@ fn lower_block<'ink, 'codegen>(
                 .unwrap();
         }
         Terminator::Return => {
-            let (ptr_ty, ptr) = &codegen.locals[&LocalId::new(0)];
+            let (ptr_ty, ptr) = &codegen.locals[&LocalId::from_id(0)];
             let return_value = codegen
                 .builder
                 .build_load(codegen.basic_ty(ptr_ty), *ptr, "load-return")
@@ -192,12 +193,12 @@ fn lower_block<'ink, 'codegen>(
                 .map(|(value, block)| {
                     (
                         codegen.constant(value).0.into_int_value(),
-                        lower_block(ctx, codegen, mir, function, *block),
+                        lower_block(ctx, codegen, mir, *block),
                     )
                 })
                 .collect::<Vec<_>>();
 
-            let otherwise = lower_block(ctx, codegen, mir, function, *otherwise);
+            let otherwise = lower_block(ctx, codegen, mir, *otherwise);
 
             codegen
                 .builder
@@ -234,7 +235,7 @@ impl<'ink> Codegen<'ink> {
         self.module
     }
 
-    pub fn declare_fn(&mut self, id: FunctionId, function: &Function, name: &str) {
+    pub fn declare_fn(&mut self, id: FunctionId, function: &Function2, name: &str) {
         let fn_value =
             self.module
                 .add_function(name, self.fn_ty(&function.ret_ty, &function.params), None);
@@ -248,10 +249,6 @@ impl<'ink> Codegen<'ink> {
                 },
             ),
         );
-    }
-
-    pub fn functions(&'_ mut self) -> Vec<FunctionId> {
-        self.functions.keys().cloned().collect()
     }
 
     pub fn function<'codegen>(
@@ -378,10 +375,9 @@ impl<'ink, 'codegen> FunctionCodegen<'ink, 'codegen> {
         match self.basic_blocks.get(&basic_block_id) {
             Some(bb) => *bb,
             None => {
-                let bb = self.ink.append_basic_block(
-                    self.function,
-                    format!("BasicBlock({})", basic_block_id.0).as_str(),
-                );
+                let bb = self
+                    .ink
+                    .append_basic_block(self.function, format!("{basic_block_id:?}").as_str());
                 self.basic_blocks.insert(basic_block_id, bb);
                 bb
             }

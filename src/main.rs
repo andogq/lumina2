@@ -19,13 +19,16 @@ fn run(source: &str) -> u8 {
     let cst = cst::Program::parse(&mut toks);
     let ast = stages::ast_builder::build_ast(&mut ctx, &cst);
     dbg!(&ast);
-    let hir = stages::hir_builder::lower(&mut ctx, &ast);
+    let hir = passes::hir_gen::HirGen::run(&mut ctx, &ast)
+        .unwrap()
+        .into_outcome();
     dbg!(&hir);
-    let types = stages::ty::solve(&hir);
-    dbg!(&types);
-    let thir = thir::Thir::new(hir, types);
-    dbg!(&thir);
-    let mir = stages::mir_builder::lower(&thir);
+    let thir = passes::thir_gen::ThirGen::run(&mut ctx, &hir)
+        .unwrap()
+        .into_outcome();
+    let mir = passes::mir_gen::MirGen::run(&mut ctx, &thir)
+        .unwrap()
+        .into_outcome();
     dbg!(&mir);
 
     let ink = inkwell::context::Context::create();

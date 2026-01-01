@@ -1,10 +1,10 @@
-use crate::prelude::*;
+use crate::prelude::{thir::Thir2, *};
 
 use cst::UnaryOp;
-use hir::{Thir, Type};
+use hir::Type;
 use mir::*;
 
-pub fn lower(thir: &Thir) -> Mir {
+pub fn lower(thir: &Thir2<'_>) -> Mir {
     let mut builder = Builder::new();
 
     for function in thir.functions.iter_keys() {
@@ -14,7 +14,7 @@ pub fn lower(thir: &Thir) -> Mir {
     builder.build()
 }
 
-fn lower_function(thir: &Thir, builder: &mut Builder, function: hir::FunctionId) {
+fn lower_function(thir: &Thir2<'_>, builder: &mut Builder, function: hir::FunctionId) {
     let function = &thir[function];
     let mut builder = builder.function(
         function,
@@ -35,7 +35,7 @@ fn lower_function(thir: &Thir, builder: &mut Builder, function: hir::FunctionId)
     if let Some(result) = result
         && thir.type_of(block.expr) == &function.return_ty
     {
-        builder.store(LocalId::new(0), RValue::Use(result));
+        builder.store(LocalId::from_id(0), RValue::Use(result));
     }
 
     // Function block must always terminate with a return.
@@ -45,7 +45,7 @@ fn lower_function(thir: &Thir, builder: &mut Builder, function: hir::FunctionId)
 }
 
 fn lower_block(
-    thir: &Thir,
+    thir: &Thir2<'_>,
     builder: &mut FunctionBuilder<'_>,
     block: &hir::Block,
 ) -> Option<Operand> {
@@ -63,7 +63,7 @@ fn lower_block(
             }
             hir::Statement::Return(hir::ReturnStatement { expr }) => {
                 if let Some(value) = lower_expr(thir, builder, *expr) {
-                    builder.store(LocalId::new(0), RValue::Use(value));
+                    builder.store(LocalId::from_id(0), RValue::Use(value));
                 }
                 builder.terminate(Terminator::Return);
             }
@@ -85,7 +85,7 @@ fn lower_block(
 }
 
 fn lower_expr(
-    thir: &Thir,
+    thir: &Thir2<'_>,
     builder: &mut FunctionBuilder<'_>,
     expr: hir::ExprId,
 ) -> Option<Operand> {
@@ -344,13 +344,13 @@ impl<'b> FunctionBuilder<'b> {
             for (binding, ty) in function.parameters.iter() {
                 let i = locals.len();
                 locals.push((Some(*binding), ty.clone()));
-                bindings.insert(*binding, (Binding::Local(LocalId::new(i)), true));
+                bindings.insert(*binding, (Binding::Local(LocalId::from_id(i)), true));
             }
 
             (bindings, locals)
         };
 
-        let temp_entry = BasicBlockId::new(0);
+        let temp_entry = BasicBlockId::from_id(0);
 
         // Register the function definition.
         let function_id = builder.mir.functions.insert(Function {
@@ -397,7 +397,7 @@ impl<'b> FunctionBuilder<'b> {
     }
 
     pub fn new_basic_block(&mut self) -> BasicBlockId {
-        let id = BasicBlockId::new(self.function().basic_blocks.len());
+        let id = BasicBlockId::from_id(self.function().basic_blocks.len());
         self.function_mut().basic_blocks.push(BasicBlock {
             statements: Vec::new(),
             terminator: Terminator::Unterminated,
@@ -414,7 +414,7 @@ impl<'b> FunctionBuilder<'b> {
 
     fn add_local(&mut self, binding: Option<BindingId>, ty: Type) -> LocalId {
         let locals = &mut self.function_mut().locals;
-        let id = LocalId::new(locals.len());
+        let id = LocalId::from_id(locals.len());
         locals.push((binding, ty));
         id
     }
@@ -476,13 +476,13 @@ impl Index<BasicBlockId> for FunctionBuilder<'_> {
     type Output = BasicBlock;
 
     fn index(&self, index: BasicBlockId) -> &Self::Output {
-        &self.function().basic_blocks[index.0]
+        &self.function().basic_blocks[index.into_id()]
     }
 }
 
 impl IndexMut<BasicBlockId> for FunctionBuilder<'_> {
     fn index_mut(&mut self, index: BasicBlockId) -> &mut Self::Output {
-        &mut self.function_mut().basic_blocks[index.0]
+        &mut self.function_mut().basic_blocks[index.into_id()]
     }
 }
 
@@ -518,7 +518,7 @@ fn literal_to_constant(literal: &hir::Literal, ty: &Type) -> Constant {
     }
 }
 
-fn expr_to_place(thir: &Thir, builder: &mut FunctionBuilder<'_>, expr: hir::ExprId) -> Place {
+fn expr_to_place(thir: &Thir2<'_>, builder: &mut FunctionBuilder<'_>, expr: hir::ExprId) -> Place {
     match &thir[expr] {
         hir::Expr::Variable(hir::Variable { binding }) => Place {
             local: *builder[*binding].as_local(),
