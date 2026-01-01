@@ -139,93 +139,115 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
         let expr = &self.hir[expr_id];
 
         match expr {
-            Expr::Assign(Assign { variable, value }) => self.constraints.extend([
-                // Value of the assignment must match the variable it's being assigned to.
-                ((*value).into(), Constraint::Eq((*variable).into())),
-                // The actual assignment expression results in unit.
-                (expr_id.into(), Constraint::Eq(Type::Unit.into())),
-            ]),
-            Expr::Binary(Binary { lhs, op, rhs }) => match op {
-                BinaryOp::Plus(_)
-                | BinaryOp::Minus(_)
-                | BinaryOp::Multiply(_)
-                | BinaryOp::Divide(_)
-                | BinaryOp::BinaryAnd(_)
-                | BinaryOp::BinaryOr(_) => {
-                    self.constraints.extend([
-                        // Operands must equal each other.
-                        ((*lhs).into(), Constraint::Eq((*rhs).into())),
-                        // Operands should be integers.
-                        ((*lhs).into(), Constraint::Integer(IntegerKind::Any)),
-                        ((*rhs).into(), Constraint::Integer(IntegerKind::Any)),
-                        // Result is the same as the input.
-                        (expr_id.into(), Constraint::Eq((*lhs).into())),
-                    ]);
+            Expr::Assign(Assign { variable, value }) => {
+                self.constraints.extend([
+                    // Value of the assignment must match the variable it's being assigned to.
+                    ((*value).into(), Constraint::Eq((*variable).into())),
+                    // The actual assignment expression results in unit.
+                    (expr_id.into(), Constraint::Eq(Type::Unit.into())),
+                ]);
+
+                self.add_expr_constraints(ctx, *variable);
+                self.add_expr_constraints(ctx, *value);
+            }
+            Expr::Binary(Binary { lhs, op, rhs }) => {
+                self.add_expr_constraints(ctx, *lhs);
+                self.add_expr_constraints(ctx, *rhs);
+
+                match op {
+                    BinaryOp::Plus(_)
+                    | BinaryOp::Minus(_)
+                    | BinaryOp::Multiply(_)
+                    | BinaryOp::Divide(_)
+                    | BinaryOp::BinaryAnd(_)
+                    | BinaryOp::BinaryOr(_) => {
+                        self.constraints.extend([
+                            // Operands must equal each other.
+                            ((*lhs).into(), Constraint::Eq((*rhs).into())),
+                            // Operands should be integers.
+                            ((*lhs).into(), Constraint::Integer(IntegerKind::Any)),
+                            ((*rhs).into(), Constraint::Integer(IntegerKind::Any)),
+                            // Result is the same as the input.
+                            (expr_id.into(), Constraint::Eq((*lhs).into())),
+                        ]);
+                    }
+                    BinaryOp::Equal(_) | BinaryOp::NotEqual(_) => {
+                        self.constraints.extend([
+                            // Operands must be identical
+                            ((*lhs).into(), Constraint::Eq((*rhs).into())),
+                            // Results in a boolean.
+                            (expr_id.into(), Constraint::Eq(Type::Boolean.into())),
+                        ]);
+                    }
+                    BinaryOp::Greater(_)
+                    | BinaryOp::GreaterEqual(_)
+                    | BinaryOp::Less(_)
+                    | BinaryOp::LessEqual(_) => {
+                        self.constraints.extend([
+                            // Operands must be identical
+                            ((*lhs).into(), Constraint::Eq((*rhs).into())),
+                            // Operands should be integers.
+                            // TODO: Probably should check they are ordinals.
+                            ((*lhs).into(), Constraint::Integer(IntegerKind::Any)),
+                            ((*rhs).into(), Constraint::Integer(IntegerKind::Any)),
+                            // Results in a boolean.
+                            (expr_id.into(), Constraint::Eq(Type::Boolean.into())),
+                        ]);
+                    }
+                    BinaryOp::LogicalAnd(_) | BinaryOp::LogicalOr(_) => {
+                        self.constraints.extend([
+                            // Operands must be booleans.
+                            ((*lhs).into(), Constraint::Eq(Type::Boolean.into())),
+                            ((*rhs).into(), Constraint::Eq(Type::Boolean.into())),
+                            // Results in a boolean.
+                            (expr_id.into(), Constraint::Eq(Type::Boolean.into())),
+                        ]);
+                    }
                 }
-                BinaryOp::Equal(_) | BinaryOp::NotEqual(_) => {
-                    self.constraints.extend([
-                        // Operands must be identical
-                        ((*lhs).into(), Constraint::Eq((*rhs).into())),
-                        // Results in a boolean.
-                        (expr_id.into(), Constraint::Eq(Type::Boolean.into())),
-                    ]);
+            }
+            Expr::Unary(Unary { op, value }) => {
+                self.add_expr_constraints(ctx, *value);
+
+                match op {
+                    UnaryOp::Not(_) => {
+                        self.constraints.extend([
+                            // Output is same as input.
+                            (expr_id.into(), Constraint::Eq((*value).into())),
+                            // Operand can be any integer.
+                            ((*value).into(), Constraint::Integer(IntegerKind::Any)),
+                        ]);
+                    }
+                    UnaryOp::Negative(_) => {
+                        self.constraints.extend([
+                            // Output is same as input.
+                            (expr_id.into(), Constraint::Eq((*value).into())),
+                            // Operand can be any integer.
+                            ((*value).into(), Constraint::Integer(IntegerKind::Signed)),
+                        ]);
+                    }
+                    UnaryOp::Deref(_) => {
+                        // Make sure that operand is a pointer, and output is inner type of pointer.
+                        self.constraints
+                            .push(((*value).into(), Constraint::Reference(expr_id.into())));
+                    }
+                    UnaryOp::Ref(_) => self
+                        .constraints
+                        .push((expr_id.into(), Constraint::Reference((*value).into()))),
                 }
-                BinaryOp::Greater(_)
-                | BinaryOp::GreaterEqual(_)
-                | BinaryOp::Less(_)
-                | BinaryOp::LessEqual(_) => {
-                    self.constraints.extend([
-                        // Operands must be identical
-                        ((*lhs).into(), Constraint::Eq((*rhs).into())),
-                        // Operands should be integers.
-                        // TODO: Probably should check they are ordinals.
-                        ((*lhs).into(), Constraint::Integer(IntegerKind::Any)),
-                        ((*rhs).into(), Constraint::Integer(IntegerKind::Any)),
-                        // Results in a boolean.
-                        (expr_id.into(), Constraint::Eq(Type::Boolean.into())),
-                    ]);
-                }
-                BinaryOp::LogicalAnd(_) | BinaryOp::LogicalOr(_) => {
-                    self.constraints.extend([
-                        // Operands must be booleans.
-                        ((*lhs).into(), Constraint::Eq(Type::Boolean.into())),
-                        ((*rhs).into(), Constraint::Eq(Type::Boolean.into())),
-                        // Results in a boolean.
-                        (expr_id.into(), Constraint::Eq(Type::Boolean.into())),
-                    ]);
-                }
-            },
-            Expr::Unary(Unary { op, value }) => match op {
-                UnaryOp::Not(_) => {
-                    self.constraints.extend([
-                        // Output is same as input.
-                        (expr_id.into(), Constraint::Eq((*value).into())),
-                        // Operand can be any integer.
-                        ((*value).into(), Constraint::Integer(IntegerKind::Any)),
-                    ]);
-                }
-                UnaryOp::Negative(_) => {
-                    self.constraints.extend([
-                        // Output is same as input.
-                        (expr_id.into(), Constraint::Eq((*value).into())),
-                        // Operand can be any integer.
-                        ((*value).into(), Constraint::Integer(IntegerKind::Signed)),
-                    ]);
-                }
-                UnaryOp::Deref(_) => {
-                    // Make sure that operand is a pointer, and output is inner type of pointer.
-                    self.constraints
-                        .push(((*value).into(), Constraint::Reference(expr_id.into())));
-                }
-                UnaryOp::Ref(_) => self
-                    .constraints
-                    .push((expr_id.into(), Constraint::Reference((*value).into()))),
-            },
+            }
             Expr::Switch(Switch {
                 discriminator,
                 branches,
                 default,
             }) => {
+                self.add_expr_constraints(ctx, *discriminator);
+                for (_, branch) in branches {
+                    self.add_block_constraints(ctx, *branch);
+                }
+                if let Some(default) = default {
+                    self.add_block_constraints(ctx, *default);
+                }
+
                 self.constraints
                     .extend(branches.iter().flat_map(|(literal, block)| {
                         [
@@ -260,13 +282,20 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
             Expr::Literal(literal) => self
                 .constraints
                 .push((expr_id.into(), constraint_from_literal(literal))),
-            Expr::Call(Call { callee, arguments }) => self.constraints.push((
-                (*callee).into(),
-                Constraint::Function {
-                    params: arguments.iter().map(|arg| (*arg).into()).collect(),
-                    ret_ty: expr_id.into(),
-                },
-            )),
+            Expr::Call(Call { callee, arguments }) => {
+                self.add_expr_constraints(ctx, *callee);
+                for argument in arguments {
+                    self.add_expr_constraints(ctx, *argument);
+                }
+
+                self.constraints.push((
+                    (*callee).into(),
+                    Constraint::Function {
+                        params: arguments.iter().map(|arg| (*arg).into()).collect(),
+                        ret_ty: expr_id.into(),
+                    },
+                ));
+            }
             Expr::Block(block_id) => self.add_block_constraints(ctx, *block_id),
             Expr::Variable(Variable { binding }) => self
                 .constraints
