@@ -1,0 +1,30 @@
+---
+source: src/passes/thir_gen.rs
+expression: "Unary { op: Negative(Minus), value: ExprId(1) }"
+---
+[
+    (
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+        Eq(
+            Expr(
+                ExprId(
+                    1,
+                ),
+            ),
+        ),
+    ),
+    (
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+        Integer(
+            Signed,
+        ),
+    ),
+]

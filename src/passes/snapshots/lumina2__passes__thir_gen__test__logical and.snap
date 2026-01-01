@@ -1,0 +1,42 @@
+---
+source: src/passes/thir_gen.rs
+expression: "Binary { lhs: ExprId(1), op: LogicalAnd(AmpAmp), rhs: ExprId(2) }"
+---
+[
+    (
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+        Eq(
+            Type(
+                Boolean,
+            ),
+        ),
+    ),
+    (
+        Expr(
+            ExprId(
+                2,
+            ),
+        ),
+        Eq(
+            Type(
+                Boolean,
+            ),
+        ),
+    ),
+    (
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+        Eq(
+            Type(
+                Boolean,
+            ),
+        ),
+    ),
+]

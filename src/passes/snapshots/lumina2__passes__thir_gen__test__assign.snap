@@ -1,0 +1,32 @@
+---
+source: src/passes/thir_gen.rs
+expression: "Assign { variable: ExprId(0), value: ExprId(0) }"
+---
+[
+    (
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Eq(
+            Expr(
+                ExprId(
+                    0,
+                ),
+            ),
+        ),
+    ),
+    (
+        Expr(
+            ExprId(
+                1,
+            ),
+        ),
+        Eq(
+            Type(
+                Unit,
+            ),
+        ),
+    ),
+]

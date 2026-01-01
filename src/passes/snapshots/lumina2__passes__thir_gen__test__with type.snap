@@ -1,0 +1,30 @@
+---
+source: src/passes/thir_gen.rs
+expression: Type(I8)
+---
+[
+    (
+        Binding(
+            BindingId(
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                I8,
+            ),
+        ),
+    ),
+    (
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                Unit,
+            ),
+        ),
+    ),
+]

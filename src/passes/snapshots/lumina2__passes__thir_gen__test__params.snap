@@ -1,0 +1,24 @@
+---
+source: src/passes/thir_gen.rs
+expression: "[(BindingId(1), I8), (BindingId(2), Boolean)] => Boolean"
+---
+[
+    (
+        Binding(
+            BindingId(
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                Function {
+                    params: [
+                        I8,
+                        Boolean,
+                    ],
+                    ret_ty: Boolean,
+                },
+            ),
+        ),
+    ),
+]

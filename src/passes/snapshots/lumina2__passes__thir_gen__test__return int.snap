@@ -1,0 +1,21 @@
+---
+source: src/passes/thir_gen.rs
+expression: "[] => I8"
+---
+[
+    (
+        Binding(
+            BindingId(
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                Function {
+                    params: [],
+                    ret_ty: I8,
+                },
+            ),
+        ),
+    ),
+]

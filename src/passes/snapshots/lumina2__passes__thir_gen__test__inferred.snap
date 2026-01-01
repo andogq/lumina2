@@ -1,0 +1,32 @@
+---
+source: src/passes/thir_gen.rs
+expression: Inferred(ExprId(0))
+---
+[
+    (
+        Binding(
+            BindingId(
+                0,
+            ),
+        ),
+        Eq(
+            Expr(
+                ExprId(
+                    0,
+                ),
+            ),
+        ),
+    ),
+    (
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                Unit,
+            ),
+        ),
+    ),
+]

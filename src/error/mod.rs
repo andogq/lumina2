@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use crate::passes::hir_gen::HirGenError;
+use crate::passes::{hir_gen::HirGenError, thir_gen::ThirGenError};
 
 /// Compiler result, an alias for [`Result`] with [`CError`] as the error value.
 pub type CResult<T> = Result<T, CError>;
@@ -10,6 +10,7 @@ pub type CResult<T> = Result<T, CError>;
 #[error(transparent)]
 pub enum CErrorKind {
     HirGen(#[from] HirGenError),
+    ThirGen(#[from] ThirGenError),
 }
 
 /// An error that may occur during compilation.
@@ -76,8 +77,8 @@ impl CErrorList {
     }
 
     /// Report the provided error, returning it's ID.
-    pub fn report(&mut self, error: CError) -> CErrorId {
-        self.0.insert(error)
+    pub fn report(&mut self, error: impl Into<CError>) -> CErrorId {
+        self.0.insert(error.into())
     }
 
     /// Produce an iterator over all errors.

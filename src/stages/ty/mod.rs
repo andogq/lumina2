@@ -1,6 +1,6 @@
 mod constraint_builder;
 mod disjoint_union_set;
-mod solver;
+pub mod solver;
 
 use crate::prelude::*;
 
@@ -26,7 +26,7 @@ enum_conversion! {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum Constraint {
+pub enum Constraint {
     Eq(TypeVarId),
     Integer(IntegerKind),
     Reference(TypeVarId),
@@ -81,7 +81,7 @@ impl Literal {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum IntegerKind {
+pub enum IntegerKind {
     Any,
     Signed,
     Unsigned,

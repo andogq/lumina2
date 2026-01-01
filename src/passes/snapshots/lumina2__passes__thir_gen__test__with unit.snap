@@ -1,0 +1,30 @@
+---
+source: src/passes/thir_gen.rs
+expression: Type(Unit)
+---
+[
+    (
+        Binding(
+            BindingId(
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                Unit,
+            ),
+        ),
+    ),
+    (
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                Unit,
+            ),
+        ),
+    ),
+]
