@@ -296,7 +296,15 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     },
                 ));
             }
-            Expr::Block(block_id) => self.add_block_constraints(ctx, *block_id),
+            Expr::Block(block_id) => {
+                self.add_block_constraints(ctx, *block_id);
+
+                // Type of this expression will be the type of the block.
+                self.constraints.push((
+                    expr_id.into(),
+                    Constraint::Eq(self.hir[*block_id].expr.into()),
+                ));
+            }
             Expr::Variable(Variable { binding }) => self
                 .constraints
                 .push((expr_id.into(), Constraint::Eq((*binding).into()))),
