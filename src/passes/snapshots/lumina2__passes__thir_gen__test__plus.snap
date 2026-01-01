@@ -1,18 +1,42 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "Binary { lhs: ExprId(1), op: Plus(Plus), rhs: ExprId(2) }"
+expression: "Binary { lhs: ExprId(0), op: Plus(Plus), rhs: ExprId(0) }"
 ---
 [
     (
         Expr(
             ExprId(
-                1,
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                Unit,
+            ),
+        ),
+    ),
+    (
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                Unit,
+            ),
+        ),
+    ),
+    (
+        Expr(
+            ExprId(
+                0,
             ),
         ),
         Eq(
             Expr(
                 ExprId(
-                    2,
+                    0,
                 ),
             ),
         ),
@@ -20,7 +44,7 @@ expression: "Binary { lhs: ExprId(1), op: Plus(Plus), rhs: ExprId(2) }"
     (
         Expr(
             ExprId(
-                1,
+                0,
             ),
         ),
         Integer(
@@ -30,7 +54,7 @@ expression: "Binary { lhs: ExprId(1), op: Plus(Plus), rhs: ExprId(2) }"
     (
         Expr(
             ExprId(
-                2,
+                0,
             ),
         ),
         Integer(
@@ -46,7 +70,7 @@ expression: "Binary { lhs: ExprId(1), op: Plus(Plus), rhs: ExprId(2) }"
         Eq(
             Expr(
                 ExprId(
-                    1,
+                    0,
                 ),
             ),
         ),

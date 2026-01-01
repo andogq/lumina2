@@ -445,36 +445,36 @@ mod test {
     #[case(
         "plus",
         Binary {
-            lhs: ExprId::from_id(1),
+            lhs: ExprId::from_id(0),
             op: BinaryOp::Plus(tok::Plus),
-            rhs: ExprId::from_id(2),
+            rhs: ExprId::from_id(0),
         },
     )]
     #[case(
         "logical and",
         Binary {
-            lhs: ExprId::from_id(1),
+            lhs: ExprId::from_id(0),
             op: BinaryOp::LogicalAnd(tok::AmpAmp),
-            rhs: ExprId::from_id(2),
+            rhs: ExprId::from_id(0),
         },
     )]
     #[case(
         "equal",
         Binary {
-            lhs: ExprId::from_id(1),
+            lhs: ExprId::from_id(0),
             op: BinaryOp::Equal(tok::EqEq),
-            rhs: ExprId::from_id(2),
+            rhs: ExprId::from_id(0),
         },
     )]
     #[case(
         "greater",
         Binary {
-            lhs: ExprId::from_id(1),
+            lhs: ExprId::from_id(0),
             op: BinaryOp::Greater(tok::RAngle),
-            rhs: ExprId::from_id(2),
+            rhs: ExprId::from_id(0),
         },
     )]
-    #[case("negative", Unary { op: UnaryOp::Negative(tok::Minus), value: ExprId::from_id(1) })]
+    #[case("negative", Unary { op: UnaryOp::Negative(tok::Minus), value: ExprId::from_id(0) })]
     fn expr_constraint(
         mut hir: Hir,
         mut ctx: Ctx,

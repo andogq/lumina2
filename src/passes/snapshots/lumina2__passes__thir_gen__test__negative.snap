@@ -1,8 +1,20 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "Unary { op: Negative(Minus), value: ExprId(1) }"
+expression: "Unary { op: Negative(Minus), value: ExprId(0) }"
 ---
 [
+    (
+        Expr(
+            ExprId(
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                Unit,
+            ),
+        ),
+    ),
     (
         Expr(
             ExprId(
@@ -12,7 +24,7 @@ expression: "Unary { op: Negative(Minus), value: ExprId(1) }"
         Eq(
             Expr(
                 ExprId(
-                    1,
+                    0,
                 ),
             ),
         ),
@@ -20,7 +32,7 @@ expression: "Unary { op: Negative(Minus), value: ExprId(1) }"
     (
         Expr(
             ExprId(
-                1,
+                0,
             ),
         ),
         Integer(
