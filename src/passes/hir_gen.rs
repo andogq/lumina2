@@ -160,10 +160,19 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         }
 
         // Lower the final expression of the block, or fallback to `()` if there is no expression.
-        let expr = if let Some(expr) = block.expression {
-            self.lower_expr(&self.ast[expr], scope)?
-        } else {
-            self.hir.exprs.insert(Expr::Literal(Literal::Unit))
+        let expr = match (
+            block.expression,
+            block
+                .statements
+                .last()
+                .map(|statement| &self.ast[*statement]),
+        ) {
+            // Use the provided expression to end the block.
+            (Some(expr), _) => self.lower_expr(&self.ast[expr], scope)?,
+            // Otherwise, if the final statement is `return` then add an unreachable marker.
+            (None, Some(ast::Statement::Return(_))) => self.hir.exprs.insert(Expr::Unreachable),
+            // Otherwise, assume unit.
+            (None, _) => self.hir.exprs.insert(Expr::Literal(Literal::Unit)),
         };
 
         Ok(self.hir.blocks.insert(Block { statements, expr }))
