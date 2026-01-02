@@ -1,7 +1,9 @@
 {
     "version": "0.2",
     "language": "en-GB",
-    "ignorePaths": [".cspell.json"],
+    "ignorePaths": [".cspell.json", ".git"],
+    "files": ["**", ".*/**"],
+    "useGitignore": true,
     "words": [
         "color",
 
@@ -26,6 +28,7 @@
         "vars",
 
         "clippy",
+        "rustc",
         "rustup",
     ],
     "flagWords": [
