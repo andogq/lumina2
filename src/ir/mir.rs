@@ -8,19 +8,20 @@ pub use hir::FunctionId;
 
 create_id!(LocalId);
 create_id!(BasicBlockId);
+create_id!(StatementId);
+create_id!(TerminatorId);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Mir {
     pub functions: IndexedVec<FunctionId, Function>,
     pub basic_blocks: IndexedVec<BasicBlockId, BasicBlock>,
+    pub statements: IndexedVec<StatementId, Statement>,
+    pub terminators: IndexedVec<TerminatorId, Terminator>,
 }
 
 impl Mir {
     pub fn new() -> Self {
-        Self {
-            functions: IndexedVec::new(),
-            basic_blocks: IndexedVec::new(),
-        }
+        Self::default()
     }
 }
 
@@ -48,6 +49,30 @@ impl IndexMut<BasicBlockId> for Mir {
         &mut self.basic_blocks[index]
     }
 }
+impl Index<StatementId> for Mir {
+    type Output = Statement;
+
+    fn index(&self, index: StatementId) -> &Self::Output {
+        &self.statements[index]
+    }
+}
+impl IndexMut<StatementId> for Mir {
+    fn index_mut(&mut self, index: StatementId) -> &mut Self::Output {
+        &mut self.statements[index]
+    }
+}
+impl Index<TerminatorId> for Mir {
+    type Output = Terminator;
+
+    fn index(&self, index: TerminatorId) -> &Self::Output {
+        &self.terminators[index]
+    }
+}
+impl IndexMut<TerminatorId> for Mir {
+    fn index_mut(&mut self, index: TerminatorId) -> &mut Self::Output {
+        &mut self.terminators[index]
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Function {
@@ -64,8 +89,8 @@ mod basic_blocks {
 
     #[derive(Clone, Debug)]
     pub struct BasicBlock {
-        pub statements: Vec<Statement>,
-        pub terminator: Terminator,
+        pub statements: Vec<StatementId>,
+        pub terminator: TerminatorId,
     }
 }
 

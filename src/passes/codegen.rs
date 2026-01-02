@@ -181,7 +181,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
 
         // Lower each statement.
         for statement in &block.statements {
-            match statement {
+            match &self.mir[*statement] {
                 Statement::Assign(Assign { place, rvalue }) => {
                     let (ptr, ptr_ty) = self.resolve_place(&builder, function_id, place);
                     let (value, ty) = self.resolve_rvalue(&builder, function_id, rvalue);
@@ -196,7 +196,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         }
 
         // Lower the terminator.
-        match &block.terminator {
+        match &self.mir[block.terminator] {
             Terminator::Call(Call {
                 func,
                 args,
