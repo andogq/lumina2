@@ -11,7 +11,7 @@ pub use crate::{
 };
 
 // Macros
-pub use crate::{create_id, indexed_vec, run_and_report};
+pub use crate::{create_id, enum_conversion, indexed_vec, run_and_report};
 
 // IDs and associated traits.
 pub use crate::{

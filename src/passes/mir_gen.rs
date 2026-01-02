@@ -88,19 +88,17 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             && self.thir.type_of(body.expr) == &function.return_ty
         {
             let place = self.mir.places.insert(ret_local.into());
-            let statement_id = self.mir.statements.insert(Statement::Assign(Assign {
-                place,
-                rvalue: RValue::Use(result),
-            }));
-            self.mir[exit].statements.push(statement_id);
+            self.mir.add_statement(
+                exit,
+                Assign {
+                    place,
+                    rvalue: RValue::Use(result),
+                },
+            );
         }
 
         // Function block must always terminate with a return.
-        let terminator_id = self.mir[exit].terminator;
-        let terminator = &mut self.mir[terminator_id];
-        if matches!(terminator, Terminator::Unterminated) {
-            *terminator = Terminator::Return;
-        }
+        self.mir.terminate_if_unterminated(exit, Terminator::Return);
 
         self.mir.functions.insert(Function {
             ret_ty: function.return_ty.clone(),
@@ -123,12 +121,9 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
         let block = &self.thir[block_id];
 
         // Create a new (empty) basic block to lower into.
-        let terminator = self.mir.terminators.insert(Terminator::Unterminated);
-        let basic_block = self.mir.basic_blocks.insert(BasicBlock {
-            statements: Vec::new(),
-            terminator,
-        });
+        let basic_block = self.mir.add_basic_block();
 
+        // Track the ending basic block.
         let mut current_basic_block = basic_block;
 
         for statement in &block.statements {
@@ -151,15 +146,16 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                             .mir
                             .places
                             .insert(self.locals.return_local(function).into());
-                        let statement_id = self.mir.statements.insert(Statement::Assign(Assign {
-                            place,
-                            rvalue: RValue::Use(value),
-                        }));
-                        self.mir[basic_block].statements.push(statement_id);
+                        self.mir.add_statement(
+                            basic_block,
+                            Assign {
+                                place,
+                                rvalue: RValue::Use(value),
+                            },
+                        );
                     }
 
-                    let terminator_id = self.mir[basic_block].terminator;
-                    self.mir[terminator_id] = Terminator::Return;
+                    self.mir.terminate(basic_block, Terminator::Return);
                 }
                 hir::Statement::Break(hir::BreakStatement { expr }) => {
                     if let Some(value) = self.lower_expr(function, &mut current_basic_block, *expr)
@@ -168,9 +164,10 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                         unimplemented!();
                     }
 
-                    let terminator_id = self.mir[basic_block].terminator;
-                    self.mir[terminator_id] =
-                        Terminator::Goto(todo!("work out which block to jump to"));
+                    self.mir.terminate(
+                        basic_block,
+                        Terminator::Goto(todo!("work out which block to jump to")),
+                    );
                 }
                 hir::Statement::Expr(hir::ExprStatement { expr }) => {
                     self.lower_expr(function, &mut current_basic_block, *expr);
@@ -195,11 +192,13 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 let place = self.expr_to_place(*variable);
                 let place = self.mir.places.insert(place);
 
-                let statement_id = self.mir.statements.insert(Statement::Assign(Assign {
-                    place,
-                    rvalue: RValue::Use(value),
-                }));
-                self.mir[*basic_block].statements.push(statement_id);
+                self.mir.add_statement(
+                    *basic_block,
+                    Assign {
+                        place,
+                        rvalue: RValue::Use(value),
+                    },
+                );
 
                 self.mir.operands.insert(Operand::Constant(Constant::Unit))
             }
@@ -212,15 +211,17 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     .create(function, self.thir.type_of(expr_id).clone());
                 let result_place = self.mir.places.insert(result.into());
 
-                let statement_id = self.mir.statements.insert(Statement::Assign(Assign {
-                    place: result_place,
-                    rvalue: RValue::Binary(Binary {
-                        lhs,
-                        op: op.clone(),
-                        rhs,
-                    }),
-                }));
-                self.mir[*basic_block].statements.push(statement_id);
+                self.mir.add_statement(
+                    *basic_block,
+                    Assign {
+                        place: result_place,
+                        rvalue: RValue::Binary(Binary {
+                            lhs,
+                            op: op.clone(),
+                            rhs,
+                        }),
+                    },
+                );
 
                 self.mir.operands.insert(Operand::Place(result_place))
             }
@@ -232,14 +233,16 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     .create(function, self.thir.type_of(expr_id).clone());
                 let result_place = self.mir.places.insert(result.into());
 
-                let statement_id = self.mir.statements.insert(Statement::Assign(Assign {
-                    place: result_place,
-                    rvalue: RValue::Unary(Unary {
-                        op: op.clone(),
-                        value,
-                    }),
-                }));
-                self.mir[*basic_block].statements.push(statement_id);
+                self.mir.add_statement(
+                    *basic_block,
+                    Assign {
+                        place: result_place,
+                        rvalue: RValue::Unary(Unary {
+                            op: op.clone(),
+                            value,
+                        }),
+                    },
+                );
 
                 self.mir.operands.insert(Operand::Place(result_place))
             }
@@ -255,11 +258,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 let switch_value = self.locals.create(function, switch_ty.clone());
                 let switch_place = self.mir.places.insert(switch_value.into());
 
-                let terminator = self.mir.terminators.insert(Terminator::Unterminated);
-                let end_block = self.mir.basic_blocks.insert(BasicBlock {
-                    statements: Vec::new(),
-                    terminator,
-                });
+                let end_block = self.mir.add_basic_block();
 
                 // Lower all of the branches.
                 let targets = branches
@@ -273,22 +272,22 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                         if let Some(result) = result
                             && !matches!(switch_ty, Type::Unit | Type::Never)
                         {
-                            let statement_id =
-                                self.mir.statements.insert(Statement::Assign(Assign {
+                            self.mir.add_statement(
+                                basic_block_exit,
+                                Assign {
                                     place: switch_place,
                                     rvalue: RValue::Use(result),
-                                }));
-                            self.mir[basic_block_exit].statements.push(statement_id);
+                                },
+                            );
                         }
 
                         // If required, jump to the ending basic block.
-                        let terminator_id = self.mir[basic_block_exit].terminator;
-                        let terminator = &mut self.mir[terminator_id];
-                        if matches!(terminator, Terminator::Unterminated) {
-                            *terminator = Terminator::Goto(Goto {
+                        self.mir.terminate_if_unterminated(
+                            basic_block_exit,
+                            Goto {
                                 basic_block: end_block,
-                            });
-                        }
+                            },
+                        );
 
                         (
                             literal_to_constant(target, discriminator_ty),
@@ -307,21 +306,22 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     if let Some(result) = result
                         && !matches!(switch_ty, Type::Unit | Type::Never)
                     {
-                        let statement_id = self.mir.statements.insert(Statement::Assign(Assign {
-                            place: switch_place,
-                            rvalue: RValue::Use(result),
-                        }));
-                        self.mir[basic_block_exit].statements.push(statement_id);
+                        self.mir.add_statement(
+                            basic_block_exit,
+                            Assign {
+                                place: switch_place,
+                                rvalue: RValue::Use(result),
+                            },
+                        );
                     }
 
                     // If required, jump to the ending basic block.
-                    let terminator_id = self.mir[basic_block_exit].terminator;
-                    let terminator = &mut self.mir[terminator_id];
-                    if matches!(terminator, Terminator::Unterminated) {
-                        *terminator = Terminator::Goto(Goto {
+                    self.mir.terminate_if_unterminated(
+                        basic_block_exit,
+                        Goto {
                             basic_block: end_block,
-                        });
-                    }
+                        },
+                    );
 
                     basic_block_entry
                 } else {
@@ -329,12 +329,14 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 };
 
                 // Terminate the current block.
-                let terminator_id = self.mir[*basic_block].terminator;
-                self.mir[terminator_id] = Terminator::SwitchInt(SwitchInt {
-                    discriminator,
-                    targets,
-                    otherwise,
-                });
+                self.mir.terminate(
+                    *basic_block,
+                    SwitchInt {
+                        discriminator,
+                        targets,
+                        otherwise,
+                    },
+                );
 
                 // Update the current basic block to be pointing to the new end block.
                 *basic_block = end_block;
@@ -349,19 +351,20 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 assert!(loop_value.is_none());
 
                 // If the loop exits unterminated, loop back to the entry.
-                let terminator_id = self.mir[loop_exit].terminator;
-                let terminator = &mut self.mir[terminator_id];
-                if matches!(terminator, Terminator::Unterminated) {
-                    *terminator = Terminator::Goto(Goto {
+                self.mir.terminate_if_unterminated(
+                    loop_exit,
+                    Goto {
                         basic_block: loop_entry,
-                    });
-                }
+                    },
+                );
 
                 // Jump to the loop entry.
-                let terminator_id = self.mir[*basic_block].terminator;
-                self.mir[terminator_id] = Terminator::Goto(Goto {
-                    basic_block: loop_entry,
-                });
+                self.mir.terminate(
+                    *basic_block,
+                    Goto {
+                        basic_block: loop_entry,
+                    },
+                );
 
                 // TODO: When break expressions are supported, produce the local here.
                 self.mir.operands.insert(Operand::Constant(Constant::Unit))
@@ -382,11 +385,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                         .into(),
                 );
                 // Create a basic block to return to after the function returns.
-                let terminator = self.mir.terminators.insert(Terminator::Unterminated);
-                let target = self.mir.basic_blocks.insert(BasicBlock {
-                    statements: Vec::new(),
-                    terminator,
-                });
+                let target = self.mir.add_basic_block();
 
                 // Lower function expression and arguments.
                 let func = self.lower_expr(function, basic_block, *callee).unwrap();
@@ -396,13 +395,15 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     .collect();
 
                 // Terminate the current block.
-                let terminator_id = self.mir[*basic_block].terminator;
-                self.mir[terminator_id] = Terminator::Call(Call {
-                    func,
-                    args,
-                    destination: result,
-                    target,
-                });
+                self.mir.terminate(
+                    *basic_block,
+                    Call {
+                        func,
+                        args,
+                        destination: result,
+                        target,
+                    },
+                );
 
                 // Update the cursor to point at the returning block.
                 *basic_block = target;

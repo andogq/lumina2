@@ -26,6 +26,60 @@ impl Mir {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Add a new unterminated basic block.
+    pub fn add_basic_block(&mut self) -> BasicBlockId {
+        let terminator = self.terminators.insert(Terminator::Unterminated);
+        self.basic_blocks.insert(BasicBlock {
+            statements: Vec::new(),
+            terminator,
+        })
+    }
+
+    /// Add a statement to a basic block.
+    pub fn add_statement(
+        &mut self,
+        basic_block: BasicBlockId,
+        statement: impl Into<Statement>,
+    ) -> StatementId {
+        let id = self.statements.insert(statement.into());
+        self[basic_block].statements.push(id);
+        id
+    }
+
+    /// Terminate a basic block with the provided terminator. Will panic if the terminator is
+    /// anything other than [`Terminator::Unterminated`].
+    pub fn terminate(
+        &mut self,
+        basic_block: BasicBlockId,
+        terminator: impl Into<Terminator>,
+    ) -> TerminatorId {
+        assert!(
+            matches!(
+                &self[self[basic_block].terminator],
+                Terminator::Unterminated
+            ),
+            "terminating a block which is already terminated"
+        );
+
+        self.terminate_if_unterminated(basic_block, terminator)
+    }
+
+    /// Terminate a basic block only if it is currently [`Terminator::Unterminated`];.
+    pub fn terminate_if_unterminated(
+        &mut self,
+        basic_block: BasicBlockId,
+        terminator: impl Into<Terminator>,
+    ) -> TerminatorId {
+        let id = self[basic_block].terminator;
+        let block_terminator = &mut self[id];
+
+        if matches!(block_terminator, Terminator::Unterminated) {
+            *block_terminator = terminator.into();
+        }
+
+        id
+    }
 }
 
 impl Index<FunctionId> for Mir {
@@ -145,6 +199,13 @@ mod statement {
         StorageDead(StorageDead),
     }
 
+    enum_conversion! {
+        [Statement]
+        Assign: Assign,
+        StorageLive: StorageLive,
+        StorageDead: StorageDead,
+    }
+
     #[derive(Clone, Debug)]
     pub struct Assign {
         pub place: PlaceId,
@@ -172,6 +233,13 @@ mod terminator {
         Return,
         SwitchInt(SwitchInt),
         Unterminated,
+    }
+
+    enum_conversion! {
+        [Terminator]
+        Call: Call,
+        Goto: Goto,
+        SwitchInt: SwitchInt,
     }
 
     #[derive(Clone, Debug)]
