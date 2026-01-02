@@ -1,15 +1,14 @@
-use crate::ir::hir::Type;
 use crate::prelude::*;
 
-pub use self::{basic_blocks::*, operand::*, place::*, rvalue::*, statement::*, terminator::*};
+use hir::Type;
 
-// HACK: Properly put this somewhere.
-pub use hir::FunctionId;
+pub use self::{basic_blocks::*, operand::*, place::*, rvalue::*, statement::*, terminator::*};
 
 create_id!(LocalId);
 create_id!(BasicBlockId);
 create_id!(StatementId);
 create_id!(TerminatorId);
+create_id!(FunctionId);
 
 #[derive(Clone, Debug, Default)]
 pub struct Mir {

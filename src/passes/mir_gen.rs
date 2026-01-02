@@ -11,6 +11,8 @@ pub struct MirGen<'hir, 'thir> {
 
     bindings: HashMap<BindingId, Binding>,
     locals: FunctionLocals,
+
+    function_ids: IndexedVec<FunctionId, hir::FunctionId>,
 }
 
 impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'hir, 'thir> {
@@ -43,19 +45,28 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             mir: Mir::new(),
             bindings: HashMap::new(),
             locals: FunctionLocals::new(),
+            function_ids: IndexedVec::new(),
         }
     }
 
     /// Declare a function by creating a new binding.
-    fn declare_function(&mut self, function_id: FunctionId) {
-        let function = &self.thir[function_id];
+    fn declare_function(&mut self, hir_function_id: hir::FunctionId) {
+        assert!(!self.function_ids.contains(&hir_function_id));
+
+        let function_binding = self.thir[hir_function_id].binding;
+        let function_id = self.function_ids.insert(hir_function_id);
         self.bindings
-            .insert(function.binding, Binding::Function(function_id));
+            .insert(function_binding, Binding::Function(function_id));
     }
 
     /// Lower a function.
-    fn lower_function(&mut self, function_id: FunctionId) {
-        let function = &self.thir[function_id];
+    fn lower_function(&mut self, hir_function_id: hir::FunctionId) {
+        let function = &self.thir[hir_function_id];
+        let (function_id, _) = self
+            .function_ids
+            .iter_pairs()
+            .find(|(_, id)| **id == hir_function_id)
+            .unwrap();
 
         // Create local for return value, as it must be the first.
         // TODO: Store this local in some context somewhere, to use it as the return local.
