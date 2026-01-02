@@ -17,13 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Install LLVM Dependencies
+        run: sudo apt update && sudo apt install -y libtinfo5
+
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: "18.1"
           directory: "${{ env.LLVM_PATH }}"
 
-      - run: ls -la "${{ env.LLVM_PATH }}"
+      - run: ls -la "${{ env.LLVM_PATH }}/bin"
 
       - name: llvm-config
         run: llvm-config --version --bindir --libdir
@@ -55,6 +58,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+
+      - name: Install LLVM Dependencies
+        run: sudo apt update && sudo apt install -y libtinfo5
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
