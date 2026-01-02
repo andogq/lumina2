@@ -87,10 +87,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
         if let Some(result) = result
             && self.thir.type_of(body.expr) == &function.return_ty
         {
-            let place = self.mir.places.insert(Place {
-                local: ret_local,
-                projection: Vec::new(),
-            });
+            let place = self.mir.places.insert(ret_local.into());
             let statement_id = self.mir.statements.insert(Statement::Assign(Assign {
                 place,
                 rvalue: RValue::Use(result),
@@ -150,10 +147,10 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     // If a value is present, store it within the return local.
                     if let Some(value) = self.lower_expr(function, &mut current_basic_block, *expr)
                     {
-                        let place = self.mir.places.insert(Place {
-                            local: self.locals.return_local(function),
-                            projection: Vec::new(),
-                        });
+                        let place = self
+                            .mir
+                            .places
+                            .insert(self.locals.return_local(function).into());
                         let statement_id = self.mir.statements.insert(Statement::Assign(Assign {
                             place,
                             rvalue: RValue::Use(value),
@@ -213,10 +210,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 let result = self
                     .locals
                     .create(function, self.thir.type_of(expr_id).clone());
-                let result_place = self.mir.places.insert(Place {
-                    local: result,
-                    projection: Vec::new(),
-                });
+                let result_place = self.mir.places.insert(result.into());
 
                 let statement_id = self.mir.statements.insert(Statement::Assign(Assign {
                     place: result_place,
@@ -236,10 +230,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 let result = self
                     .locals
                     .create(function, self.thir.type_of(expr_id).clone());
-                let result_place = self.mir.places.insert(Place {
-                    local: result,
-                    projection: Vec::new(),
-                });
+                let result_place = self.mir.places.insert(result.into());
 
                 let statement_id = self.mir.statements.insert(Statement::Assign(Assign {
                     place: result_place,
@@ -262,10 +253,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                 let switch_ty = self.thir.type_of(expr_id);
                 let switch_value = self.locals.create(function, switch_ty.clone());
-                let switch_place = self.mir.places.insert(Place {
-                    local: switch_value,
-                    projection: Vec::new(),
-                });
+                let switch_place = self.mir.places.insert(switch_value.into());
 
                 let terminator = self.mir.terminators.insert(Terminator::Unterminated);
                 let end_block = self.mir.basic_blocks.insert(BasicBlock {
@@ -388,12 +376,11 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             }
             hir::Expr::Call(hir::Call { callee, arguments }) => {
                 // Create a local to store the resulting value.
-                let result = self.mir.places.insert(Place {
-                    local: self
-                        .locals
-                        .create(function, self.thir.type_of(expr_id).clone()),
-                    projection: Vec::new(),
-                });
+                let result = self.mir.places.insert(
+                    self.locals
+                        .create(function, self.thir.type_of(expr_id).clone())
+                        .into(),
+                );
                 // Create a basic block to return to after the function returns.
                 let terminator = self.mir.terminators.insert(Terminator::Unterminated);
                 let target = self.mir.basic_blocks.insert(BasicBlock {
@@ -439,10 +426,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             }
             hir::Expr::Variable(hir::Variable { binding }) => match self.bindings[binding] {
                 Binding::Local(local) => {
-                    let place = self.mir.places.insert(Place {
-                        local,
-                        projection: Vec::new(),
-                    });
+                    let place = self.mir.places.insert(local.into());
                     self.mir.operands.insert(Operand::Place(place))
                 }
                 Binding::Function(function_id) => self
@@ -456,10 +440,9 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
     fn expr_to_place(&mut self, expr_id: hir::ExprId) -> Place {
         match &self.thir[expr_id] {
-            hir::Expr::Variable(hir::Variable { binding }) => Place {
-                local: self.bindings[binding].clone().as_local(),
-                projection: Vec::new(),
-            },
+            hir::Expr::Variable(hir::Variable { binding }) => {
+                self.bindings[binding].clone().as_local().into()
+            }
             hir::Expr::Unary(hir::Unary {
                 op: cst::UnaryOp::Deref(_),
                 value,

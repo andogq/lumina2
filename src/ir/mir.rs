@@ -204,6 +204,15 @@ mod place {
         pub projection: Vec<Projection>,
     }
 
+    impl From<LocalId> for Place {
+        fn from(local: LocalId) -> Self {
+            Self {
+                local,
+                projection: Vec::new(),
+            }
+        }
+    }
+
     #[derive(Clone, Debug)]
     pub enum Projection {
         Deref,
