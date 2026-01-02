@@ -79,17 +79,17 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
         }
 
         // Lower the entry block.
-        let (entry, exit, result) = self.lower_block(function_id, function.entry);
+        let block = self.lower_block(function_id, function.entry);
 
         // If the block resolves to a value of the same type as the return value, then it's an
         // implicit return.
         let body = &self.thir[function.entry];
-        if let Some(result) = result
+        if let Some(result) = block.operand
             && self.thir.type_of(body.expr) == &function.return_ty
         {
             let place = self.mir.places.insert(ret_local.into());
             self.mir.add_statement(
-                exit,
+                block.exit,
                 Assign {
                     place,
                     rvalue: RValue::Use(result),
@@ -98,7 +98,8 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
         }
 
         // Function block must always terminate with a return.
-        self.mir.terminate_if_unterminated(exit, Terminator::Return);
+        self.mir
+            .terminate_if_unterminated(block.exit, Terminator::Return);
 
         self.mir.functions.insert(Function {
             ret_ty: function.return_ty.clone(),
@@ -109,22 +110,19 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 .collect(),
             binding: function.binding,
             locals: self.locals.generate_locals(function_id),
-            entry,
+            entry: block.entry,
         });
     }
 
-    fn lower_block(
-        &mut self,
-        function: FunctionId,
-        block_id: hir::BlockId,
-    ) -> (BasicBlockId, BasicBlockId, Option<OperandId>) {
+    /// Lower a block within a function.
+    fn lower_block(&mut self, function: FunctionId, block_id: hir::BlockId) -> LoweredBlock {
         let block = &self.thir[block_id];
 
         // Create a new (empty) basic block to lower into.
-        let basic_block = self.mir.add_basic_block();
+        let entry = self.mir.add_basic_block();
 
         // Track the ending basic block.
-        let mut current_basic_block = basic_block;
+        let mut current_basic_block = entry;
 
         for statement in &block.statements {
             match &self.thir[*statement] {
@@ -147,7 +145,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                             .places
                             .insert(self.locals.return_local(function).into());
                         self.mir.add_statement(
-                            basic_block,
+                            entry,
                             Assign {
                                 place,
                                 rvalue: RValue::Use(value),
@@ -155,7 +153,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                         );
                     }
 
-                    self.mir.terminate(basic_block, Terminator::Return);
+                    self.mir.terminate(entry, Terminator::Return);
                 }
                 hir::Statement::Break(hir::BreakStatement { expr }) => {
                     if let Some(value) = self.lower_expr(function, &mut current_basic_block, *expr)
@@ -165,7 +163,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     }
 
                     self.mir.terminate(
-                        basic_block,
+                        entry,
                         Terminator::Goto(todo!("work out which block to jump to")),
                     );
                 }
@@ -177,9 +175,15 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
         let value = self.lower_expr(function, &mut current_basic_block, block.expr);
 
-        (basic_block, current_basic_block, value)
+        LoweredBlock {
+            entry,
+            exit: current_basic_block,
+            operand: value,
+        }
     }
 
+    /// Lower an expression into a basic block. Accepts a cursor to the current basic block, so it
+    /// may be updated as new blocks are created for sub-expressions.
     fn lower_expr(
         &mut self,
         function: FunctionId,
@@ -265,15 +269,14 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     .iter()
                     .map(|(target, block)| {
                         // Lower the block.
-                        let (basic_block_entry, basic_block_exit, result) =
-                            self.lower_block(function, *block);
+                        let lowered_block = self.lower_block(function, *block);
 
                         // Store the resulting block value.
-                        if let Some(result) = result
+                        if let Some(result) = lowered_block.operand
                             && !matches!(switch_ty, Type::Unit | Type::Never)
                         {
                             self.mir.add_statement(
-                                basic_block_exit,
+                                lowered_block.exit,
                                 Assign {
                                     place: switch_place,
                                     rvalue: RValue::Use(result),
@@ -283,7 +286,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                         // If required, jump to the ending basic block.
                         self.mir.terminate_if_unterminated(
-                            basic_block_exit,
+                            lowered_block.exit,
                             Goto {
                                 basic_block: end_block,
                             },
@@ -291,7 +294,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                         (
                             literal_to_constant(target, discriminator_ty),
-                            basic_block_entry,
+                            lowered_block.entry,
                         )
                     })
                     .collect();
@@ -299,15 +302,14 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 // Generate the otherwise branch.
                 let otherwise = if let Some(default) = default {
                     // Lower the block.
-                    let (basic_block_entry, basic_block_exit, result) =
-                        self.lower_block(function, *default);
+                    let lowered_block = self.lower_block(function, *default);
 
                     // Store the resulting block value.
-                    if let Some(result) = result
+                    if let Some(result) = lowered_block.operand
                         && !matches!(switch_ty, Type::Unit | Type::Never)
                     {
                         self.mir.add_statement(
-                            basic_block_exit,
+                            lowered_block.exit,
                             Assign {
                                 place: switch_place,
                                 rvalue: RValue::Use(result),
@@ -317,13 +319,13 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                     // If required, jump to the ending basic block.
                     self.mir.terminate_if_unterminated(
-                        basic_block_exit,
+                        lowered_block.exit,
                         Goto {
                             basic_block: end_block,
                         },
                     );
 
-                    basic_block_entry
+                    lowered_block.entry
                 } else {
                     end_block
                 };
@@ -347,14 +349,14 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 // TODO: Create a new local for the loop break value, and register it somewhere.
 
                 // Lower the loop body.
-                let (loop_entry, loop_exit, loop_value) = self.lower_block(function, *body);
-                assert!(loop_value.is_none());
+                let lowered_block = self.lower_block(function, *body);
+                assert!(lowered_block.operand.is_none());
 
                 // If the loop exits unterminated, loop back to the entry.
                 self.mir.terminate_if_unterminated(
-                    loop_exit,
+                    lowered_block.exit,
                     Goto {
-                        basic_block: loop_entry,
+                        basic_block: lowered_block.entry,
                     },
                 );
 
@@ -362,7 +364,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 self.mir.terminate(
                     *basic_block,
                     Goto {
-                        basic_block: loop_entry,
+                        basic_block: lowered_block.entry,
                     },
                 );
 
@@ -413,17 +415,21 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             }
             hir::Expr::Block(block_id) => {
                 // Lower the block
-                let (entry, exit, value) = self.lower_block(function, *block_id);
+                let lowered_block = self.lower_block(function, *block_id);
 
                 // Jump to the block's entry.
-                let terminator_id = self.mir[*basic_block].terminator;
-                self.mir[terminator_id] = Terminator::Goto(Goto { basic_block: entry });
+                self.mir.terminate(
+                    *basic_block,
+                    Goto {
+                        basic_block: lowered_block.entry,
+                    },
+                );
 
                 // Update cursor to basic block's exit.
-                *basic_block = exit;
+                *basic_block = lowered_block.exit;
 
                 // Yield the block's value.
-                value?
+                lowered_block.operand?
             }
             hir::Expr::Variable(hir::Variable { binding }) => match self.bindings[binding] {
                 Binding::Local(local) => {
@@ -456,6 +462,17 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             expr => panic!("invalid lhs: {expr:?}"),
         }
     }
+}
+
+/// The result of lowering a block.
+#[derive(Clone, Debug)]
+struct LoweredBlock {
+    /// Entry basic block.
+    entry: BasicBlockId,
+    /// Exit basic block.
+    exit: BasicBlockId,
+    /// Operand yielded from block (if it exists).
+    operand: Option<OperandId>,
 }
 
 #[derive(Clone, Debug)]
