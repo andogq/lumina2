@@ -5,5 +5,5 @@ fn main() {
         "/usr/lib/llvm-18"
     };
 
-    // println!("cargo::rustc-env=LLVM_SYS_181_PREFIX={prefix}");
+    println!("cargo::rustc-env=LLVM_SYS_181_PREFIX={prefix}");
 }
