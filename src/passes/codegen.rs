@@ -9,14 +9,9 @@ use inkwell::{
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
-use crate::{
-    ir::{
-        cst::{BinaryOperation, UnaryOperation},
-        hir::Type,
-    },
-    prelude::*,
-};
+use crate::prelude::*;
 
+use hir::Type;
 use mir::*;
 
 pub struct Codegen<'ctx, 'mir, 'ink> {
@@ -378,7 +373,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                 match (lhs_ty, &binary.operation, rhs_ty) {
                     (
                         lhs_ty @ (Type::U8 | Type::I8),
-                        BinaryOperation::Plus(_),
+                        BinaryOperation::Plus,
                         rhs_ty @ (Type::U8 | Type::I8),
                     ) if lhs_ty == rhs_ty => (
                         builder
@@ -389,7 +384,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8),
-                        BinaryOperation::Minus(_),
+                        BinaryOperation::Minus,
                         rhs_ty @ (Type::U8 | Type::I8),
                     ) if lhs_ty == rhs_ty => (
                         builder
@@ -400,7 +395,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8),
-                        BinaryOperation::Multiply(_),
+                        BinaryOperation::Multiply,
                         rhs_ty @ (Type::U8 | Type::I8),
                     ) if lhs_ty == rhs_ty => (
                         builder
@@ -409,7 +404,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         lhs_ty,
                     ),
-                    (Type::U8, BinaryOperation::Divide(_), Type::U8) => (
+                    (Type::U8, BinaryOperation::Divide, Type::U8) => (
                         builder
                             .build_int_unsigned_div(
                                 lhs.into_int_value(),
@@ -420,21 +415,21 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         Type::U8,
                     ),
-                    (Type::I8, BinaryOperation::Divide(_), Type::I8) => (
+                    (Type::I8, BinaryOperation::Divide, Type::I8) => (
                         builder
                             .build_int_signed_div(lhs.into_int_value(), rhs.into_int_value(), "add")
                             .unwrap()
                             .as_basic_value_enum(),
                         Type::I8,
                     ),
-                    (Type::Boolean, BinaryOperation::LogicalAnd(_), Type::Boolean) => (
+                    (Type::Boolean, BinaryOperation::LogicalAnd, Type::Boolean) => (
                         builder
                             .build_and(lhs.into_int_value(), rhs.into_int_value(), "logical_and")
                             .unwrap()
                             .as_basic_value_enum(),
                         Type::Boolean,
                     ),
-                    (Type::Boolean, BinaryOperation::LogicalOr(_), Type::Boolean) => (
+                    (Type::Boolean, BinaryOperation::LogicalOr, Type::Boolean) => (
                         builder
                             .build_or(lhs.into_int_value(), rhs.into_int_value(), "logical_or")
                             .unwrap()
@@ -443,7 +438,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
-                        BinaryOperation::BinaryAnd(_),
+                        BinaryOperation::BinaryAnd,
                         rhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
                     ) if lhs_ty == rhs_ty => (
                         builder
@@ -454,7 +449,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
-                        BinaryOperation::BinaryOr(_),
+                        BinaryOperation::BinaryOr,
                         rhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
                     ) if lhs_ty == rhs_ty => (
                         builder
@@ -465,7 +460,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
-                        BinaryOperation::Equal(_),
+                        BinaryOperation::Equal,
                         rhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
                     ) if lhs_ty == rhs_ty => (
                         builder
@@ -481,7 +476,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
-                        BinaryOperation::NotEqual(_),
+                        BinaryOperation::NotEqual,
                         rhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
                     ) if lhs_ty == rhs_ty => (
                         builder
@@ -495,7 +490,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         Type::Boolean,
                     ),
-                    (Type::U8, BinaryOperation::Less(_), Type::U8) => (
+                    (Type::U8, BinaryOperation::Less, Type::U8) => (
                         builder
                             .build_int_compare(
                                 IntPredicate::ULT,
@@ -507,7 +502,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         Type::Boolean,
                     ),
-                    (Type::I8, BinaryOperation::Less(_), Type::I8) => (
+                    (Type::I8, BinaryOperation::Less, Type::I8) => (
                         builder
                             .build_int_compare(
                                 IntPredicate::SLT,
@@ -519,7 +514,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         Type::Boolean,
                     ),
-                    (Type::U8, BinaryOperation::LessEqual(_), Type::U8) => (
+                    (Type::U8, BinaryOperation::LessEqual, Type::U8) => (
                         builder
                             .build_int_compare(
                                 IntPredicate::ULE,
@@ -531,7 +526,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         Type::Boolean,
                     ),
-                    (Type::I8, BinaryOperation::LessEqual(_), Type::I8) => (
+                    (Type::I8, BinaryOperation::LessEqual, Type::I8) => (
                         builder
                             .build_int_compare(
                                 IntPredicate::SLE,
@@ -543,7 +538,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         Type::Boolean,
                     ),
-                    (Type::U8, BinaryOperation::Greater(_), Type::U8) => (
+                    (Type::U8, BinaryOperation::Greater, Type::U8) => (
                         builder
                             .build_int_compare(
                                 IntPredicate::UGT,
@@ -555,7 +550,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         Type::Boolean,
                     ),
-                    (Type::I8, BinaryOperation::Greater(_), Type::I8) => (
+                    (Type::I8, BinaryOperation::Greater, Type::I8) => (
                         builder
                             .build_int_compare(
                                 IntPredicate::SGT,
@@ -567,7 +562,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         Type::Boolean,
                     ),
-                    (Type::U8, BinaryOperation::GreaterEqual(_), Type::U8) => (
+                    (Type::U8, BinaryOperation::GreaterEqual, Type::U8) => (
                         builder
                             .build_int_compare(
                                 IntPredicate::UGE,
@@ -579,7 +574,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         Type::Boolean,
                     ),
-                    (Type::I8, BinaryOperation::GreaterEqual(_), Type::I8) => (
+                    (Type::I8, BinaryOperation::GreaterEqual, Type::I8) => (
                         builder
                             .build_int_compare(
                                 IntPredicate::SGE,
@@ -595,7 +590,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                 }
             }
             RValue::Unary(unary) => match unary.operation {
-                UnaryOperation::Not(_) => {
+                UnaryOperation::Not => {
                     let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
 
                     if !matches!(value_ty, Type::U8 | Type::I8 | Type::Boolean) {
@@ -610,7 +605,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                         value_ty,
                     )
                 }
-                UnaryOperation::Negative(_) => {
+                UnaryOperation::Negative => {
                     let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
 
                     if !matches!(value_ty, Type::I8) {
@@ -625,7 +620,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                         Type::I8,
                     )
                 }
-                UnaryOperation::Deref(_) => {
+                UnaryOperation::Deref => {
                     let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
 
                     let Type::Ref(inner_ty) = value_ty else {
@@ -644,7 +639,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                         *inner_ty,
                     )
                 }
-                UnaryOperation::Ref(_) => {
+                UnaryOperation::Ref => {
                     let Operand::Place(place) = &self.mir[unary.value] else {
                         panic!("can only take reference of place");
                     };

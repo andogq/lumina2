@@ -1,5 +1,5 @@
 // Various IRs.
-pub use crate::ir::{ast, cst, hir, hir::thir, mir};
+pub use crate::ir::{BinaryOperation, UnaryOperation, ast, cst, hir, hir::thir, mir};
 
 // Common items.
 pub use crate::{

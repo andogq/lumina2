@@ -137,12 +137,12 @@ impl<'ctx> AstGen<'ctx> {
                 rhs,
             }) => Binary {
                 lhs: self.lower_expression(lhs),
-                operation: operation.clone(),
+                operation: operation.into(),
                 rhs: self.lower_expression(rhs),
             }
             .into(),
             cst::Expression::Unary(cst::Unary { operation, value }) => Unary {
-                operation: operation.clone(),
+                operation: operation.into(),
                 value: self.lower_expression(value),
             }
             .into(),

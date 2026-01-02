@@ -1,7 +1,5 @@
 use crate::prelude::*;
 
-use crate::ir::cst::{BinaryOperation, UnaryOperation};
-
 pub use self::{block::*, expression::*, function::*, statement::*};
 
 create_id!(BlockId);
@@ -133,8 +131,6 @@ mod statement {
 }
 
 mod expression {
-    use crate::enum_conversion;
-
     use super::*;
 
     #[derive(Clone, Debug)]

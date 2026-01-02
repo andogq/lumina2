@@ -1,10 +1,9 @@
-use crate::{
-    ir::cst::{BinaryOperation, UnaryOperation},
-    prelude::{thir::Thir, *},
-    ty::{Constraint, IntegerKind, solver::Solver},
-};
+use crate::prelude::*;
+
+use crate::ty::{Constraint, IntegerKind, solver::Solver};
 
 use hir::*;
+use thir::Thir;
 
 /// Generator to build a collection of [`Constraint`]s, then solve them to produce a [`Thir`].
 pub struct ThirGen<'ctx, 'hir> {
@@ -156,12 +155,12 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                 self.add_expression_constraints(ctx, *rhs);
 
                 match operation {
-                    BinaryOperation::Plus(_)
-                    | BinaryOperation::Minus(_)
-                    | BinaryOperation::Multiply(_)
-                    | BinaryOperation::Divide(_)
-                    | BinaryOperation::BinaryAnd(_)
-                    | BinaryOperation::BinaryOr(_) => {
+                    BinaryOperation::Plus
+                    | BinaryOperation::Minus
+                    | BinaryOperation::Multiply
+                    | BinaryOperation::Divide
+                    | BinaryOperation::BinaryAnd
+                    | BinaryOperation::BinaryOr => {
                         self.constraints.extend([
                             // Operands must equal each other.
                             ((*lhs).into(), Constraint::Eq((*rhs).into())),
@@ -172,7 +171,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                             (expression_id.into(), Constraint::Eq((*lhs).into())),
                         ]);
                     }
-                    BinaryOperation::Equal(_) | BinaryOperation::NotEqual(_) => {
+                    BinaryOperation::Equal | BinaryOperation::NotEqual => {
                         self.constraints.extend([
                             // Operands must be identical
                             ((*lhs).into(), Constraint::Eq((*rhs).into())),
@@ -180,10 +179,10 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                             (expression_id.into(), Constraint::Eq(Type::Boolean.into())),
                         ]);
                     }
-                    BinaryOperation::Greater(_)
-                    | BinaryOperation::GreaterEqual(_)
-                    | BinaryOperation::Less(_)
-                    | BinaryOperation::LessEqual(_) => {
+                    BinaryOperation::Greater
+                    | BinaryOperation::GreaterEqual
+                    | BinaryOperation::Less
+                    | BinaryOperation::LessEqual => {
                         self.constraints.extend([
                             // Operands must be identical
                             ((*lhs).into(), Constraint::Eq((*rhs).into())),
@@ -195,7 +194,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                             (expression_id.into(), Constraint::Eq(Type::Boolean.into())),
                         ]);
                     }
-                    BinaryOperation::LogicalAnd(_) | BinaryOperation::LogicalOr(_) => {
+                    BinaryOperation::LogicalAnd | BinaryOperation::LogicalOr => {
                         self.constraints.extend([
                             // Operands must be booleans.
                             ((*lhs).into(), Constraint::Eq(Type::Boolean.into())),
@@ -210,7 +209,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                 self.add_expression_constraints(ctx, *value);
 
                 match operation {
-                    UnaryOperation::Not(_) => {
+                    UnaryOperation::Not => {
                         self.constraints.extend([
                             // Output is same as input.
                             (expression_id.into(), Constraint::Eq((*value).into())),
@@ -218,7 +217,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                             ((*value).into(), Constraint::Integer(IntegerKind::Any)),
                         ]);
                     }
-                    UnaryOperation::Negative(_) => {
+                    UnaryOperation::Negative => {
                         self.constraints.extend([
                             // Output is same as input.
                             (expression_id.into(), Constraint::Eq((*value).into())),
@@ -226,12 +225,12 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                             ((*value).into(), Constraint::Integer(IntegerKind::Signed)),
                         ]);
                     }
-                    UnaryOperation::Deref(_) => {
+                    UnaryOperation::Deref => {
                         // Make sure that operand is a pointer, and output is inner type of pointer.
                         self.constraints
                             .push(((*value).into(), Constraint::Reference(expression_id.into())));
                     }
-                    UnaryOperation::Ref(_) => self
+                    UnaryOperation::Ref => self
                         .constraints
                         .push((expression_id.into(), Constraint::Reference((*value).into()))),
                 }
@@ -450,7 +449,7 @@ mod test {
         "plus",
         Binary {
             lhs: ExpressionId::from_id(0),
-            operation: BinaryOperation::Plus(tok::Plus),
+            operation: BinaryOperation::Plus,
             rhs: ExpressionId::from_id(0),
         },
     )]
@@ -458,7 +457,7 @@ mod test {
         "logical and",
         Binary {
             lhs: ExpressionId::from_id(0),
-            operation: BinaryOperation::LogicalAnd(tok::AmpAmp),
+            operation: BinaryOperation::LogicalAnd,
             rhs: ExpressionId::from_id(0),
         },
     )]
@@ -466,7 +465,7 @@ mod test {
         "equal",
         Binary {
             lhs: ExpressionId::from_id(0),
-            operation: BinaryOperation::Equal(tok::EqEq),
+            operation: BinaryOperation::Equal,
             rhs: ExpressionId::from_id(0),
         },
     )]
@@ -474,11 +473,11 @@ mod test {
         "greater",
         Binary {
             lhs: ExpressionId::from_id(0),
-            operation: BinaryOperation::Greater(tok::RAngle),
+            operation: BinaryOperation::Greater,
             rhs: ExpressionId::from_id(0),
         },
     )]
-    #[case("negative", Unary { operation: UnaryOperation::Negative(tok::Minus), value: ExpressionId::from_id(0) })]
+    #[case("negative", Unary { operation: UnaryOperation::Negative, value: ExpressionId::from_id(0) })]
     fn expression_constraint(
         mut hir: Hir,
         mut ctx: Ctx,

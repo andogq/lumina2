@@ -4,9 +4,7 @@ expression: "-1"
 ---
 Unary(
     Unary {
-        operation: Negative(
-            Minus,
-        ),
+        operation: Negative,
         value: ExpressionId(
             0,
         ),

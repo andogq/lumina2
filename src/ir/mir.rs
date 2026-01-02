@@ -288,8 +288,6 @@ mod place {
 }
 
 mod rvalue {
-    use crate::ir::cst::{BinaryOperation, UnaryOperation};
-
     use super::*;
 
     #[derive(Clone, Debug)]

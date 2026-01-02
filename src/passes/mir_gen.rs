@@ -462,7 +462,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 self.bindings[binding].clone().as_local().into()
             }
             hir::Expression::Unary(hir::Unary {
-                operation: cst::UnaryOperation::Deref(_),
+                operation: UnaryOperation::Deref,
                 value,
             }) => {
                 let mut value = self.expression_to_place(*value);

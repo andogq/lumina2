@@ -4,9 +4,7 @@ expression: "!true"
 ---
 Unary(
     Unary {
-        operation: Not(
-            Bang,
-        ),
+        operation: Not,
         value: ExpressionId(
             0,
         ),

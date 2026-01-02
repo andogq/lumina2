@@ -7,9 +7,7 @@ Binary(
         lhs: ExpressionId(
             0,
         ),
-        operation: BinaryAnd(
-            Amp,
-        ),
+        operation: BinaryAnd,
         rhs: ExpressionId(
             1,
         ),

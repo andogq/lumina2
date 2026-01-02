@@ -1,6 +1,11 @@
 use crate::prelude::*;
 
-pub use self::{expression::*, function::*, statement::*, util::*};
+pub use self::{
+    expression::{BinaryOperation, UnaryOperation, *},
+    function::*,
+    statement::*,
+    util::*,
+};
 
 /// Root node, representing a program.
 #[derive(Clone, Debug)]

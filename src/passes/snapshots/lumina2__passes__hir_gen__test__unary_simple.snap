@@ -1,12 +1,10 @@
 ---
 source: src/passes/hir_gen.rs
-expression: "Unary(Unary { operation: Negative(Minus), value: ExpressionId(0) })"
+expression: "Unary(Unary { operation: Negative, value: ExpressionId(0) })"
 ---
 Unary(
     Unary {
-        operation: Negative(
-            Minus,
-        ),
+        operation: Negative,
         value: ExpressionId(
             0,
         ),

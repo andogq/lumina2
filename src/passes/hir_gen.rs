@@ -394,13 +394,13 @@ mod test {
         "binary_simple",
         ast::Binary {
             lhs: ast::ExpressionId::from_id(0),
-            operation: cst::BinaryOperation::Plus(tok::Plus),
+            operation: BinaryOperation::Plus,
             rhs: ast::ExpressionId::from_id(1)
         }.into()
     )]
     #[case(
         "unary_simple",
-        ast::Unary { value: ast::ExpressionId::from_id(0), operation: cst::UnaryOperation::Negative(tok::Minus) }.into()
+        ast::Unary { value: ast::ExpressionId::from_id(0), operation: UnaryOperation::Negative }.into()
     )]
     #[case(
         "if_simple",
