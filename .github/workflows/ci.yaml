@@ -93,4 +93,11 @@ jobs:
         env:
           LLVM_SYS_181_PREFIX: "${{ env.LLVM_PATH }}"
 
+  spell-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: streetsidesoftware/cspell-action@v8
+
 # spell-checker:ignore libtinfo,Swatinem
