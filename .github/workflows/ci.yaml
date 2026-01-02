@@ -99,5 +99,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: streetsidesoftware/cspell-action@v8
+        with:
+          config: "./.cspell.json"
 
 # spell-checker:ignore libtinfo,Swatinem
