@@ -251,5 +251,15 @@ mod test {
                 123
             );
         }
+
+        #[test]
+        fn shadowing() {
+            assert_eq!(
+                run(
+                    "fn main() -> u8 { let a = 1; let b = { let old_a = a; let a = 5; a + old_a }; a + b }"
+                ),
+                7
+            );
+        }
     }
 }
