@@ -1,9 +1,7 @@
 use crate::ir::hir::Type;
 use crate::prelude::*;
 
-pub use self::{
-    basic_blocks::*, functions::*, operand::*, place::*, rvalue::*, statement::*, terminator::*,
-};
+pub use self::{basic_blocks::*, operand::*, place::*, rvalue::*, statement::*, terminator::*};
 
 // HACK: Properly put this somewhere.
 pub use hir::FunctionId;
@@ -12,64 +10,16 @@ create_id!(LocalId);
 create_id!(BasicBlockId);
 
 #[derive(Clone, Debug)]
-pub struct Mir2 {
-    pub functions: IndexedVec<FunctionId, Function2>,
-    pub basic_blocks: IndexedVec<BasicBlockId, BasicBlock>,
-}
-
-impl Mir2 {
-    pub fn new() -> Self {
-        Self {
-            functions: IndexedVec::new(),
-            basic_blocks: IndexedVec::new(),
-        }
-    }
-}
-
-impl Index<FunctionId> for Mir2 {
-    type Output = Function2;
-
-    fn index(&self, index: FunctionId) -> &Self::Output {
-        &self.functions[index]
-    }
-}
-impl IndexMut<FunctionId> for Mir2 {
-    fn index_mut(&mut self, index: FunctionId) -> &mut Self::Output {
-        &mut self.functions[index]
-    }
-}
-impl Index<BasicBlockId> for Mir2 {
-    type Output = BasicBlock;
-
-    fn index(&self, index: BasicBlockId) -> &Self::Output {
-        &self.basic_blocks[index]
-    }
-}
-impl IndexMut<BasicBlockId> for Mir2 {
-    fn index_mut(&mut self, index: BasicBlockId) -> &mut Self::Output {
-        &mut self.basic_blocks[index]
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Function2 {
-    pub ret_ty: Type,
-    pub params: Vec<Type>,
-    pub binding: BindingId,
-
-    pub locals: Vec<(Option<BindingId>, Type)>,
-    pub entry: BasicBlockId,
-}
-
-#[derive(Clone, Debug)]
 pub struct Mir {
     pub functions: IndexedVec<FunctionId, Function>,
+    pub basic_blocks: IndexedVec<BasicBlockId, BasicBlock>,
 }
 
 impl Mir {
     pub fn new() -> Self {
         Self {
             functions: IndexedVec::new(),
+            basic_blocks: IndexedVec::new(),
         }
     }
 }
@@ -81,27 +31,32 @@ impl Index<FunctionId> for Mir {
         &self.functions[index]
     }
 }
-
 impl IndexMut<FunctionId> for Mir {
     fn index_mut(&mut self, index: FunctionId) -> &mut Self::Output {
         &mut self.functions[index]
     }
 }
+impl Index<BasicBlockId> for Mir {
+    type Output = BasicBlock;
 
-mod functions {
-    use super::*;
-
-    #[derive(Clone, Debug)]
-    pub struct Function {
-        pub ret_ty: Type,
-        pub params: Vec<Type>,
-        pub binding: BindingId,
-
-        pub locals: Vec<(Option<BindingId>, Type)>,
-        pub entry: BasicBlockId,
-
-        pub basic_blocks: Vec<BasicBlock>,
+    fn index(&self, index: BasicBlockId) -> &Self::Output {
+        &self.basic_blocks[index]
     }
+}
+impl IndexMut<BasicBlockId> for Mir {
+    fn index_mut(&mut self, index: BasicBlockId) -> &mut Self::Output {
+        &mut self.basic_blocks[index]
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Function {
+    pub ret_ty: Type,
+    pub params: Vec<Type>,
+    pub binding: BindingId,
+
+    pub locals: Vec<(Option<BindingId>, Type)>,
+    pub entry: BasicBlockId,
 }
 
 mod basic_blocks {

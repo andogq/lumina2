@@ -1,6 +1,6 @@
 use crate::{
     ir::cst::{BinaryOp, UnaryOp},
-    prelude::{thir::Thir2, *},
+    prelude::{thir::Thir, *},
     ty::{Constraint, IntegerKind, solver::Solver},
 };
 
@@ -20,7 +20,7 @@ pub struct ThirGen<'ctx, 'hir> {
 
 impl<'ctx, 'hir> Pass<'ctx, 'hir> for ThirGen<'ctx, 'hir> {
     type Input = hir::Hir;
-    type Output = Thir2<'hir>;
+    type Output = Thir<'hir>;
     type Extra = ();
 
     fn run(ctx: &'ctx mut Ctx, hir: &'hir Self::Input, _extra: ()) -> PassResult<Self::Output> {
@@ -39,7 +39,7 @@ impl<'ctx, 'hir> Pass<'ctx, 'hir> for ThirGen<'ctx, 'hir> {
         // Run the solver.
         let types = Solver::run(&thir_gen.constraints);
 
-        Ok(PassSuccess::new(Thir2 { hir, types }, thir_gen.errors))
+        Ok(PassSuccess::new(Thir { hir, types }, thir_gen.errors))
     }
 }
 

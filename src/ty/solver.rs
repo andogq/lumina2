@@ -56,11 +56,9 @@ impl Solver {
     }
 
     pub fn run(constraints: &[(TypeVarId, Constraint)]) -> HashMap<TypeVarId, Type> {
-        // Pre-fill with builtin types.
-        let mut solver = Self::prefill([]);
+        let mut solver = Self::new();
 
         for (var, constraint) in constraints {
-            dbg!(&var, &constraint);
             assert!(solver.process_constraint(var, constraint));
         }
 

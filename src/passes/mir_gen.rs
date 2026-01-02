@@ -2,20 +2,20 @@ use crate::prelude::*;
 
 use hir::Type;
 use mir::*;
-use thir::Thir2;
+use thir::Thir;
 
 pub struct MirGen<'hir, 'thir> {
-    thir: &'thir Thir2<'hir>,
+    thir: &'thir Thir<'hir>,
 
-    mir: Mir2,
+    mir: Mir,
 
     bindings: HashMap<BindingId, Binding>,
     locals: FunctionLocals,
 }
 
 impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'hir, 'thir> {
-    type Input = Thir2<'hir>;
-    type Output = Mir2;
+    type Input = Thir<'hir>;
+    type Output = Mir;
     type Extra = ();
 
     fn run(_ctx: &'ctx mut Ctx, thir: &'thir Self::Input, _extra: ()) -> PassResult<Self::Output> {
@@ -37,10 +37,10 @@ impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'hir, 'thir> {
 
 impl<'hir, 'thir> MirGen<'hir, 'thir> {
     /// Create a new instance.
-    pub fn new(thir: &'thir Thir2<'hir>) -> Self {
+    pub fn new(thir: &'thir Thir<'hir>) -> Self {
         Self {
             thir,
-            mir: Mir2::new(),
+            mir: Mir::new(),
             bindings: HashMap::new(),
             locals: FunctionLocals::new(),
         }
@@ -91,7 +91,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             *terminator = Terminator::Return;
         }
 
-        self.mir.functions.insert(Function2 {
+        self.mir.functions.insert(Function {
             ret_ty: function.return_ty.clone(),
             params: function
                 .parameters

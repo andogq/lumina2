@@ -20,7 +20,7 @@ use mir::*;
 
 pub struct Codegen<'ctx, 'mir, 'ink> {
     ctx: &'ctx mut Ctx,
-    mir: &'mir Mir2,
+    mir: &'mir Mir,
 
     ink: &'ink Context,
     module: Module<'ink>,
@@ -31,7 +31,7 @@ pub struct Codegen<'ctx, 'mir, 'ink> {
 }
 
 impl<'ctx, 'mir, 'ink> Pass<'ctx, 'mir> for Codegen<'ctx, 'mir, 'ink> {
-    type Input = Mir2;
+    type Input = Mir;
     type Output = Module<'ink>;
     type Extra = &'ink Context;
 
@@ -62,7 +62,7 @@ impl<'ctx, 'mir, 'ink> Pass<'ctx, 'mir> for Codegen<'ctx, 'mir, 'ink> {
 }
 
 impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
-    fn new(ctx: &'ctx mut Ctx, mir: &'mir Mir2, ink: &'ink Context) -> Self {
+    fn new(ctx: &'ctx mut Ctx, mir: &'mir Mir, ink: &'ink Context) -> Self {
         Self {
             ctx,
             mir,
