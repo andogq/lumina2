@@ -1,4 +1,5 @@
 pub mod ast_gen;
+pub mod codegen;
 pub mod cst_gen;
 pub mod hir_gen;
 pub mod mir_gen;
@@ -13,8 +14,14 @@ pub trait Pass<'ctx, 'input> {
     /// Output produced by this pass.
     type Output;
 
+    type Extra;
+
     /// Run the pass with the provided context and input.
-    fn run(ctx: &'ctx mut Ctx, input: &'input Self::Input) -> PassResult<Self::Output>;
+    fn run(
+        ctx: &'ctx mut Ctx,
+        input: &'input Self::Input,
+        extra: Self::Extra,
+    ) -> PassResult<Self::Output>;
 }
 
 /// A pass may result in a success (something can be produced, even if it's incomplete), or a

@@ -224,7 +224,7 @@ mod test {
 
     #[fixture]
     fn ctx() -> Ctx {
-        Ctx::default()
+        Ctx::new()
     }
 
     fn lexer(source: &'static str) -> Lexer<'static> {

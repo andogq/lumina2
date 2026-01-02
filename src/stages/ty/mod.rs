@@ -133,7 +133,7 @@ mod test {
     use crate::stages::{parse::Parse, *};
 
     fn get_ty(expr: &str) -> Type {
-        let mut ctx = Ctx::default();
+        let mut ctx = Ctx::new();
 
         // Tokenise the source.
         let mut lexer = Lexer::new(expr);

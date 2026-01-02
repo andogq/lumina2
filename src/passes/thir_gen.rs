@@ -21,8 +21,9 @@ pub struct ThirGen<'ctx, 'hir> {
 impl<'ctx, 'hir> Pass<'ctx, 'hir> for ThirGen<'ctx, 'hir> {
     type Input = hir::Hir;
     type Output = Thir2<'hir>;
+    type Extra = ();
 
-    fn run(ctx: &'ctx mut Ctx, hir: &'hir Self::Input) -> PassResult<Self::Output> {
+    fn run(ctx: &'ctx mut Ctx, hir: &'hir Self::Input, _extra: ()) -> PassResult<Self::Output> {
         let mut thir_gen = Self::new(ctx, hir);
 
         // Declare all functions up front.

@@ -15,13 +15,15 @@ use crate::prelude::*;
 ///
 /// A mutable reference to [`Ctx`] is passed within `[]` (`&mut ctx`), and the input for the
 /// pipeline is provided on the left of `=>` (`source`). Then, a list of 'steps' in the form of
-/// types which implement [`Pass`] are listed within `{}`. Each step accepts extra information
-/// within `[]`, including:
+/// types which implement [`Pass`] are listed within `{}`. Each step accepts extra information,
+/// including:
 ///
 /// - `[debug]`: debug print the output of this step upon completion.
+/// - `=> (&ink)`: provide `&ink` as the `extra` parameter in [`Pass::run`].
 ///
 /// ```
 /// let mut ctx = Ctx::new();
+/// let ink = inkwell::context::Context::create();
 /// let source = "fn main() -> u8 { 1 }";
 ///
 /// let hir = pipeline! {
@@ -30,30 +32,47 @@ use crate::prelude::*;
 ///         |> passes::cst_gen::CstGen
 ///         |> passes::ast_gen::AstGen [debug]
 ///         |> passes::hir_gen::HirGen
+///         |> passes::thir_gen::ThirGen
+///         |> passes::mir_gen::MirGen
+///         |> passes::codegen::Codegen => (&ink)
 ///     }
 /// };
 /// ```
 macro_rules! pipeline {
-    ([$ctx:expr] $input:expr => { $(|> $pass:ty $([$($extra:tt)+])*)* }) => {{
+    ([$ctx:expr] $input:expr => { $(|> $pass:ty $(=> ($extra:expr))? $([$($meta:tt)+])*)* }) => {{
         let input = $input;
 
         $(
-            let input = <$pass>::run($ctx, &input).unwrap().into_outcome();
+            let input = <$pass>::run(
+                $ctx,
+                &input,
+                pipeline!(@extra $($extra)?),
+            ).unwrap().into_outcome();
 
-            $(pipeline!(@extra [input, $pass] $($extra)*);)*
+            $(pipeline!(@meta [input, $pass] $($meta)*);)*
         )*
 
         input
     }};
 
-    (@extra [$input:ident, $pass:ty] debug) => {
+    (@extra $extra:expr) => {
+        $extra
+    };
+
+    (@extra ) => {
+        ()
+    };
+
+    (@meta [$input:ident, $pass:ty] debug) => {
         eprintln!("{} => {:#?}", stringify!($pass), $input);
     };
 }
 
 fn run(source: &str) -> u8 {
-    let mut ctx = Ctx::default();
-    let mir = pipeline! {
+    let mut ctx = Ctx::new();
+    let ink = inkwell::context::Context::create();
+
+    let module = pipeline! {
         [&mut ctx]
         source => {
             |> passes::cst_gen::CstGen
@@ -61,11 +80,9 @@ fn run(source: &str) -> u8 {
             |> passes::hir_gen::HirGen
             |> passes::thir_gen::ThirGen
             |> passes::mir_gen::MirGen
+            |> passes::codegen::Codegen => (&ink)
         }
     };
-
-    let ink = inkwell::context::Context::create();
-    let module = stages::codegen::codegen(&ctx, &ink, &mir);
 
     {
         let engine = module

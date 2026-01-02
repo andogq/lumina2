@@ -21,8 +21,9 @@ pub struct HirGen<'ctx, 'ast> {
 impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
     type Input = ast::Ast;
     type Output = Hir;
+    type Extra = ();
 
-    fn run(ctx: &'ctx mut Ctx, ast: &'ast Self::Input) -> PassResult<Self::Output> {
+    fn run(ctx: &'ctx mut Ctx, ast: &'ast Self::Input, _extra: ()) -> PassResult<Self::Output> {
         let mut hir_gen = Self::new(ctx, ast);
 
         // Errors generated throughout this pass.

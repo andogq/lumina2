@@ -4,8 +4,7 @@ use hir::Type;
 use mir::*;
 use thir::Thir2;
 
-pub struct MirGen<'ctx, 'hir, 'thir> {
-    ctx: &'ctx mut Ctx,
+pub struct MirGen<'hir, 'thir> {
     thir: &'thir Thir2<'hir>,
 
     mir: Mir2,
@@ -14,14 +13,13 @@ pub struct MirGen<'ctx, 'hir, 'thir> {
     locals: FunctionLocals,
 }
 
-impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'ctx, 'hir, 'thir> {
+impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'hir, 'thir> {
     type Input = Thir2<'hir>;
     type Output = Mir2;
+    type Extra = ();
 
-    fn run(ctx: &'ctx mut Ctx, thir: &'thir Self::Input) -> PassResult<Self::Output> {
-        let mut mir_gen = Self::new(ctx, thir);
-
-        let mut errors = Vec::new();
+    fn run(_ctx: &'ctx mut Ctx, thir: &'thir Self::Input, _extra: ()) -> PassResult<Self::Output> {
+        let mut mir_gen = Self::new(thir);
 
         // Declare all functions.
         for function in mir_gen.thir.functions.iter_keys() {
@@ -33,15 +31,14 @@ impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'ctx, 'hir, 'thir> {
             mir_gen.lower_function(function);
         }
 
-        Ok(PassSuccess::new(mir_gen.mir, errors))
+        Ok(PassSuccess::Ok(mir_gen.mir))
     }
 }
 
-impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
+impl<'hir, 'thir> MirGen<'hir, 'thir> {
     /// Create a new instance.
-    pub fn new(ctx: &'ctx mut Ctx, thir: &'thir Thir2<'hir>) -> Self {
+    pub fn new(thir: &'thir Thir2<'hir>) -> Self {
         Self {
-            ctx,
             thir,
             mir: Mir2::new(),
             bindings: HashMap::new(),

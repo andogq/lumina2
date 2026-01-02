@@ -11,8 +11,9 @@ pub struct AstGen<'ctx> {
 impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
     type Input = cst::Program;
     type Output = Ast;
+    type Extra = ();
 
-    fn run(ctx: &'ctx mut Ctx, cst: &'cst Self::Input) -> PassResult<Self::Output> {
+    fn run(ctx: &'ctx mut Ctx, cst: &'cst Self::Input, _extra: ()) -> PassResult<Self::Output> {
         let mut ast_gen = Self::new(ctx);
 
         for item in &cst.items {
@@ -201,7 +202,7 @@ mod test {
 
     #[fixture]
     fn ctx() -> Ctx {
-        Ctx::default()
+        Ctx::new()
     }
 
     fn parse<T>(source: &'static str) -> T
