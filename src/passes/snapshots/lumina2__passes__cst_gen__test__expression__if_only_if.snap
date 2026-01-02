@@ -1,0 +1,33 @@
+---
+source: src/passes/cst_gen.rs
+expression: "if condition { something }"
+---
+If {
+    tok_if: If,
+    condition: Variable(
+        Variable {
+            variable: Ident(
+                "condition",
+            ),
+        },
+    ),
+    then: Block {
+        tok_l_brace: LBrace,
+        statements: [
+            Expression(
+                ExpressionStatement {
+                    expression: Variable(
+                        Variable {
+                            variable: Ident(
+                                "something",
+                            ),
+                        },
+                    ),
+                    tok_semicolon: None,
+                },
+            ),
+        ],
+        tok_r_brace: RBrace,
+    },
+    trailer: None,
+}

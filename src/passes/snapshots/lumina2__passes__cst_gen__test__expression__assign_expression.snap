@@ -1,0 +1,39 @@
+---
+source: src/passes/cst_gen.rs
+expression: some_ident = 1 + 2
+---
+Assign {
+    assignee: Variable(
+        Variable {
+            variable: Ident(
+                "some_ident",
+            ),
+        },
+    ),
+    tok_eq: Eq,
+    value: Binary(
+        Binary {
+            lhs: Literal(
+                Integer(
+                    IntegerLiteral(
+                        IntegerLiteral(
+                            1,
+                        ),
+                    ),
+                ),
+            ),
+            operation: Plus(
+                Plus,
+            ),
+            rhs: Literal(
+                Integer(
+                    IntegerLiteral(
+                        IntegerLiteral(
+                            2,
+                        ),
+                    ),
+                ),
+            ),
+        },
+    ),
+}

@@ -1,18 +1,18 @@
 ---
 source: src/passes/cst_gen.rs
-expression: "fn some_func() -> u32 {}"
+expression: "fn some_function() -> u32 {}"
 ---
 FunctionDeclaration {
     tok_fn: Fn,
     name: Ident(
-        "some_func",
+        "some_function",
     ),
-    tok_lparen: LParen,
-    params: PunctuatedList {
+    tok_l_parenthesis: LParenthesis,
+    parameters: PunctuatedList {
         items: [],
         punctuation: [],
     },
-    tok_rparan: RParen,
+    tok_r_parenthesis: RParenthesis,
     return_ty: Some(
         FunctionReturnType {
             tok_thin_arrow: ThinArrow,

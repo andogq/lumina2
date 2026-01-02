@@ -46,9 +46,11 @@ mod function {
             cst::FunctionDeclaration {
                 tok_fn: lexer.expect().unwrap(),
                 name: lexer.expect().unwrap(),
-                tok_lparen: lexer.expect().unwrap(),
-                params: PunctuatedList::parse_while(lexer, |tok| !matches!(tok, Tok::RParen)),
-                tok_rparan: lexer.expect().unwrap(),
+                tok_l_parenthesis: lexer.expect().unwrap(),
+                parameters: PunctuatedList::parse_while(lexer, |tok| {
+                    !matches!(tok, Tok::RParenthesis)
+                }),
+                tok_r_parenthesis: lexer.expect().unwrap(),
                 return_ty: lexer
                     .next_if()
                     .map(|tok_thin_arrow| cst::FunctionReturnType {
@@ -102,7 +104,7 @@ mod statement {
                 Tok::Let => cst::LetStatement::parse(lexer).into(),
                 Tok::Return => cst::ReturnStatement::parse(lexer).into(),
                 Tok::Break => cst::BreakStatement::parse(lexer).into(),
-                _ => cst::ExprStatement::parse(lexer).into(),
+                _ => cst::ExpressionStatement::parse(lexer).into(),
             }
         }
     }
@@ -113,7 +115,7 @@ mod statement {
                 tok_let: lexer.expect().unwrap(),
                 variable: lexer.expect().unwrap(),
                 tok_eq: lexer.expect().unwrap(),
-                value: cst::Expr::parse(lexer),
+                value: cst::Expression::parse(lexer),
                 tok_semicolon: lexer.expect().unwrap(),
             }
         }
@@ -123,7 +125,7 @@ mod statement {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
             Self {
                 tok_return: lexer.expect().unwrap(),
-                value: cst::Expr::parse(lexer),
+                value: cst::Expression::parse(lexer),
                 tok_semicolon: lexer.expect().unwrap(),
             }
         }
@@ -134,23 +136,24 @@ mod statement {
             Self {
                 tok_break: lexer.expect().unwrap(),
                 // If the next token isn't a semicolon, continue parsing.
-                value: (!matches!(lexer.peek(), Tok::SemiColon)).then(|| cst::Expr::parse(lexer)),
+                value: (!matches!(lexer.peek(), Tok::SemiColon))
+                    .then(|| cst::Expression::parse(lexer)),
                 tok_semicolon: lexer.expect().unwrap(),
             }
         }
     }
 
-    impl Parse for cst::ExprStatement {
+    impl Parse for cst::ExpressionStatement {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
             Self {
-                expr: cst::Expr::parse(lexer),
+                expression: cst::Expression::parse(lexer),
                 tok_semicolon: lexer.next_if(),
             }
         }
     }
 }
 
-mod expr {
+mod expression {
     use super::*;
 
     #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -171,7 +174,7 @@ mod expr {
         // TODO: Don't have multiple precedence functions
         fn of(tok: &Tok) -> Self {
             match tok {
-                Tok::LParen | Tok::LBracket => Self::Call,
+                Tok::LParenthesis | Tok::LBracket => Self::Call,
                 Tok::Asterisk | Tok::Slash => Self::Multiply,
                 Tok::Plus | Tok::Minus => Self::Sum,
                 Tok::Amp | Tok::Bar => Self::Binary,
@@ -185,15 +188,15 @@ mod expr {
         }
     }
 
-    impl Parse for cst::Expr {
+    impl Parse for cst::Expression {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
             Self::parse_with_precedence(lexer, Precedence::Lowest)
         }
     }
 
-    impl cst::Expr {
+    impl cst::Expression {
         fn parse_with_precedence(lexer: &mut Lexer<'_>, precedence: Precedence) -> Self {
-            let mut expr = Self::parse_prefix(lexer);
+            let mut expression = Self::parse_prefix(lexer);
 
             loop {
                 let tok = lexer.peek();
@@ -216,25 +219,27 @@ mod expr {
                     | Tok::LAngle
                     | Tok::RAngle
                     | Tok::LtEq
-                    | Tok::GtEq => expr = cst::Binary::parse(lexer, expr).into(),
-                    Tok::Eq => expr = cst::Assign::parse(lexer, expr).into(),
-                    Tok::LParen => expr = cst::Call::parse(lexer, expr).into(),
+                    | Tok::GtEq => expression = cst::Binary::parse(lexer, expression).into(),
+                    Tok::Eq => expression = cst::Assign::parse(lexer, expression).into(),
+                    Tok::LParenthesis => expression = cst::Call::parse(lexer, expression).into(),
                     _ => break,
                 }
             }
 
-            expr
+            expression
         }
 
         fn parse_prefix(lexer: &mut Lexer<'_>) -> Self {
             match lexer.peek() {
                 Tok::Ident(_) => cst::Variable::parse(lexer).into(),
-                Tok::IntLit(_) | Tok::True | Tok::False => cst::Literal::parse(lexer).into(),
+                Tok::IntegerLiteral(_) | Tok::True | Tok::False => {
+                    cst::Literal::parse(lexer).into()
+                }
                 Tok::Minus | Tok::Amp | Tok::Asterisk | Tok::Bang => {
                     cst::Unary::parse(lexer).into()
                 }
                 Tok::LBrace => cst::Block::parse(lexer).into(),
-                Tok::LParen => cst::Paren::parse(lexer).into(),
+                Tok::LParenthesis => cst::Parenthesis::parse(lexer).into(),
                 Tok::If => cst::If::parse(lexer).into(),
                 Tok::Loop => cst::Loop::parse(lexer).into(),
                 tok => panic!("unexpected tok: {tok}"),
@@ -243,29 +248,32 @@ mod expr {
     }
 
     impl cst::Assign {
-        pub(super) fn parse(lexer: &mut Lexer<'_>, assignee: cst::Expr) -> Self {
+        pub(super) fn parse(lexer: &mut Lexer<'_>, assignee: cst::Expression) -> Self {
             Self {
                 assignee: Box::new(assignee),
                 tok_eq: lexer.expect().unwrap(),
-                value: Box::new(cst::Expr::parse_with_precedence(lexer, Precedence::Assign)),
+                value: Box::new(cst::Expression::parse_with_precedence(
+                    lexer,
+                    Precedence::Assign,
+                )),
             }
         }
     }
 
     impl cst::Binary {
-        pub(super) fn parse(lexer: &mut Lexer<'_>, lhs: cst::Expr) -> Self {
-            let op = cst::BinaryOp::parse(lexer);
-            let rhs = cst::Expr::parse_with_precedence(lexer, op.precedence());
+        pub(super) fn parse(lexer: &mut Lexer<'_>, lhs: cst::Expression) -> Self {
+            let operation = cst::BinaryOperation::parse(lexer);
+            let rhs = cst::Expression::parse_with_precedence(lexer, operation.precedence());
 
             Self {
                 lhs: Box::new(lhs),
-                op,
+                operation,
                 rhs: Box::new(rhs),
             }
         }
     }
 
-    impl Parse for cst::BinaryOp {
+    impl Parse for cst::BinaryOperation {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
             match lexer.peek() {
                 Tok::Plus => Self::Plus(lexer.expect().unwrap()),
@@ -291,7 +299,7 @@ mod expr {
         }
     }
 
-    impl cst::BinaryOp {
+    impl cst::BinaryOperation {
         fn precedence(&self) -> Precedence {
             match self {
                 Self::Plus(_) | Self::Minus(_) => Precedence::Sum,
@@ -312,13 +320,16 @@ mod expr {
     impl Parse for cst::Unary {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
             Self {
-                op: cst::UnaryOp::parse(lexer),
-                value: Box::new(cst::Expr::parse_with_precedence(lexer, Precedence::Prefix)),
+                operation: cst::UnaryOperation::parse(lexer),
+                value: Box::new(cst::Expression::parse_with_precedence(
+                    lexer,
+                    Precedence::Prefix,
+                )),
             }
         }
     }
 
-    impl Parse for cst::UnaryOp {
+    impl Parse for cst::UnaryOperation {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
             match lexer.peek() {
                 Tok::Bang => Self::Not(lexer.expect().unwrap()),
@@ -334,7 +345,7 @@ mod expr {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
             Self {
                 tok_if: lexer.expect().unwrap(),
-                condition: Box::new(cst::Expr::parse(lexer)),
+                condition: Box::new(cst::Expression::parse(lexer)),
                 then: cst::Block::parse(lexer),
                 trailer: lexer.next_if().map(|tok_else| cst::IfTrailer {
                     tok_else,
@@ -368,31 +379,31 @@ mod expr {
             match lexer.peek() {
                 Tok::True => cst::BooleanLiteral::True(lexer.expect().unwrap()).into(),
                 Tok::False => cst::BooleanLiteral::False(lexer.expect().unwrap()).into(),
-                Tok::IntLit(_) => cst::IntegerLiteral(lexer.expect().unwrap()).into(),
+                Tok::IntegerLiteral(_) => cst::IntegerLiteral(lexer.expect().unwrap()).into(),
                 tok => panic!("expected literal, found: {tok}"),
             }
         }
     }
 
-    impl Parse for cst::Paren {
+    impl Parse for cst::Parenthesis {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
             Self {
-                tok_l_paren: lexer.expect().unwrap(),
-                expr: Box::new(cst::Expr::parse(lexer)),
-                tok_r_paren: lexer.expect().unwrap(),
+                tok_l_parenthesis: lexer.expect().unwrap(),
+                expression: Box::new(cst::Expression::parse(lexer)),
+                tok_r_parenthesis: lexer.expect().unwrap(),
             }
         }
     }
 
     impl cst::Call {
-        pub fn parse(lexer: &mut Lexer<'_>, callee: cst::Expr) -> Self {
+        pub fn parse(lexer: &mut Lexer<'_>, callee: cst::Expression) -> Self {
             Self {
                 callee: Box::new(callee),
-                tok_l_paren: lexer.expect().unwrap(),
+                tok_l_parenthesis: lexer.expect().unwrap(),
                 arguments: cst::PunctuatedList::parse_while(lexer, |tok| {
-                    !matches!(tok, Tok::RParen)
+                    !matches!(tok, Tok::RParenthesis)
                 }),
-                tok_r_paren: lexer.expect().unwrap(),
+                tok_r_parenthesis: lexer.expect().unwrap(),
             }
         }
     }
@@ -450,22 +461,22 @@ mod test {
         assert_eq!(lexer.next(), Tok::Eof)
     }
 
-    mod expr {
+    mod expression {
         use super::*;
 
         #[rstest]
-        #[case("expr_int_lit", "123")]
-        #[case("expr_ident", "some_ident")]
-        #[case("expr_add", "123 + 321")]
-        #[case("expr_add_mul", "123 + 321 * 999")]
-        #[case("expr_un_op", "-123")]
-        #[case("expr_un_op_add_mul", "123 + -321 * 999")]
-        #[case("expr_assignment", "some_ident = 123 + other_ident")]
-        #[case("expr_logical_and", "true && something")]
-        fn expr(#[case] name: &str, #[case] source: &str) {
+        #[case("expression_integer_literal", "123")]
+        #[case("expression_ident", "some_ident")]
+        #[case("expression_add", "123 + 321")]
+        #[case("expression_add_mul", "123 + 321 * 999")]
+        #[case("expression_unary_operation", "-123")]
+        #[case("expression_unary_operation_add_mul", "123 + -321 * 999")]
+        #[case("expression_assignment", "some_ident = 123 + other_ident")]
+        #[case("expression_logical_and", "true && something")]
+        fn expression(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
-                let expr = cst::Expr::parse(lexer);
-                assert_debug_snapshot!(name, expr, source);
+                let expression = cst::Expression::parse(lexer);
+                assert_debug_snapshot!(name, expression, source);
             });
         }
 
@@ -476,7 +487,7 @@ mod test {
             test_with_lexer(source, |lexer| {
                 let assign = cst::Assign::parse(
                     lexer,
-                    cst::Expr::Variable(cst::Variable {
+                    cst::Expression::Variable(cst::Variable {
                         variable: tok::Ident("some_ident".to_string()),
                     }),
                 );
@@ -492,7 +503,7 @@ mod test {
             test_with_lexer(source, |lexer| {
                 let binary = cst::Binary::parse(
                     lexer,
-                    cst::Expr::Variable(cst::Variable {
+                    cst::Expression::Variable(cst::Variable {
                         variable: tok::Ident("a".to_string()),
                     }),
                 );
@@ -525,19 +536,19 @@ mod test {
             "if_if_else_if_else_if_else",
             "if condition { something } else if other { something_else } else if another { thing } else { final }"
         )]
-        fn if_expr(#[case] name: &str, #[case] source: &str) {
+        fn if_expression(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
-                let if_expr = cst::If::parse(lexer);
-                assert_debug_snapshot!(name, if_expr, source);
+                let if_expression = cst::If::parse(lexer);
+                assert_debug_snapshot!(name, if_expression, source);
             });
         }
 
         #[rstest]
         #[case("literal_true", "true")]
         #[case("literal_false", "false")]
-        #[case("literal_int_0", "0")]
-        #[case("literal_int_1", "1")]
-        #[case("literal_int_123", "123")]
+        #[case("literal_integer_0", "0")]
+        #[case("literal_integer_1", "1")]
+        #[case("literal_integer_123", "123")]
         fn literal(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
                 let literal = cst::Literal::parse(lexer);
@@ -546,27 +557,27 @@ mod test {
         }
 
         #[rstest]
-        #[case("paren_ident", "(some_ident)")]
-        #[case("paren_literal", "(123)")]
-        #[case("paren_double", "((some_ident))")]
-        fn paren(#[case] name: &str, #[case] source: &str) {
+        #[case("parenthesis_ident", "(some_ident)")]
+        #[case("parenthesis_literal", "(123)")]
+        #[case("parenthesis_double", "((some_ident))")]
+        fn parenthesis(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
-                let paren = cst::Paren::parse(lexer);
-                assert_debug_snapshot!(name, paren, source);
+                let parenthesis = cst::Parenthesis::parse(lexer);
+                assert_debug_snapshot!(name, parenthesis, source);
             });
         }
 
         #[rstest]
-        #[case("call_no_args", "()")]
-        #[case("call_single_arg", "(1)")]
-        #[case("call_single_arg_trailing", "(1,)")]
-        #[case("call_multiple_args", "(1, 2, 3)")]
-        #[case("call_multiple_args_trailing", "(1, 2, 3,)")]
+        #[case("call_no_arguments", "()")]
+        #[case("call_single_argument", "(1)")]
+        #[case("call_single_argument_trailing", "(1,)")]
+        #[case("call_multiple_arguments", "(1, 2, 3)")]
+        #[case("call_multiple_arguments_trailing", "(1, 2, 3,)")]
         fn call(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
                 let call = cst::Call::parse(
                     lexer,
-                    cst::Expr::Variable(cst::Variable {
+                    cst::Expression::Variable(cst::Variable {
                         variable: tok::Ident("a".to_string()),
                     }),
                 );
@@ -586,9 +597,9 @@ mod test {
 
     #[rstest]
     #[case("block_empty", "{ }")]
-    #[case("block_expr", "{ 1 }")]
+    #[case("block_expression", "{ 1 }")]
     #[case("block_statements", "{ let a = 1; let b = 1; }")]
-    #[case("block_statements_and_expr", "{ let a = 1; let b = 1; 1 }")]
+    #[case("block_statements_and_expression", "{ let a = 1; let b = 1; 1 }")]
     fn block(#[case] name: &str, #[case] source: &str) {
         test_with_lexer(source, |lexer| {
             let block = cst::Block::parse(lexer);
@@ -618,19 +629,19 @@ mod test {
         }
 
         #[rstest]
-        #[case("expr_no_semicolon", "1")]
-        #[case("expr_semicolon", "1;")]
-        fn expr_statement(#[case] name: &str, #[case] source: &str) {
+        #[case("expression_no_semicolon", "1")]
+        #[case("expression_semicolon", "1;")]
+        fn expression_statement(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
-                let expr_statement = cst::ExprStatement::parse(lexer);
-                assert_debug_snapshot!(name, expr_statement, source);
+                let expression_statement = cst::ExpressionStatement::parse(lexer);
+                assert_debug_snapshot!(name, expression_statement, source);
             });
         }
 
         #[rstest]
         #[case("statements_let", "let a = 1;")]
         #[case("statements_return", "return 1;")]
-        #[case("statements_expr", "1")]
+        #[case("statements_expression", "1")]
         fn statements(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
                 let statement = cst::Statement::parse(lexer);
@@ -640,13 +651,13 @@ mod test {
     }
 
     #[rstest]
-    #[case("function_basic", "fn some_func() {}")]
-    #[case("function_with_params", "fn some_func(a: u32, b: bool) {}")]
-    #[case("function_with_return", "fn some_func() -> u32 {}")]
-    #[case("function_with_body", "fn some_func() { let a = 1; 1 + 2; }")]
+    #[case("function_basic", "fn some_function() {}")]
+    #[case("function_with_parameters", "fn some_function(a: u32, b: bool) {}")]
+    #[case("function_with_return", "fn some_function() -> u32 {}")]
+    #[case("function_with_body", "fn some_function() { let a = 1; 1 + 2; }")]
     #[case(
         "function_with_everything",
-        "fn some_func(a: u32, b: bool) -> bool { let a = 1; 1 + 2; }"
+        "fn some_function(a: u32, b: bool) -> bool { let a = 1; 1 + 2; }"
     )]
     fn function(#[case] name: &str, #[case] source: &str) {
         test_with_lexer(source, |lexer| {

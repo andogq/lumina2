@@ -4,13 +4,13 @@ expression: true && false
 ---
 Binary(
     Binary {
-        lhs: ExprId(
+        lhs: ExpressionId(
             0,
         ),
-        op: LogicalAnd(
+        operation: LogicalAnd(
             AmpAmp,
         ),
-        rhs: ExprId(
+        rhs: ExpressionId(
             1,
         ),
     },

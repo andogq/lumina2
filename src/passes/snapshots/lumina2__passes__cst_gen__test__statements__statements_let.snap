@@ -12,7 +12,7 @@ Let(
         value: Literal(
             Integer(
                 IntegerLiteral(
-                    IntLit(
+                    IntegerLiteral(
                         1,
                     ),
                 ),

@@ -1,18 +1,18 @@
 ---
 source: src/passes/cst_gen.rs
-expression: "fn some_func() { let a = 1; 1 + 2; }"
+expression: "fn some_function() { let a = 1; 1 + 2; }"
 ---
 FunctionDeclaration {
     tok_fn: Fn,
     name: Ident(
-        "some_func",
+        "some_function",
     ),
-    tok_lparen: LParen,
-    params: PunctuatedList {
+    tok_l_parenthesis: LParenthesis,
+    parameters: PunctuatedList {
         items: [],
         punctuation: [],
     },
-    tok_rparan: RParen,
+    tok_r_parenthesis: RParenthesis,
     return_ty: None,
     body: Block {
         tok_l_brace: LBrace,
@@ -27,7 +27,7 @@ FunctionDeclaration {
                     value: Literal(
                         Integer(
                             IntegerLiteral(
-                                IntLit(
+                                IntegerLiteral(
                                     1,
                                 ),
                             ),
@@ -36,26 +36,26 @@ FunctionDeclaration {
                     tok_semicolon: SemiColon,
                 },
             ),
-            Expr(
-                ExprStatement {
-                    expr: Binary(
+            Expression(
+                ExpressionStatement {
+                    expression: Binary(
                         Binary {
                             lhs: Literal(
                                 Integer(
                                     IntegerLiteral(
-                                        IntLit(
+                                        IntegerLiteral(
                                             1,
                                         ),
                                     ),
                                 ),
                             ),
-                            op: Plus(
+                            operation: Plus(
                                 Plus,
                             ),
                             rhs: Literal(
                                 Integer(
                                     IntegerLiteral(
-                                        IntLit(
+                                        IntegerLiteral(
                                             2,
                                         ),
                                     ),

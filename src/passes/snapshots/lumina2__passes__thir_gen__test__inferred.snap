@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: Inferred(ExprId(0))
+expression: Inferred(ExpressionId(0))
 ---
 [
     (
@@ -10,16 +10,16 @@ expression: Inferred(ExprId(0))
             ),
         ),
         Eq(
-            Expr(
-                ExprId(
+            Expression(
+                ExpressionId(
                     0,
                 ),
             ),
         ),
     ),
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 0,
             ),
         ),

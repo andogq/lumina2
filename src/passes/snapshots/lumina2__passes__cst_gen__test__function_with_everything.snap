@@ -1,14 +1,14 @@
 ---
 source: src/passes/cst_gen.rs
-expression: "fn some_func(a: u32, b: bool) -> bool { let a = 1; 1 + 2; }"
+expression: "fn some_function(a: u32, b: bool) -> bool { let a = 1; 1 + 2; }"
 ---
 FunctionDeclaration {
     tok_fn: Fn,
     name: Ident(
-        "some_func",
+        "some_function",
     ),
-    tok_lparen: LParen,
-    params: PunctuatedList {
+    tok_l_parenthesis: LParenthesis,
+    parameters: PunctuatedList {
         items: [
             FunctionParameter {
                 name: Ident(
@@ -33,7 +33,7 @@ FunctionDeclaration {
             Comma,
         ],
     },
-    tok_rparan: RParen,
+    tok_r_parenthesis: RParenthesis,
     return_ty: Some(
         FunctionReturnType {
             tok_thin_arrow: ThinArrow,
@@ -55,7 +55,7 @@ FunctionDeclaration {
                     value: Literal(
                         Integer(
                             IntegerLiteral(
-                                IntLit(
+                                IntegerLiteral(
                                     1,
                                 ),
                             ),
@@ -64,26 +64,26 @@ FunctionDeclaration {
                     tok_semicolon: SemiColon,
                 },
             ),
-            Expr(
-                ExprStatement {
-                    expr: Binary(
+            Expression(
+                ExpressionStatement {
+                    expression: Binary(
                         Binary {
                             lhs: Literal(
                                 Integer(
                                     IntegerLiteral(
-                                        IntLit(
+                                        IntegerLiteral(
                                             1,
                                         ),
                                     ),
                                 ),
                             ),
-                            op: Plus(
+                            operation: Plus(
                                 Plus,
                             ),
                             rhs: Literal(
                                 Integer(
                                     IntegerLiteral(
-                                        IntLit(
+                                        IntegerLiteral(
                                             2,
                                         ),
                                     ),

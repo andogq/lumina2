@@ -157,8 +157,8 @@ impl IndexMut<OperandId> for Mir {
 
 #[derive(Clone, Debug)]
 pub struct Function {
-    pub ret_ty: Type,
-    pub params: Vec<Type>,
+    pub return_ty: Type,
+    pub parameters: Vec<Type>,
     pub binding: BindingId,
 
     pub locals: IndexedVec<LocalId, (Option<BindingId>, Type)>,
@@ -231,7 +231,7 @@ mod terminator {
         Call(Call),
         Goto(Goto),
         Return,
-        SwitchInt(SwitchInt),
+        SwitchInteger(SwitchInteger),
         Unterminated,
     }
 
@@ -239,13 +239,13 @@ mod terminator {
         [Terminator]
         Call: Call,
         Goto: Goto,
-        SwitchInt: SwitchInt,
+        SwitchInteger: SwitchInteger,
     }
 
     #[derive(Clone, Debug)]
     pub struct Call {
-        pub func: OperandId,
-        pub args: Vec<OperandId>,
+        pub function: OperandId,
+        pub arguments: Vec<OperandId>,
         pub destination: PlaceId,
         pub target: BasicBlockId,
     }
@@ -256,7 +256,7 @@ mod terminator {
     }
 
     #[derive(Clone, Debug)]
-    pub struct SwitchInt {
+    pub struct SwitchInteger {
         pub discriminator: OperandId,
         pub targets: Vec<(Constant, BasicBlockId)>,
         pub otherwise: BasicBlockId,
@@ -288,7 +288,7 @@ mod place {
 }
 
 mod rvalue {
-    use crate::ir::cst::{BinaryOp, UnaryOp};
+    use crate::ir::cst::{BinaryOperation, UnaryOperation};
 
     use super::*;
 
@@ -303,13 +303,13 @@ mod rvalue {
     #[derive(Clone, Debug)]
     pub struct Binary {
         pub lhs: OperandId,
-        pub op: BinaryOp,
+        pub operation: BinaryOperation,
         pub rhs: OperandId,
     }
 
     #[derive(Clone, Debug)]
     pub struct Unary {
-        pub op: UnaryOp,
+        pub operation: UnaryOperation,
         pub value: OperandId,
     }
 }

@@ -1,0 +1,39 @@
+---
+source: src/passes/cst_gen.rs
+expression: some_ident = 123 + other_ident
+---
+Assign(
+    Assign {
+        assignee: Variable(
+            Variable {
+                variable: Ident(
+                    "some_ident",
+                ),
+            },
+        ),
+        tok_eq: Eq,
+        value: Binary(
+            Binary {
+                lhs: Literal(
+                    Integer(
+                        IntegerLiteral(
+                            IntegerLiteral(
+                                123,
+                            ),
+                        ),
+                    ),
+                ),
+                operation: Plus(
+                    Plus,
+                ),
+                rhs: Variable(
+                    Variable {
+                        variable: Ident(
+                            "other_ident",
+                        ),
+                    },
+                ),
+            },
+        ),
+    },
+)

@@ -1,0 +1,16 @@
+---
+source: src/passes/cst_gen.rs
+expression: "1"
+---
+ExpressionStatement {
+    expression: Literal(
+        Integer(
+            IntegerLiteral(
+                IntegerLiteral(
+                    1,
+                ),
+            ),
+        ),
+    ),
+    tok_semicolon: None,
+}

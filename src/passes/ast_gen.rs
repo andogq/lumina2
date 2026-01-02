@@ -39,12 +39,12 @@ impl<'ctx> AstGen<'ctx> {
     fn lower_function(&mut self, function: &cst::FunctionDeclaration) {
         let function_declaration = FunctionDeclaration {
             name: self.ctx.strings.intern(&function.name.0),
-            params: function
-                .params
+            parameters: function
+                .parameters
                 .iter_items()
-                .map(|param| FunctionParameter {
-                    name: self.ctx.strings.intern(&param.name.0),
-                    ty: self.ctx.strings.intern(&param.ty.0),
+                .map(|parameter| FunctionParameter {
+                    name: self.ctx.strings.intern(&parameter.name.0),
+                    ty: self.ctx.strings.intern(&parameter.ty.0),
                 })
                 .collect(),
             return_ty: function
@@ -58,7 +58,7 @@ impl<'ctx> AstGen<'ctx> {
 
     fn lower_block(&mut self, block: &cst::Block) -> BlockId {
         let mut statements = Vec::with_capacity(block.statements.len());
-        let mut expression = None;
+        let mut block_expression = None;
 
         for (i, statement) in block.statements.iter().enumerate() {
             let is_last = i == block.statements.len() - 1;
@@ -67,7 +67,7 @@ impl<'ctx> AstGen<'ctx> {
                 cst::Statement::Let(cst::LetStatement {
                     variable, value, ..
                 }) => {
-                    let value = self.lower_expr(value);
+                    let value = self.lower_expression(value);
 
                     statements.push(
                         self.ast.statements.insert(
@@ -80,23 +80,37 @@ impl<'ctx> AstGen<'ctx> {
                     )
                 }
                 cst::Statement::Return(cst::ReturnStatement { value, .. }) => {
-                    let expr = self.lower_expr(value);
-                    statements.push(self.ast.statements.insert(ReturnStatement { expr }.into()))
+                    let expression = self.lower_expression(value);
+                    statements.push(
+                        self.ast
+                            .statements
+                            .insert(ReturnStatement { expression }.into()),
+                    )
                 }
                 cst::Statement::Break(cst::BreakStatement { value, .. }) => {
-                    let expr = value.as_ref().map(|expr| self.lower_expr(expr));
-                    statements.push(self.ast.statements.insert(BreakStatement { expr }.into()))
+                    let expression = value
+                        .as_ref()
+                        .map(|expression| self.lower_expression(expression));
+                    statements.push(
+                        self.ast
+                            .statements
+                            .insert(BreakStatement { expression }.into()),
+                    )
                 }
-                cst::Statement::Expr(cst::ExprStatement {
-                    expr,
+                cst::Statement::Expression(cst::ExpressionStatement {
+                    expression,
                     tok_semicolon,
                 }) => {
-                    let expr = self.lower_expr(expr);
+                    let expression = self.lower_expression(expression);
 
                     if is_last && tok_semicolon.is_none() {
-                        expression = Some(expr);
+                        block_expression = Some(expression);
                     } else {
-                        statements.push(self.ast.statements.insert(ExprStatement { expr }.into()));
+                        statements.push(
+                            self.ast
+                                .statements
+                                .insert(ExpressionStatement { expression }.into()),
+                        );
                     }
                 }
             }
@@ -104,46 +118,50 @@ impl<'ctx> AstGen<'ctx> {
 
         self.ast.blocks.insert(Block {
             statements,
-            expression,
+            expression: block_expression,
         })
     }
 
-    pub fn lower_expr(&mut self, expr: &cst::Expr) -> ExprId {
-        let expr = match expr {
-            cst::Expr::Assign(cst::Assign {
+    pub fn lower_expression(&mut self, expression: &cst::Expression) -> ExpressionId {
+        let expression = match expression {
+            cst::Expression::Assign(cst::Assign {
                 assignee, value, ..
             }) => Assign {
-                variable: self.lower_expr(assignee),
-                value: self.lower_expr(value),
+                variable: self.lower_expression(assignee),
+                value: self.lower_expression(value),
             }
             .into(),
-            cst::Expr::Binary(cst::Binary { lhs, op, rhs }) => Binary {
-                lhs: self.lower_expr(lhs),
-                op: op.clone(),
-                rhs: self.lower_expr(rhs),
+            cst::Expression::Binary(cst::Binary {
+                lhs,
+                operation,
+                rhs,
+            }) => Binary {
+                lhs: self.lower_expression(lhs),
+                operation: operation.clone(),
+                rhs: self.lower_expression(rhs),
             }
             .into(),
-            cst::Expr::Unary(cst::Unary { op, value }) => Unary {
-                op: op.clone(),
-                value: self.lower_expr(value),
+            cst::Expression::Unary(cst::Unary { operation, value }) => Unary {
+                operation: operation.clone(),
+                value: self.lower_expression(value),
             }
             .into(),
-            cst::Expr::If(if_expr) => {
+            cst::Expression::If(if_expression) => {
                 let mut conditions = Vec::new();
 
                 let otherwise = {
-                    let mut if_expr = if_expr;
+                    let mut if_expression = if_expression;
                     loop {
                         conditions.push((
-                            self.lower_expr(&if_expr.condition),
-                            self.lower_block(&if_expr.then),
+                            self.lower_expression(&if_expression.condition),
+                            self.lower_block(&if_expression.then),
                         ));
 
-                        let Some(trailer) = &if_expr.trailer else {
+                        let Some(trailer) = &if_expression.trailer else {
                             break None;
                         };
                         match &trailer.if_or_block {
-                            cst::IfOrBlock::If(inner) => if_expr = inner,
+                            cst::IfOrBlock::If(inner) => if_expression = inner,
                             cst::IfOrBlock::Block(block) => {
                                 break Some(block);
                             }
@@ -159,11 +177,11 @@ impl<'ctx> AstGen<'ctx> {
                 }
                 .into()
             }
-            cst::Expr::Loop(cst::Loop { body, .. }) => Loop {
+            cst::Expression::Loop(cst::Loop { body, .. }) => Loop {
                 body: self.lower_block(body),
             }
             .into(),
-            cst::Expr::Literal(literal) => match literal {
+            cst::Expression::Literal(literal) => match literal {
                 cst::Literal::Integer(integer_literal) => {
                     Literal::Integer(integer_literal.as_usize())
                 }
@@ -172,25 +190,27 @@ impl<'ctx> AstGen<'ctx> {
                 }
             }
             .into(),
-            cst::Expr::Paren(cst::Paren { expr, .. }) => return self.lower_expr(expr),
-            cst::Expr::Call(cst::Call {
+            cst::Expression::Parenthesis(cst::Parenthesis { expression, .. }) => {
+                return self.lower_expression(expression);
+            }
+            cst::Expression::Call(cst::Call {
                 callee, arguments, ..
             }) => Call {
-                callee: self.lower_expr(callee),
+                callee: self.lower_expression(callee),
                 arguments: arguments
                     .iter_items()
-                    .map(|arg| self.lower_expr(arg))
+                    .map(|argument| self.lower_expression(argument))
                     .collect(),
             }
             .into(),
-            cst::Expr::Block(block) => self.lower_block(block).into(),
-            cst::Expr::Variable(cst::Variable { variable }) => Variable {
+            cst::Expression::Block(block) => self.lower_block(block).into(),
+            cst::Expression::Variable(cst::Variable { variable }) => Variable {
                 variable: self.ctx.strings.intern(&variable.0),
             }
             .into(),
         };
 
-        self.ast.expressions.insert(expr)
+        self.ast.expressions.insert(expression)
     }
 }
 
@@ -227,13 +247,13 @@ mod test {
         "if condition { then } else if thing { then_2 } else { otherwise }"
     )]
     #[case("literal_bool", "true")]
-    #[case("literal_int", "123")]
+    #[case("literal_integer", "123")]
     #[case("call_simple", "some_ident()")]
-    #[case("call_args", "some_ident(1, something, true)")]
+    #[case("call_arguments", "some_ident(1, something, true)")]
     #[case("variable_simple", "some_ident")]
-    fn lower_expr(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
+    fn lower_expression(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
         let mut pass = AstGen::new(&mut ctx);
-        let expr_id = pass.lower_expr(&parse::<cst::Expr>(source));
-        assert_debug_snapshot!(name, pass.ast[expr_id], source);
+        let expression_id = pass.lower_expression(&parse::<cst::Expression>(source));
+        assert_debug_snapshot!(name, pass.ast[expression_id], source);
     }
 }

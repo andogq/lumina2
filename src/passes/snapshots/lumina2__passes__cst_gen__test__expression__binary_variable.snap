@@ -1,0 +1,23 @@
+---
+source: src/passes/cst_gen.rs
+expression: a + b
+---
+Binary {
+    lhs: Variable(
+        Variable {
+            variable: Ident(
+                "a",
+            ),
+        },
+    ),
+    operation: Plus(
+        Plus,
+    ),
+    rhs: Variable(
+        Variable {
+            variable: Ident(
+                "b",
+            ),
+        },
+    ),
+}

@@ -4,7 +4,7 @@ expression: "Block { statements: [], expression: None }"
 ---
 Block {
     statements: [],
-    expr: ExprId(
+    expression: ExpressionId(
         0,
     ),
 }

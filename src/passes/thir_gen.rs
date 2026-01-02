@@ -1,5 +1,5 @@
 use crate::{
-    ir::cst::{BinaryOp, UnaryOp},
+    ir::cst::{BinaryOperation, UnaryOperation},
     prelude::{thir::Thir, *},
     ty::{Constraint, IntegerKind, solver::Solver},
 };
@@ -59,12 +59,12 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
             TypeVarId::Binding(function.binding),
             Constraint::Eq(
                 Type::Function {
-                    params: function
+                    parameters: function
                         .parameters
                         .iter()
                         .map(|(_, ty)| ty.clone())
                         .collect(),
-                    ret_ty: Box::new(function.return_ty.clone()),
+                    return_ty: Box::new(function.return_ty.clone()),
                 }
                 .into(),
             ),
@@ -85,7 +85,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
         // Add constraint for the function return type (the body of the function must result in the
         // return type).
         self.constraints.push((
-            self.hir[function.entry].expr.into(),
+            self.hir[function.entry].expression.into(),
             Constraint::Eq(function.return_ty.clone().into()),
         ));
 
@@ -104,58 +104,64 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                         // Directly set variable type.
                         DeclarationTy::Type(ty) => Constraint::Eq(ty.clone().into()),
                         // Infer variable's type from the provided expression.
-                        DeclarationTy::Inferred(expr) => Constraint::Eq((*expr).into()),
+                        DeclarationTy::Inferred(expression) => Constraint::Eq((*expression).into()),
                     },
                 )),
                 // Expression must equal the return type of the current function.
-                Statement::Return(ReturnStatement { expr }) => self.constraints.push((
-                    (*expr).into(),
+                Statement::Return(ReturnStatement { expression }) => self.constraints.push((
+                    (*expression).into(),
                     Constraint::Eq(self.hir[ctx.function].return_ty.clone().into()),
                 )),
-                Statement::Break(BreakStatement { expr }) => match ctx.loops.last() {
+                Statement::Break(BreakStatement { expression }) => match ctx.loops.last() {
                     // Break expression must match the expression of the inner most loop.
                     Some(current_loop) => self
                         .constraints
-                        .push(((*expr).into(), Constraint::Eq((*current_loop).into()))),
+                        .push(((*expression).into(), Constraint::Eq((*current_loop).into()))),
                     // Not currently in a loop, so report that it's invalid, and continue
                     // generating constraints.
                     None => self
                         .errors
                         .push(self.ctx.errors.report(ThirGenError::InvalidBreak)),
                 },
-                Statement::Expr(ExprStatement { expr }) => self.add_expr_constraints(ctx, *expr),
+                Statement::Expression(ExpressionStatement { expression }) => {
+                    self.add_expression_constraints(ctx, *expression)
+                }
             }
         }
 
-        self.add_expr_constraints(ctx, block.expr);
+        self.add_expression_constraints(ctx, block.expression);
     }
 
-    fn add_expr_constraints(&mut self, ctx: &ConstraintCtx, expr_id: ExprId) {
-        let expr = &self.hir[expr_id];
+    fn add_expression_constraints(&mut self, ctx: &ConstraintCtx, expression_id: ExpressionId) {
+        let expression = &self.hir[expression_id];
 
-        match expr {
-            Expr::Assign(Assign { variable, value }) => {
+        match expression {
+            Expression::Assign(Assign { variable, value }) => {
                 self.constraints.extend([
                     // Value of the assignment must match the variable it's being assigned to.
                     ((*value).into(), Constraint::Eq((*variable).into())),
                     // The actual assignment expression results in unit.
-                    (expr_id.into(), Constraint::Eq(Type::Unit.into())),
+                    (expression_id.into(), Constraint::Eq(Type::Unit.into())),
                 ]);
 
-                self.add_expr_constraints(ctx, *variable);
-                self.add_expr_constraints(ctx, *value);
+                self.add_expression_constraints(ctx, *variable);
+                self.add_expression_constraints(ctx, *value);
             }
-            Expr::Binary(Binary { lhs, op, rhs }) => {
-                self.add_expr_constraints(ctx, *lhs);
-                self.add_expr_constraints(ctx, *rhs);
+            Expression::Binary(Binary {
+                lhs,
+                operation,
+                rhs,
+            }) => {
+                self.add_expression_constraints(ctx, *lhs);
+                self.add_expression_constraints(ctx, *rhs);
 
-                match op {
-                    BinaryOp::Plus(_)
-                    | BinaryOp::Minus(_)
-                    | BinaryOp::Multiply(_)
-                    | BinaryOp::Divide(_)
-                    | BinaryOp::BinaryAnd(_)
-                    | BinaryOp::BinaryOr(_) => {
+                match operation {
+                    BinaryOperation::Plus(_)
+                    | BinaryOperation::Minus(_)
+                    | BinaryOperation::Multiply(_)
+                    | BinaryOperation::Divide(_)
+                    | BinaryOperation::BinaryAnd(_)
+                    | BinaryOperation::BinaryOr(_) => {
                         self.constraints.extend([
                             // Operands must equal each other.
                             ((*lhs).into(), Constraint::Eq((*rhs).into())),
@@ -163,21 +169,21 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                             ((*lhs).into(), Constraint::Integer(IntegerKind::Any)),
                             ((*rhs).into(), Constraint::Integer(IntegerKind::Any)),
                             // Result is the same as the input.
-                            (expr_id.into(), Constraint::Eq((*lhs).into())),
+                            (expression_id.into(), Constraint::Eq((*lhs).into())),
                         ]);
                     }
-                    BinaryOp::Equal(_) | BinaryOp::NotEqual(_) => {
+                    BinaryOperation::Equal(_) | BinaryOperation::NotEqual(_) => {
                         self.constraints.extend([
                             // Operands must be identical
                             ((*lhs).into(), Constraint::Eq((*rhs).into())),
                             // Results in a boolean.
-                            (expr_id.into(), Constraint::Eq(Type::Boolean.into())),
+                            (expression_id.into(), Constraint::Eq(Type::Boolean.into())),
                         ]);
                     }
-                    BinaryOp::Greater(_)
-                    | BinaryOp::GreaterEqual(_)
-                    | BinaryOp::Less(_)
-                    | BinaryOp::LessEqual(_) => {
+                    BinaryOperation::Greater(_)
+                    | BinaryOperation::GreaterEqual(_)
+                    | BinaryOperation::Less(_)
+                    | BinaryOperation::LessEqual(_) => {
                         self.constraints.extend([
                             // Operands must be identical
                             ((*lhs).into(), Constraint::Eq((*rhs).into())),
@@ -186,56 +192,56 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                             ((*lhs).into(), Constraint::Integer(IntegerKind::Any)),
                             ((*rhs).into(), Constraint::Integer(IntegerKind::Any)),
                             // Results in a boolean.
-                            (expr_id.into(), Constraint::Eq(Type::Boolean.into())),
+                            (expression_id.into(), Constraint::Eq(Type::Boolean.into())),
                         ]);
                     }
-                    BinaryOp::LogicalAnd(_) | BinaryOp::LogicalOr(_) => {
+                    BinaryOperation::LogicalAnd(_) | BinaryOperation::LogicalOr(_) => {
                         self.constraints.extend([
                             // Operands must be booleans.
                             ((*lhs).into(), Constraint::Eq(Type::Boolean.into())),
                             ((*rhs).into(), Constraint::Eq(Type::Boolean.into())),
                             // Results in a boolean.
-                            (expr_id.into(), Constraint::Eq(Type::Boolean.into())),
+                            (expression_id.into(), Constraint::Eq(Type::Boolean.into())),
                         ]);
                     }
                 }
             }
-            Expr::Unary(Unary { op, value }) => {
-                self.add_expr_constraints(ctx, *value);
+            Expression::Unary(Unary { operation, value }) => {
+                self.add_expression_constraints(ctx, *value);
 
-                match op {
-                    UnaryOp::Not(_) => {
+                match operation {
+                    UnaryOperation::Not(_) => {
                         self.constraints.extend([
                             // Output is same as input.
-                            (expr_id.into(), Constraint::Eq((*value).into())),
+                            (expression_id.into(), Constraint::Eq((*value).into())),
                             // Operand can be any integer.
                             ((*value).into(), Constraint::Integer(IntegerKind::Any)),
                         ]);
                     }
-                    UnaryOp::Negative(_) => {
+                    UnaryOperation::Negative(_) => {
                         self.constraints.extend([
                             // Output is same as input.
-                            (expr_id.into(), Constraint::Eq((*value).into())),
+                            (expression_id.into(), Constraint::Eq((*value).into())),
                             // Operand can be any integer.
                             ((*value).into(), Constraint::Integer(IntegerKind::Signed)),
                         ]);
                     }
-                    UnaryOp::Deref(_) => {
+                    UnaryOperation::Deref(_) => {
                         // Make sure that operand is a pointer, and output is inner type of pointer.
                         self.constraints
-                            .push(((*value).into(), Constraint::Reference(expr_id.into())));
+                            .push(((*value).into(), Constraint::Reference(expression_id.into())));
                     }
-                    UnaryOp::Ref(_) => self
+                    UnaryOperation::Ref(_) => self
                         .constraints
-                        .push((expr_id.into(), Constraint::Reference((*value).into()))),
+                        .push((expression_id.into(), Constraint::Reference((*value).into()))),
                 }
             }
-            Expr::Switch(Switch {
+            Expression::Switch(Switch {
                 discriminator,
                 branches,
                 default,
             }) => {
-                self.add_expr_constraints(ctx, *discriminator);
+                self.add_expression_constraints(ctx, *discriminator);
                 for (_, branch) in branches {
                     self.add_block_constraints(ctx, *branch);
                 }
@@ -249,63 +255,69 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                             // Branch literal must match discriminator.
                             ((*discriminator).into(), constraint_from_literal(literal)),
                             // Block which is resolved must match this expression.
-                            (self.hir[*block].expr.into(), Constraint::Eq(expr_id.into())),
+                            (
+                                self.hir[*block].expression.into(),
+                                Constraint::Eq(expression_id.into()),
+                            ),
                         ]
                     }));
 
                 // Ensure the default branch matches the expression, or unit if there is no default branch.
                 // TODO: This does not handle branches which are exhaustive.
                 self.constraints.push((
-                    expr_id.into(),
+                    expression_id.into(),
                     Constraint::Eq(match default {
-                        Some(default) => self.hir[*default].expr.into(),
+                        Some(default) => self.hir[*default].expression.into(),
                         None => Type::Unit.into(),
                     }),
                 ));
             }
-            Expr::Loop(Loop { body }) => {
+            Expression::Loop(Loop { body }) => {
                 // Ensure the body of the loop doesn't yield any non-unit expressions.
                 self.constraints.push((
-                    self.hir[*body].expr.into(),
+                    self.hir[*body].expression.into(),
                     Constraint::Eq(Type::Unit.into()),
                 ));
 
                 // Create a new ctx for generating constraints for the body.
-                let ctx = ctx.push_loop(expr_id);
+                let ctx = ctx.push_loop(expression_id);
                 self.add_block_constraints(&ctx, *body);
             }
-            Expr::Literal(literal) => self
+            Expression::Literal(literal) => self
                 .constraints
-                .push((expr_id.into(), constraint_from_literal(literal))),
-            Expr::Call(Call { callee, arguments }) => {
-                self.add_expr_constraints(ctx, *callee);
+                .push((expression_id.into(), constraint_from_literal(literal))),
+            Expression::Call(Call { callee, arguments }) => {
+                self.add_expression_constraints(ctx, *callee);
                 for argument in arguments {
-                    self.add_expr_constraints(ctx, *argument);
+                    self.add_expression_constraints(ctx, *argument);
                 }
 
                 self.constraints.push((
                     (*callee).into(),
                     Constraint::Function {
-                        params: arguments.iter().map(|arg| (*arg).into()).collect(),
-                        ret_ty: expr_id.into(),
+                        parameters: arguments
+                            .iter()
+                            .map(|argument| (*argument).into())
+                            .collect(),
+                        return_ty: expression_id.into(),
                     },
                 ));
             }
-            Expr::Block(block_id) => {
+            Expression::Block(block_id) => {
                 self.add_block_constraints(ctx, *block_id);
 
                 // Type of this expression will be the type of the block.
                 self.constraints.push((
-                    expr_id.into(),
-                    Constraint::Eq(self.hir[*block_id].expr.into()),
+                    expression_id.into(),
+                    Constraint::Eq(self.hir[*block_id].expression.into()),
                 ));
             }
-            Expr::Variable(Variable { binding }) => self
+            Expression::Variable(Variable { binding }) => self
                 .constraints
-                .push((expr_id.into(), Constraint::Eq((*binding).into()))),
-            Expr::Unreachable => self
+                .push((expression_id.into(), Constraint::Eq((*binding).into()))),
+            Expression::Unreachable => self
                 .constraints
-                .push((expr_id.into(), Constraint::Eq(Type::Never.into()))),
+                .push((expression_id.into(), Constraint::Eq(Type::Never.into()))),
         }
     }
 }
@@ -324,7 +336,7 @@ struct ConstraintCtx {
     /// Current function which constraints are being produced for.
     function: FunctionId,
     /// Track nested loop expressions.
-    loops: Vec<ExprId>,
+    loops: Vec<ExpressionId>,
 }
 
 impl ConstraintCtx {
@@ -337,9 +349,9 @@ impl ConstraintCtx {
     }
 
     /// Push a new loop to the context, returning a new instance..
-    pub fn push_loop(&self, loop_expr: ExprId) -> Self {
+    pub fn push_loop(&self, loop_expression: ExpressionId) -> Self {
         let mut ctx = self.clone();
-        ctx.loops.push(loop_expr);
+        ctx.loops.push(loop_expression);
         ctx
     }
 }
@@ -360,7 +372,7 @@ mod test {
             functions: indexed_vec![],
             blocks: indexed_vec![],
             statements: indexed_vec![],
-            exprs: indexed_vec![Expr::Literal(Literal::Unit),],
+            expressions: indexed_vec![Expression::Literal(Literal::Unit),],
         }
     }
 
@@ -379,18 +391,18 @@ mod test {
 
     #[rstest]
     #[case("simple", [], Type::Unit)]
-    #[case("return int", [], Type::I8)]
-    #[case("params", [(BindingId::from_id(1), Type::I8), (BindingId::from_id(2), Type::Boolean)], Type::Boolean)]
+    #[case("return integer", [], Type::I8)]
+    #[case("parameters", [(BindingId::from_id(1), Type::I8), (BindingId::from_id(2), Type::Boolean)], Type::Boolean)]
     fn function_declaration(
         mut hir: Hir,
         mut ctx: Ctx,
         #[case] name: &str,
-        #[case] params: impl IntoIterator<Item = (BindingId, Type)>,
+        #[case] parameters: impl IntoIterator<Item = (BindingId, Type)>,
         #[case] return_ty: Type,
     ) {
         let function = Function {
             binding: BindingId::from_id(0),
-            parameters: params.into_iter().collect(),
+            parameters: parameters.into_iter().collect(),
             return_ty,
             entry: BlockId::from_id(0),
         };
@@ -407,7 +419,7 @@ mod test {
     }
 
     #[rstest]
-    #[case("inferred", DeclarationTy::Inferred(ExprId::from_id(0)))]
+    #[case("inferred", DeclarationTy::Inferred(ExpressionId::from_id(0)))]
     #[case("with unit", DeclarationTy::Type(Type::Unit))]
     #[case("with type", DeclarationTy::Type(Type::I8))]
     fn variable_declaration(
@@ -423,7 +435,7 @@ mod test {
         }));
         let block = hir.blocks.insert(Block {
             statements: vec![statement],
-            expr: ExprId::from_id(0),
+            expression: ExpressionId::from_id(0),
         });
 
         let mut pass = ThirGen::new(&mut ctx, &hir);
@@ -433,52 +445,52 @@ mod test {
     }
 
     #[rstest]
-    #[case("assign", Assign { variable: ExprId::from_id(0), value: ExprId::from_id(0) })]
+    #[case("assign", Assign { variable: ExpressionId::from_id(0), value: ExpressionId::from_id(0) })]
     #[case(
         "plus",
         Binary {
-            lhs: ExprId::from_id(0),
-            op: BinaryOp::Plus(tok::Plus),
-            rhs: ExprId::from_id(0),
+            lhs: ExpressionId::from_id(0),
+            operation: BinaryOperation::Plus(tok::Plus),
+            rhs: ExpressionId::from_id(0),
         },
     )]
     #[case(
         "logical and",
         Binary {
-            lhs: ExprId::from_id(0),
-            op: BinaryOp::LogicalAnd(tok::AmpAmp),
-            rhs: ExprId::from_id(0),
+            lhs: ExpressionId::from_id(0),
+            operation: BinaryOperation::LogicalAnd(tok::AmpAmp),
+            rhs: ExpressionId::from_id(0),
         },
     )]
     #[case(
         "equal",
         Binary {
-            lhs: ExprId::from_id(0),
-            op: BinaryOp::Equal(tok::EqEq),
-            rhs: ExprId::from_id(0),
+            lhs: ExpressionId::from_id(0),
+            operation: BinaryOperation::Equal(tok::EqEq),
+            rhs: ExpressionId::from_id(0),
         },
     )]
     #[case(
         "greater",
         Binary {
-            lhs: ExprId::from_id(0),
-            op: BinaryOp::Greater(tok::RAngle),
-            rhs: ExprId::from_id(0),
+            lhs: ExpressionId::from_id(0),
+            operation: BinaryOperation::Greater(tok::RAngle),
+            rhs: ExpressionId::from_id(0),
         },
     )]
-    #[case("negative", Unary { op: UnaryOp::Negative(tok::Minus), value: ExprId::from_id(0) })]
-    fn expr_constraint(
+    #[case("negative", Unary { operation: UnaryOperation::Negative(tok::Minus), value: ExpressionId::from_id(0) })]
+    fn expression_constraint(
         mut hir: Hir,
         mut ctx: Ctx,
         constraint_ctx: ConstraintCtx,
         #[case] name: &str,
-        #[case] expr: impl Into<Expr> + Debug,
+        #[case] expression: impl Into<Expression> + Debug,
     ) {
-        let dbg_str = format!("{expr:?}");
-        let expr_id = hir.exprs.insert(expr.into());
+        let dbg_str = format!("{expression:?}");
+        let expression_id = hir.expressions.insert(expression.into());
 
         let mut pass = ThirGen::new(&mut ctx, &hir);
-        pass.add_expr_constraints(&constraint_ctx, expr_id);
+        pass.add_expression_constraints(&constraint_ctx, expression_id);
         assert_debug_snapshot!(name, pass.constraints, &dbg_str);
         assert!(pass.errors.is_empty());
     }

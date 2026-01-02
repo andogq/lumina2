@@ -2,10 +2,10 @@ pub mod thir;
 
 use crate::prelude::*;
 
-pub use self::{block::*, expr::*, functions::*, statement::*, type_refs::*};
+pub use self::{block::*, expression::*, functions::*, statement::*, type_refs::*};
 
 create_id!(BlockId);
-create_id!(ExprId);
+create_id!(ExpressionId);
 create_id!(FunctionId);
 create_id!(StatementId);
 
@@ -14,7 +14,7 @@ pub struct Hir {
     pub functions: IndexedVec<FunctionId, Function>,
     pub blocks: IndexedVec<BlockId, Block>,
     pub statements: IndexedVec<StatementId, Statement>,
-    pub exprs: IndexedVec<ExprId, Expr>,
+    pub expressions: IndexedVec<ExpressionId, Expression>,
 }
 
 impl Index<FunctionId> for Hir {
@@ -41,11 +41,11 @@ impl Index<StatementId> for Hir {
     }
 }
 
-impl Index<ExprId> for Hir {
-    type Output = Expr;
+impl Index<ExpressionId> for Hir {
+    type Output = Expression;
 
-    fn index(&self, index: ExprId) -> &Self::Output {
-        &self.exprs[index]
+    fn index(&self, index: ExpressionId) -> &Self::Output {
+        &self.expressions[index]
     }
 }
 
@@ -67,7 +67,7 @@ mod block {
     #[derive(Clone, Debug)]
     pub struct Block {
         pub statements: Vec<StatementId>,
-        pub expr: ExprId,
+        pub expression: ExpressionId,
     }
 }
 
@@ -79,7 +79,7 @@ mod statement {
         Declare(DeclareStatement),
         Return(ReturnStatement),
         Break(BreakStatement),
-        Expr(ExprStatement),
+        Expression(ExpressionStatement),
     }
 
     #[derive(Clone, Debug)]
@@ -91,35 +91,35 @@ mod statement {
     #[derive(Clone, Debug)]
     pub enum DeclarationTy {
         Type(Type),
-        Inferred(ExprId),
+        Inferred(ExpressionId),
     }
 
     #[derive(Clone, Debug)]
     pub struct ReturnStatement {
-        pub expr: ExprId,
+        pub expression: ExpressionId,
     }
 
     #[derive(Clone, Debug)]
     pub struct BreakStatement {
-        pub expr: ExprId,
+        pub expression: ExpressionId,
     }
 
     #[derive(Clone, Debug)]
-    pub struct ExprStatement {
-        pub expr: ExprId,
+    pub struct ExpressionStatement {
+        pub expression: ExpressionId,
     }
 }
 
-mod expr {
+mod expression {
     use crate::{
         enum_conversion,
-        ir::cst::{BinaryOp, UnaryOp},
+        ir::cst::{BinaryOperation, UnaryOperation},
     };
 
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub enum Expr {
+    pub enum Expression {
         Assign(Assign),
         Binary(Binary),
         Unary(Unary),
@@ -134,26 +134,26 @@ mod expr {
 
     #[derive(Clone, Debug)]
     pub struct Assign {
-        pub variable: ExprId,
-        pub value: ExprId,
+        pub variable: ExpressionId,
+        pub value: ExpressionId,
     }
 
     #[derive(Clone, Debug)]
     pub struct Binary {
-        pub lhs: ExprId,
-        pub op: BinaryOp,
-        pub rhs: ExprId,
+        pub lhs: ExpressionId,
+        pub operation: BinaryOperation,
+        pub rhs: ExpressionId,
     }
 
     #[derive(Clone, Debug)]
     pub struct Unary {
-        pub op: UnaryOp,
-        pub value: ExprId,
+        pub operation: UnaryOperation,
+        pub value: ExpressionId,
     }
 
     #[derive(Clone, Debug)]
     pub struct Switch {
-        pub discriminator: ExprId,
+        pub discriminator: ExpressionId,
         pub branches: Vec<(Literal, BlockId)>,
         pub default: Option<BlockId>,
     }
@@ -172,8 +172,8 @@ mod expr {
 
     #[derive(Clone, Debug)]
     pub struct Call {
-        pub callee: ExprId,
-        pub arguments: Vec<ExprId>,
+        pub callee: ExpressionId,
+        pub arguments: Vec<ExpressionId>,
     }
 
     #[derive(Clone, Debug)]
@@ -182,7 +182,7 @@ mod expr {
     }
 
     enum_conversion! {
-        [Expr]
+        [Expression]
         Assign: Assign,
         Binary: Binary,
         Unary: Unary,
@@ -221,8 +221,8 @@ mod type_refs {
         Boolean,
         Ref(Box<Type>),
         Function {
-            params: Vec<Type>,
-            ret_ty: Box<Type>,
+            parameters: Vec<Type>,
+            return_ty: Box<Type>,
         },
     }
 

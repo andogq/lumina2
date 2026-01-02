@@ -1,11 +1,11 @@
 use crate::prelude::*;
 
-use crate::ir::cst::{BinaryOp, UnaryOp};
+use crate::ir::cst::{BinaryOperation, UnaryOperation};
 
-pub use self::{block::*, expr::*, function::*, statement::*};
+pub use self::{block::*, expression::*, function::*, statement::*};
 
 create_id!(BlockId);
-create_id!(ExprId);
+create_id!(ExpressionId);
 create_id!(FunctionId);
 create_id!(StatementId);
 
@@ -15,7 +15,7 @@ pub struct Ast {
 
     pub blocks: IndexedVec<BlockId, Block>,
     pub statements: IndexedVec<StatementId, Statement>,
-    pub expressions: IndexedVec<ExprId, Expr>,
+    pub expressions: IndexedVec<ExpressionId, Expression>,
 }
 
 impl Ast {
@@ -37,10 +37,10 @@ impl Index<BlockId> for Ast {
     }
 }
 
-impl Index<ExprId> for Ast {
-    type Output = Expr;
+impl Index<ExpressionId> for Ast {
+    type Output = Expression;
 
-    fn index(&self, index: ExprId) -> &Self::Output {
+    fn index(&self, index: ExpressionId) -> &Self::Output {
         &self.expressions[index]
     }
 }
@@ -67,7 +67,7 @@ mod function {
     #[derive(Clone, Debug)]
     pub struct FunctionDeclaration {
         pub name: StringId,
-        pub params: Vec<FunctionParameter>,
+        pub parameters: Vec<FunctionParameter>,
         pub return_ty: Option<StringId>,
         pub body: BlockId,
     }
@@ -85,7 +85,7 @@ mod block {
     #[derive(Clone, Debug)]
     pub struct Block {
         pub statements: Vec<StatementId>,
-        pub expression: Option<ExprId>,
+        pub expression: Option<ExpressionId>,
     }
 }
 
@@ -99,28 +99,28 @@ mod statement {
         Let(LetStatement),
         Return(ReturnStatement),
         Break(BreakStatement),
-        Expr(ExprStatement),
+        Expression(ExpressionStatement),
     }
 
     #[derive(Clone, Debug)]
     pub struct LetStatement {
         pub variable: StringId,
-        pub value: ExprId,
+        pub value: ExpressionId,
     }
 
     #[derive(Clone, Debug)]
     pub struct ReturnStatement {
-        pub expr: ExprId,
+        pub expression: ExpressionId,
     }
 
     #[derive(Clone, Debug)]
     pub struct BreakStatement {
-        pub expr: Option<ExprId>,
+        pub expression: Option<ExpressionId>,
     }
 
     #[derive(Clone, Debug)]
-    pub struct ExprStatement {
-        pub expr: ExprId,
+    pub struct ExpressionStatement {
+        pub expression: ExpressionId,
     }
 
     enum_conversion! {
@@ -128,17 +128,17 @@ mod statement {
         Let: LetStatement,
         Return: ReturnStatement,
         Break: BreakStatement,
-        Expr: ExprStatement,
+        Expression: ExpressionStatement,
     }
 }
 
-mod expr {
+mod expression {
     use crate::enum_conversion;
 
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub enum Expr {
+    pub enum Expression {
         Assign(Assign),
         Binary(Binary),
         Unary(Unary),
@@ -152,26 +152,26 @@ mod expr {
 
     #[derive(Clone, Debug)]
     pub struct Assign {
-        pub variable: ExprId,
-        pub value: ExprId,
+        pub variable: ExpressionId,
+        pub value: ExpressionId,
     }
 
     #[derive(Clone, Debug)]
     pub struct Binary {
-        pub lhs: ExprId,
-        pub op: BinaryOp,
-        pub rhs: ExprId,
+        pub lhs: ExpressionId,
+        pub operation: BinaryOperation,
+        pub rhs: ExpressionId,
     }
 
     #[derive(Clone, Debug)]
     pub struct Unary {
-        pub op: UnaryOp,
-        pub value: ExprId,
+        pub operation: UnaryOperation,
+        pub value: ExpressionId,
     }
 
     #[derive(Clone, Debug)]
     pub struct If {
-        pub conditions: Vec<(ExprId, BlockId)>,
+        pub conditions: Vec<(ExpressionId, BlockId)>,
         pub otherwise: Option<BlockId>,
     }
 
@@ -189,8 +189,8 @@ mod expr {
 
     #[derive(Clone, Debug)]
     pub struct Call {
-        pub callee: ExprId,
-        pub arguments: Vec<ExprId>,
+        pub callee: ExpressionId,
+        pub arguments: Vec<ExpressionId>,
     }
 
     #[derive(Clone, Debug)]
@@ -199,7 +199,7 @@ mod expr {
     }
 
     enum_conversion! {
-        [Expr]
+        [Expression]
         Assign: Assign,
         Binary: Binary,
         Unary: Unary,

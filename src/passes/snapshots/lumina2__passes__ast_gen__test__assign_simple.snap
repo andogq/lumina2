@@ -4,10 +4,10 @@ expression: a = 1 + 2
 ---
 Assign(
     Assign {
-        variable: ExprId(
+        variable: ExpressionId(
             0,
         ),
-        value: ExprId(
+        value: ExpressionId(
             3,
         ),
     },

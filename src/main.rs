@@ -39,6 +39,7 @@ use crate::prelude::*;
 /// };
 /// ```
 macro_rules! pipeline {
+    // spell-checker:disable-next-line
     ([$ctx:expr] $input:expr => { $(|> $pass:ty $(=> ($extra:expr))? $([$($meta:tt)+])*)* }) => {{
         let input = $input;
 
@@ -55,6 +56,7 @@ macro_rules! pipeline {
         input
     }};
 
+    // spell-checker:disable-next-line
     (@extra $extra:expr) => {
         $extra
     };
@@ -213,7 +215,7 @@ mod test {
         }
 
         #[test]
-        fn params() {
+        fn parameters() {
             assert_eq!(
                 run("fn double(a: u8) -> u8 { a * 2 } fn main() -> u8 { double(3) }"),
                 6
@@ -244,7 +246,7 @@ mod test {
         fn function_as_value() {
             assert_eq!(
                 run(
-                    "fn a() -> u8 { 123 } fn b() -> u8 { 99 } fn main() -> u8 { let func = if true { a } else { b }; func() }"
+                    "fn a() -> u8 { 123 } fn b() -> u8 { 99 } fn main() -> u8 { let my_fn = if true { a } else { b }; my_fn() }"
                 ),
                 123
             );

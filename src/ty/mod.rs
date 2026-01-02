@@ -8,14 +8,14 @@ use crate::{enum_conversion, ir::hir::*};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeVarId {
-    Expr(ExprId),
+    Expression(ExpressionId),
     Binding(BindingId),
     Type(Type),
 }
 
 enum_conversion! {
     [TypeVarId]
-    Expr: ExprId,
+    Expression: ExpressionId,
     Binding: BindingId,
     Type: Type,
 }
@@ -26,8 +26,8 @@ pub enum Constraint {
     Integer(IntegerKind),
     Reference(TypeVarId),
     Function {
-        params: Vec<TypeVarId>,
-        ret_ty: TypeVarId,
+        parameters: Vec<TypeVarId>,
+        return_ty: TypeVarId,
     },
 }
 
@@ -114,19 +114,19 @@ mod test {
 
     use crate::passes::{ast_gen::AstGen, cst_gen::Parse, hir_gen::HirGen, thir_gen::ThirGen};
 
-    fn get_ty(expr: &str) -> Type {
+    fn get_ty(expression: &str) -> Type {
         let mut ctx = Ctx::new();
 
         // Tokenise the source.
-        let mut lexer = Lexer::new(expr);
+        let mut lexer = Lexer::new(expression);
         // Parse into CST.
-        let expr = cst::Expr::parse(&mut lexer);
+        let expression = cst::Expression::parse(&mut lexer);
         // Ensure that the entirety of the source was consumed.
         lexer.expect::<tok::Eof>().unwrap();
 
         // Create a new AST builder, and lower the expression.
         let mut ast_pass = AstGen::new(&mut ctx);
-        let expr_id = ast_pass.lower_expr(&expr);
+        let expression_id = ast_pass.lower_expression(&expression);
 
         // Finalise the AST.
         let mut ast = ast_pass.ast;
@@ -141,7 +141,7 @@ mod test {
                 .statements
                 .insert(ast::Statement::Let(ast::LetStatement {
                     variable,
-                    value: expr_id,
+                    value: expression_id,
                 }));
             let block_id = ast.blocks.insert(ast::Block {
                 statements: vec![statement_id],
@@ -149,7 +149,7 @@ mod test {
             });
             ast.function_declarations.insert(ast::FunctionDeclaration {
                 name: ctx.strings.intern("main"),
-                params: Vec::new(),
+                parameters: Vec::new(),
                 return_ty: None,
                 body: block_id,
             })
@@ -189,7 +189,7 @@ mod test {
     #[case("{ let a = 1; }", Type::Unit)]
     #[case("{ let a = 1; 1 }", Type::I8)]
     #[case("{ let a = 1; a }", Type::I8)]
-    fn assert_expr_ty(#[case] expr: &str, #[case] ty: Type) {
-        assert_eq!(get_ty(expr), ty);
+    fn assert_expression_ty(#[case] expression: &str, #[case] ty: Type) {
+        assert_eq!(get_ty(expression), ty);
     }
 }

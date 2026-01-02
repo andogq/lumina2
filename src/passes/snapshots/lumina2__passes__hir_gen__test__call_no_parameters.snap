@@ -1,0 +1,12 @@
+---
+source: src/passes/hir_gen.rs
+expression: "Call(Call { callee: ExpressionId(0), arguments: [] })"
+---
+Call(
+    Call {
+        callee: ExpressionId(
+            0,
+        ),
+        arguments: [],
+    },
+)

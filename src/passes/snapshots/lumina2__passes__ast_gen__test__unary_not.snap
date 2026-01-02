@@ -4,10 +4,10 @@ expression: "!true"
 ---
 Unary(
     Unary {
-        op: Not(
+        operation: Not(
             Bang,
         ),
-        value: ExprId(
+        value: ExpressionId(
             0,
         ),
     },

@@ -7,6 +7,7 @@ macro_rules! toks {
         );
     };
 
+    // spell-checker:disable-next-line
     (@inner { $($items:tt)* } $variant:ident => $fmt:expr, $($rest:tt)*) => {
         toks!(
             @inner
@@ -23,6 +24,7 @@ macro_rules! toks {
         );
     };
 
+    // spell-checker:disable-next-line
     (@inner { $($variant:ident $(($inner:ty, $binding:ident))? => $fmt:expr,)* }) => {
         #[derive(Clone, Debug, PartialEq, Eq)]
         pub enum Tok {
@@ -89,8 +91,8 @@ macro_rules! toks {
 }
 
 toks! {
-    LParen => "(",
-    RParen => ")",
+    LParenthesis => "(",
+    RParenthesis => ")",
     LBrace => "{{",
     RBrace => "}}",
     LBracket => "[",
@@ -134,5 +136,5 @@ toks! {
     Eof => "<Eof>",
 
     Ident(String),
-    IntLit(usize),
+    IntegerLiteral(usize),
 }

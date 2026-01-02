@@ -1,11 +1,11 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "Binary { lhs: ExprId(0), op: Plus(Plus), rhs: ExprId(0) }"
+expression: "Binary { lhs: ExpressionId(0), operation: Plus(Plus), rhs: ExpressionId(0) }"
 ---
 [
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 0,
             ),
         ),
@@ -16,8 +16,8 @@ expression: "Binary { lhs: ExprId(0), op: Plus(Plus), rhs: ExprId(0) }"
         ),
     ),
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 0,
             ),
         ),
@@ -28,22 +28,22 @@ expression: "Binary { lhs: ExprId(0), op: Plus(Plus), rhs: ExprId(0) }"
         ),
     ),
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 0,
             ),
         ),
         Eq(
-            Expr(
-                ExprId(
+            Expression(
+                ExpressionId(
                     0,
                 ),
             ),
         ),
     ),
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 0,
             ),
         ),
@@ -52,8 +52,8 @@ expression: "Binary { lhs: ExprId(0), op: Plus(Plus), rhs: ExprId(0) }"
         ),
     ),
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 0,
             ),
         ),
@@ -62,14 +62,14 @@ expression: "Binary { lhs: ExprId(0), op: Plus(Plus), rhs: ExprId(0) }"
         ),
     ),
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 1,
             ),
         ),
         Eq(
-            Expr(
-                ExprId(
+            Expression(
+                ExpressionId(
                     0,
                 ),
             ),

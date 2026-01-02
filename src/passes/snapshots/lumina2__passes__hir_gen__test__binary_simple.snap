@@ -1,16 +1,16 @@
 ---
 source: src/passes/hir_gen.rs
-expression: "Binary(Binary { lhs: ExprId(0), op: Plus(Plus), rhs: ExprId(1) })"
+expression: "Binary(Binary { lhs: ExpressionId(0), operation: Plus(Plus), rhs: ExpressionId(1) })"
 ---
 Binary(
     Binary {
-        lhs: ExprId(
+        lhs: ExpressionId(
             0,
         ),
-        op: Plus(
+        operation: Plus(
             Plus,
         ),
-        rhs: ExprId(
+        rhs: ExpressionId(
             1,
         ),
     },

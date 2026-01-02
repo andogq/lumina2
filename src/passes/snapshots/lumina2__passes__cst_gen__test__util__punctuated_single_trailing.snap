@@ -6,7 +6,7 @@ PunctuatedList {
     items: [
         Integer(
             IntegerLiteral(
-                IntLit(
+                IntegerLiteral(
                     123,
                 ),
             ),

@@ -49,7 +49,7 @@ impl Solver {
         }
     }
 
-    pub fn prefill(solutions: impl IntoIterator<Item = (TypeVarId, Solution)>) -> Self {
+    fn prefill(solutions: impl IntoIterator<Item = (TypeVarId, Solution)>) -> Self {
         let mut solver = Self::new();
         solver.solutions.extend(solutions);
         solver
@@ -70,7 +70,10 @@ impl Solver {
             Constraint::Eq(eq_var) => self.solve_eq(var, eq_var),
             Constraint::Integer(integer_kind) => self.solve_integer(var, integer_kind),
             Constraint::Reference(ref_var) => self.solve_reference(var, ref_var),
-            Constraint::Function { params, ret_ty } => self.solve_function(var, params, ret_ty),
+            Constraint::Function {
+                parameters,
+                return_ty,
+            } => self.solve_function(var, parameters, return_ty),
         }
     }
 
@@ -125,38 +128,36 @@ impl Solver {
     fn solve_function(
         &mut self,
         var: &TypeVarId,
-        params: &[TypeVarId],
-        ret_ty: &TypeVarId,
+        parameter_vars: &[TypeVarId],
+        return_ty_var: &TypeVarId,
     ) -> bool {
         let Some(Solution::Type(Type::Function {
-            params: fn_params,
-            ret_ty: fn_ret_ty,
+            parameters,
+            return_ty,
         })) = self.get_solution(var)
         else {
             unimplemented!();
         };
 
-        assert_eq!(params.len(), fn_params.len());
+        assert_eq!(parameter_vars.len(), parameters.len());
 
-        let solved_params = params
+        let solved_parameters = parameter_vars
             .iter()
-            .zip(fn_params)
-            .filter_map(|(param, fn_param)| {
-                let var = self.merge(param, &fn_param.clone().into()).unwrap();
+            .zip(parameters)
+            .filter_map(|(parameter_var, parameter)| {
+                let var = self
+                    .merge(parameter_var, &parameter.clone().into())
+                    .unwrap();
                 self.get_type(&var)
             })
             .collect::<Vec<_>>();
 
-        let solved_ret_ty = {
-            let var = self.merge(ret_ty, &(*fn_ret_ty).into()).unwrap();
+        let solved_return_ty = {
+            let var = self.merge(return_ty_var, &(*return_ty).into()).unwrap();
             self.get_type(&var)
         };
 
-        if let Some(solved_ret_ty) = solved_ret_ty
-            && solved_params.len() == params.len()
-        {}
-
-        true
+        solved_return_ty.is_some() && solved_parameters.len() == parameter_vars.len()
     }
 
     fn merge(&mut self, lhs: &TypeVarId, rhs: &TypeVarId) -> Option<TypeVarId> {
@@ -339,9 +340,9 @@ mod test {
     use super::*;
 
     #[fixture]
-    fn expr<const N: usize>() -> [TypeVarId; N] {
+    fn expression<const N: usize>() -> [TypeVarId; N] {
         (0..N)
-            .map(|i| TypeVarId::from(ExprId::from_id(i)))
+            .map(|i| TypeVarId::from(ExpressionId::from_id(i)))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap()
@@ -362,68 +363,68 @@ mod test {
     }
 
     #[rstest]
-    fn prefilled(expr: [TypeVarId; 1]) {
-        let solver = Solver::prefill([(expr[0].clone(), Solution::Type(Type::I8))]);
-        assert_eq!(solver.get_type(&expr[0]).unwrap(), Type::I8);
+    fn prefilled(expression: [TypeVarId; 1]) {
+        let solver = Solver::prefill([(expression[0].clone(), Solution::Type(Type::I8))]);
+        assert_eq!(solver.get_type(&expression[0]).unwrap(), Type::I8);
     }
 
     #[rstest]
-    fn simple_constraint(expr: [TypeVarId; 2]) {
-        let mut solver = Solver::prefill([(expr[0].clone(), Solution::Type(Type::I8))]);
+    fn simple_constraint(expression: [TypeVarId; 2]) {
+        let mut solver = Solver::prefill([(expression[0].clone(), Solution::Type(Type::I8))]);
 
-        assert!(solver.process_constraint(&expr[0], &Constraint::Eq(expr[1].clone())));
-        assert_eq!(solver.get_type(&expr[1]).unwrap(), Type::I8);
+        assert!(solver.process_constraint(&expression[0], &Constraint::Eq(expression[1].clone())));
+        assert_eq!(solver.get_type(&expression[1]).unwrap(), Type::I8);
     }
 
     #[rstest]
-    fn deep_constraint(expr: [TypeVarId; 3]) {
-        let mut solver = Solver::prefill([(expr[0].clone(), Solution::Type(Type::I8))]);
+    fn deep_constraint(expression: [TypeVarId; 3]) {
+        let mut solver = Solver::prefill([(expression[0].clone(), Solution::Type(Type::I8))]);
 
-        assert!(solver.process_constraint(&expr[0], &Constraint::Eq(expr[1].clone())));
-        assert!(solver.process_constraint(&expr[1], &Constraint::Eq(expr[2].clone())));
-        assert_eq!(solver.get_type(&expr[1]).unwrap(), Type::I8);
-        assert_eq!(solver.get_type(&expr[2]).unwrap(), Type::I8);
+        assert!(solver.process_constraint(&expression[0], &Constraint::Eq(expression[1].clone())));
+        assert!(solver.process_constraint(&expression[1], &Constraint::Eq(expression[2].clone())));
+        assert_eq!(solver.get_type(&expression[1]).unwrap(), Type::I8);
+        assert_eq!(solver.get_type(&expression[2]).unwrap(), Type::I8);
     }
 
     #[rstest]
-    fn deep_constraint_reversed(expr: [TypeVarId; 3]) {
-        let mut solver = Solver::prefill([(expr[0].clone(), Solution::Type(Type::I8))]);
+    fn deep_constraint_reversed(expression: [TypeVarId; 3]) {
+        let mut solver = Solver::prefill([(expression[0].clone(), Solution::Type(Type::I8))]);
 
         // Solve equality constraint before constraint with solution.
-        assert!(solver.process_constraint(&expr[1], &Constraint::Eq(expr[2].clone())));
-        assert!(solver.process_constraint(&expr[0], &Constraint::Eq(expr[1].clone())));
-        assert_eq!(solver.get_type(&expr[1]).unwrap(), Type::I8);
-        assert_eq!(solver.get_type(&expr[2]).unwrap(), Type::I8);
+        assert!(solver.process_constraint(&expression[1], &Constraint::Eq(expression[2].clone())));
+        assert!(solver.process_constraint(&expression[0], &Constraint::Eq(expression[1].clone())));
+        assert_eq!(solver.get_type(&expression[1]).unwrap(), Type::I8);
+        assert_eq!(solver.get_type(&expression[2]).unwrap(), Type::I8);
     }
 
     #[rstest]
-    fn literal(expr: [TypeVarId; 1]) {
+    fn literal(expression: [TypeVarId; 1]) {
         let solver = Solver::prefill([
             // Manually solve expression as literal.
             (
-                expr[0].clone(),
+                expression[0].clone(),
                 Solution::Literal(Literal::Integer(IntegerKind::Unsigned)),
             ),
         ]);
 
         // Should default to type if none specified.
-        assert_eq!(solver.get_type(&expr[0]).unwrap(), Type::U8);
+        assert_eq!(solver.get_type(&expression[0]).unwrap(), Type::U8);
     }
 
     #[rstest]
-    fn literal_constraint(expr: [TypeVarId; 1]) {
+    fn literal_constraint(expression: [TypeVarId; 1]) {
         let mut solver = Solver::new();
 
-        assert!(solver.process_constraint(&expr[0], &Constraint::Integer(IntegerKind::Any)));
-        assert_eq!(solver.get_type(&expr[0]).unwrap(), Type::I8);
+        assert!(solver.process_constraint(&expression[0], &Constraint::Integer(IntegerKind::Any)));
+        assert_eq!(solver.get_type(&expression[0]).unwrap(), Type::I8);
     }
 
     #[rstest]
-    fn simple_infer(expr: [TypeVarId; 2]) {
+    fn simple_infer(expression: [TypeVarId; 2]) {
         // {
         //   1 <-- Integer
         // }   <-- U8
-        let [block, one] = expr;
+        let [block, one] = expression;
 
         let solutions = Solver::run(&[
             (one.clone(), Constraint::Integer(IntegerKind::Any)),
@@ -434,7 +435,7 @@ mod test {
     }
 
     #[rstest]
-    fn unsigned_infer(expr: [TypeVarId; 4], binding: [TypeVarId; 2]) {
+    fn unsigned_infer(expression: [TypeVarId; 4], binding: [TypeVarId; 2]) {
         // {
         //   let a = 1; <-- Integer
         //   let b = 2; <-- Integer
@@ -442,7 +443,7 @@ mod test {
         // }            <-- U8
 
         let [a, b] = binding;
-        let [one, two, a_plus_b, block] = expr;
+        let [one, two, a_plus_b, block] = expression;
 
         let solutions = Solver::run(&[
             // Literals
@@ -465,14 +466,14 @@ mod test {
     }
 
     #[rstest]
-    fn reference_infer(expr: [TypeVarId; 4], binding: [TypeVarId; 2]) {
+    fn reference_infer(expression: [TypeVarId; 4], binding: [TypeVarId; 2]) {
         // {
         //   let a = 1;  <- Integer
         //   let b = &a; <- Reference(a)
         //   *b
         // }             <- U8
         let [a, b] = binding;
-        let [one, ref_a, deref_b, block] = expr;
+        let [one, ref_a, deref_b, block] = expression;
 
         let solutions = Solver::run(&[
             // Literal
@@ -494,13 +495,13 @@ mod test {
     }
 
     #[rstest]
-    fn more_references(expr: [TypeVarId; 4], binding: [TypeVarId; 2]) {
+    fn more_references(expression: [TypeVarId; 4], binding: [TypeVarId; 2]) {
         // {
         //   let a = 123; <- Integer
         //   let b = &a;  <- Reference(a)
         //   *b
         // }              <- U8
-        let [num, ref_a, deref_b, block] = expr;
+        let [num, ref_a, deref_b, block] = expression;
         let [a, b] = binding;
 
         let solutions = Solver::run(&[
@@ -523,17 +524,23 @@ mod test {
     }
 
     #[rstest]
-    fn overriding(expr: [TypeVarId; 4]) {
+    fn overriding(expression: [TypeVarId; 4]) {
         let solutions = Solver::run(&[
-            (expr[0].clone(), Constraint::Integer(IntegerKind::Any)),
-            (expr[1].clone(), Constraint::Reference(expr[0].clone())),
-            (expr[2].clone(), Constraint::Reference(expr[3].clone())),
-            (expr[2].clone(), Constraint::Eq(expr[1].clone())),
-            (expr[3].clone(), Constraint::Eq(Type::U8.into())),
+            (expression[0].clone(), Constraint::Integer(IntegerKind::Any)),
+            (
+                expression[1].clone(),
+                Constraint::Reference(expression[0].clone()),
+            ),
+            (
+                expression[2].clone(),
+                Constraint::Reference(expression[3].clone()),
+            ),
+            (expression[2].clone(), Constraint::Eq(expression[1].clone())),
+            (expression[3].clone(), Constraint::Eq(Type::U8.into())),
         ]);
 
-        assert_eq!(solutions[&expr[0]], Type::U8);
-        assert_eq!(solutions[&expr[3]], Type::U8);
+        assert_eq!(solutions[&expression[0]], Type::U8);
+        assert_eq!(solutions[&expression[3]], Type::U8);
     }
 
     mod merge_solutions {

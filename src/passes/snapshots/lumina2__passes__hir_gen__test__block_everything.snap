@@ -1,6 +1,6 @@
 ---
 source: src/passes/hir_gen.rs
-expression: "Block { statements: [StatementId(0)], expression: Some(ExprId(0)) }"
+expression: "Block { statements: [StatementId(0)], expression: Some(ExpressionId(0)) }"
 ---
 Block {
     statements: [
@@ -8,7 +8,7 @@ Block {
             0,
         ),
     ],
-    expr: ExprId(
+    expression: ExpressionId(
         1,
     ),
 }

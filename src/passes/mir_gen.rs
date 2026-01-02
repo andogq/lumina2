@@ -70,7 +70,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
         // Create local for return value, as it must be the first.
         // TODO: Store this local in some context somewhere, to use it as the return local.
-        let ret_local = self.locals.create(function_id, function.return_ty.clone());
+        let return_local = self.locals.create(function_id, function.return_ty.clone());
 
         // Following locals are all for the parameters.
         for (binding, ty) in &function.parameters {
@@ -85,9 +85,9 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
         // implicit return.
         let body = &self.thir[function.entry];
         if let Some(result) = block.operand
-            && self.thir.type_of(body.expr) == &function.return_ty
+            && self.thir.type_of(body.expression) == &function.return_ty
         {
-            let place = self.mir.places.insert(ret_local.into());
+            let place = self.mir.places.insert(return_local.into());
             self.mir.add_statement(
                 block.exit,
                 Assign {
@@ -102,8 +102,8 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             .terminate_if_unterminated(block.exit, Terminator::Return);
 
         self.mir.functions.insert(Function {
-            ret_ty: function.return_ty.clone(),
-            params: function
+            return_ty: function.return_ty.clone(),
+            parameters: function
                 .parameters
                 .iter()
                 .map(|(_, ty)| ty.clone())
@@ -136,9 +136,10 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     // Register the local against the binding.
                     self.bindings.insert(*binding, Binding::Local(local));
                 }
-                hir::Statement::Return(hir::ReturnStatement { expr }) => {
+                hir::Statement::Return(hir::ReturnStatement { expression }) => {
                     // If a value is present, store it within the return local.
-                    if let Some(value) = self.lower_expr(function, &mut current_basic_block, *expr)
+                    if let Some(value) =
+                        self.lower_expression(function, &mut current_basic_block, *expression)
                     {
                         let place = self
                             .mir
@@ -155,8 +156,9 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                     self.mir.terminate(entry, Terminator::Return);
                 }
-                hir::Statement::Break(hir::BreakStatement { expr }) => {
-                    if let Some(value) = self.lower_expr(function, &mut current_basic_block, *expr)
+                hir::Statement::Break(hir::BreakStatement { expression }) => {
+                    if let Some(value) =
+                        self.lower_expression(function, &mut current_basic_block, *expression)
                     {
                         // TODO: Store resulting expression in the local for the current loop.
                         unimplemented!();
@@ -167,13 +169,13 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                         Terminator::Goto(todo!("work out which block to jump to")),
                     );
                 }
-                hir::Statement::Expr(hir::ExprStatement { expr }) => {
-                    self.lower_expr(function, &mut current_basic_block, *expr);
+                hir::Statement::Expression(hir::ExpressionStatement { expression }) => {
+                    self.lower_expression(function, &mut current_basic_block, *expression);
                 }
             }
         }
 
-        let value = self.lower_expr(function, &mut current_basic_block, block.expr);
+        let value = self.lower_expression(function, &mut current_basic_block, block.expression);
 
         LoweredBlock {
             entry,
@@ -184,16 +186,16 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
     /// Lower an expression into a basic block. Accepts a cursor to the current basic block, so it
     /// may be updated as new blocks are created for sub-expressions.
-    fn lower_expr(
+    fn lower_expression(
         &mut self,
         function: FunctionId,
         basic_block: &mut BasicBlockId,
-        expr_id: hir::ExprId,
+        expression_id: hir::ExpressionId,
     ) -> Option<OperandId> {
-        Some(match &self.thir[expr_id] {
-            hir::Expr::Assign(hir::Assign { variable, value }) => {
-                let value = self.lower_expr(function, basic_block, *value)?;
-                let place = self.expr_to_place(*variable);
+        Some(match &self.thir[expression_id] {
+            hir::Expression::Assign(hir::Assign { variable, value }) => {
+                let value = self.lower_expression(function, basic_block, *value)?;
+                let place = self.expression_to_place(*variable);
                 let place = self.mir.places.insert(place);
 
                 self.mir.add_statement(
@@ -206,13 +208,17 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                 self.mir.operands.insert(Operand::Constant(Constant::Unit))
             }
-            hir::Expr::Binary(hir::Binary { lhs, op, rhs }) => {
-                let lhs = self.lower_expr(function, basic_block, *lhs)?;
-                let rhs = self.lower_expr(function, basic_block, *rhs)?;
+            hir::Expression::Binary(hir::Binary {
+                lhs,
+                operation,
+                rhs,
+            }) => {
+                let lhs = self.lower_expression(function, basic_block, *lhs)?;
+                let rhs = self.lower_expression(function, basic_block, *rhs)?;
 
                 let result = self
                     .locals
-                    .create(function, self.thir.type_of(expr_id).clone());
+                    .create(function, self.thir.type_of(expression_id).clone());
                 let result_place = self.mir.places.insert(result.into());
 
                 self.mir.add_statement(
@@ -221,7 +227,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                         place: result_place,
                         rvalue: RValue::Binary(Binary {
                             lhs,
-                            op: op.clone(),
+                            operation: operation.clone(),
                             rhs,
                         }),
                     },
@@ -229,12 +235,12 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                 self.mir.operands.insert(Operand::Place(result_place))
             }
-            hir::Expr::Unary(hir::Unary { op, value }) => {
-                let value = self.lower_expr(function, basic_block, *value)?;
+            hir::Expression::Unary(hir::Unary { operation, value }) => {
+                let value = self.lower_expression(function, basic_block, *value)?;
 
                 let result = self
                     .locals
-                    .create(function, self.thir.type_of(expr_id).clone());
+                    .create(function, self.thir.type_of(expression_id).clone());
                 let result_place = self.mir.places.insert(result.into());
 
                 self.mir.add_statement(
@@ -242,7 +248,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     Assign {
                         place: result_place,
                         rvalue: RValue::Unary(Unary {
-                            op: op.clone(),
+                            operation: operation.clone(),
                             value,
                         }),
                     },
@@ -250,15 +256,15 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                 self.mir.operands.insert(Operand::Place(result_place))
             }
-            hir::Expr::Switch(hir::Switch {
+            hir::Expression::Switch(hir::Switch {
                 discriminator,
                 branches,
                 default,
             }) => {
                 let discriminator_ty = self.thir.type_of(*discriminator);
-                let discriminator = self.lower_expr(function, basic_block, *discriminator)?;
+                let discriminator = self.lower_expression(function, basic_block, *discriminator)?;
 
-                let switch_ty = self.thir.type_of(expr_id);
+                let switch_ty = self.thir.type_of(expression_id);
                 let switch_value = self.locals.create(function, switch_ty.clone());
                 let switch_place = self.mir.places.insert(switch_value.into());
 
@@ -333,7 +339,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 // Terminate the current block.
                 self.mir.terminate(
                     *basic_block,
-                    SwitchInt {
+                    SwitchInteger {
                         discriminator,
                         targets,
                         otherwise,
@@ -345,7 +351,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                 self.mir.operands.insert(Operand::Place(switch_place))
             }
-            hir::Expr::Loop(hir::Loop { body }) => {
+            hir::Expression::Loop(hir::Loop { body }) => {
                 // TODO: Create a new local for the loop break value, and register it somewhere.
 
                 // Lower the loop body.
@@ -371,37 +377,42 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 // TODO: When break expressions are supported, produce the local here.
                 self.mir.operands.insert(Operand::Constant(Constant::Unit))
             }
-            hir::Expr::Literal(literal) => {
+            hir::Expression::Literal(literal) => {
                 self.mir
                     .operands
                     .insert(Operand::Constant(literal_to_constant(
                         literal,
-                        self.thir.type_of(expr_id),
+                        self.thir.type_of(expression_id),
                     )))
             }
-            hir::Expr::Call(hir::Call { callee, arguments }) => {
+            hir::Expression::Call(hir::Call { callee, arguments }) => {
                 // Create a local to store the resulting value.
                 let result = self.mir.places.insert(
                     self.locals
-                        .create(function, self.thir.type_of(expr_id).clone())
+                        .create(function, self.thir.type_of(expression_id).clone())
                         .into(),
                 );
                 // Create a basic block to return to after the function returns.
                 let target = self.mir.add_basic_block();
 
                 // Lower function expression and arguments.
-                let func = self.lower_expr(function, basic_block, *callee).unwrap();
-                let args = arguments
+                let callee = self
+                    .lower_expression(function, basic_block, *callee)
+                    .unwrap();
+                let arguments = arguments
                     .iter()
-                    .map(|expr| self.lower_expr(function, basic_block, *expr).unwrap())
+                    .map(|expression| {
+                        self.lower_expression(function, basic_block, *expression)
+                            .unwrap()
+                    })
                     .collect();
 
                 // Terminate the current block.
                 self.mir.terminate(
                     *basic_block,
                     Call {
-                        func,
-                        args,
+                        function: callee,
+                        arguments,
                         destination: result,
                         target,
                     },
@@ -413,7 +424,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 // Produce the value of this function.
                 self.mir.operands.insert(Operand::Place(result))
             }
-            hir::Expr::Block(block_id) => {
+            hir::Expression::Block(block_id) => {
                 // Lower the block
                 let lowered_block = self.lower_block(function, *block_id);
 
@@ -431,7 +442,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 // Yield the block's value.
                 lowered_block.operand?
             }
-            hir::Expr::Variable(hir::Variable { binding }) => match self.bindings[binding] {
+            hir::Expression::Variable(hir::Variable { binding }) => match self.bindings[binding] {
                 Binding::Local(local) => {
                     let place = self.mir.places.insert(local.into());
                     self.mir.operands.insert(Operand::Place(place))
@@ -441,25 +452,25 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     .operands
                     .insert(Operand::Constant(Constant::Function(function_id))),
             },
-            hir::Expr::Unreachable => return None,
+            hir::Expression::Unreachable => return None,
         })
     }
 
-    fn expr_to_place(&mut self, expr_id: hir::ExprId) -> Place {
-        match &self.thir[expr_id] {
-            hir::Expr::Variable(hir::Variable { binding }) => {
+    fn expression_to_place(&mut self, expression_id: hir::ExpressionId) -> Place {
+        match &self.thir[expression_id] {
+            hir::Expression::Variable(hir::Variable { binding }) => {
                 self.bindings[binding].clone().as_local().into()
             }
-            hir::Expr::Unary(hir::Unary {
-                op: cst::UnaryOp::Deref(_),
+            hir::Expression::Unary(hir::Unary {
+                operation: cst::UnaryOperation::Deref(_),
                 value,
             }) => {
-                let mut value = self.expr_to_place(*value);
+                let mut value = self.expression_to_place(*value);
                 // TODO: Not sure if this is append or prepend.
                 value.projection.push(Projection::Deref);
                 value
             }
-            expr => panic!("invalid lhs: {expr:?}"),
+            expression => panic!("invalid lhs: {expression:?}"),
         }
     }
 }

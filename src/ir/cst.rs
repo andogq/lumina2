@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-pub use self::{expr::*, function::*, statement::*, util::*};
+pub use self::{expression::*, function::*, statement::*, util::*};
 
 /// Root node, representing a program.
 #[derive(Clone, Debug)]
@@ -32,7 +32,7 @@ mod function {
     /// Function declaration.
     ///
     /// ```
-    /// fn some_function(param_a: usize, param_b: bool) -> f64 {
+    /// fn some_function(parameter_a: usize, parameter_b: bool) -> f64 {
     ///     // Statements...
     /// }
     /// ```
@@ -41,10 +41,10 @@ mod function {
         pub tok_fn: tok::Fn,
         /// Name of the function.
         pub name: tok::Ident,
-        pub tok_lparen: tok::LParen,
+        pub tok_l_parenthesis: tok::LParenthesis,
         /// Parameters for the function.
-        pub params: PunctuatedList<FunctionParameter, tok::Comma>,
-        pub tok_rparan: tok::RParen,
+        pub parameters: PunctuatedList<FunctionParameter, tok::Comma>,
+        pub tok_r_parenthesis: tok::RParenthesis,
         /// Optional return type for the function.
         pub return_ty: Option<FunctionReturnType>,
         pub body: Block,
@@ -53,7 +53,7 @@ mod function {
     /// Parameter for a function declaration.
     ///
     /// ```
-    /// param: ty
+    /// parameter: ty
     /// ```
     #[derive(Clone, Debug)]
     pub struct FunctionParameter {
@@ -97,7 +97,7 @@ mod statement {
         Let(LetStatement),
         Return(ReturnStatement),
         Break(BreakStatement),
-        Expr(ExprStatement),
+        Expression(ExpressionStatement),
     }
 
     /// A `let` statement creates a new binding (`name`), and assigns `value` to it.
@@ -108,7 +108,7 @@ mod statement {
         pub variable: tok::Ident,
         pub tok_eq: tok::Eq,
         /// Value that was assigned.
-        pub value: Expr,
+        pub value: Expression,
         pub tok_semicolon: tok::SemiColon,
     }
 
@@ -117,22 +117,22 @@ mod statement {
     pub struct ReturnStatement {
         pub tok_return: tok::Return,
         /// Value that is being returned.
-        pub value: Expr,
+        pub value: Expression,
         pub tok_semicolon: tok::SemiColon,
     }
 
     #[derive(Clone, Debug)]
     pub struct BreakStatement {
         pub tok_break: tok::Break,
-        pub value: Option<Expr>,
+        pub value: Option<Expression>,
         pub tok_semicolon: tok::SemiColon,
     }
 
     /// An in-place expression, followed by an optional semicolon.
     #[derive(Clone, Debug)]
-    pub struct ExprStatement {
+    pub struct ExpressionStatement {
         /// Expression.
-        pub expr: Expr,
+        pub expression: Expression,
         /// Can be optionally terminated by semicolon.
         pub tok_semicolon: Option<tok::SemiColon>,
     }
@@ -142,18 +142,18 @@ mod statement {
         Let: LetStatement,
         Return: ReturnStatement,
         Break: BreakStatement,
-        Expr: ExprStatement,
+        Expression: ExpressionStatement,
     }
 }
 
-mod expr {
+mod expression {
     use crate::enum_conversion;
 
     use super::*;
 
     /// All possible expressions.
     #[derive(Clone, Debug)]
-    pub enum Expr {
+    pub enum Expression {
         Assign(Assign),
         Binary(Binary),
         Unary(Unary),
@@ -161,7 +161,7 @@ mod expr {
         // While(While),
         Loop(Loop),
         Literal(Literal),
-        Paren(Paren),
+        Parenthesis(Parenthesis),
         Call(Call),
         Block(Block),
         Variable(Variable),
@@ -175,26 +175,26 @@ mod expr {
     #[derive(Clone, Debug)]
     pub struct Assign {
         /// Variable being assigned to.
-        pub assignee: Box<Expr>,
+        pub assignee: Box<Expression>,
         pub tok_eq: tok::Eq,
         /// Value of the assignment.
-        pub value: Box<Expr>,
+        pub value: Box<Expression>,
     }
 
     /// Binary operation.
     #[derive(Clone, Debug)]
     pub struct Binary {
         /// Left hand side of the operation.
-        pub lhs: Box<Expr>,
+        pub lhs: Box<Expression>,
         /// Binary operation.
-        pub op: BinaryOp,
+        pub operation: BinaryOperation,
         /// Right hand side of the operation.
-        pub rhs: Box<Expr>,
+        pub rhs: Box<Expression>,
     }
 
     /// All possible binary operations.
     #[derive(Clone, Debug)]
-    pub enum BinaryOp {
+    pub enum BinaryOperation {
         Plus(tok::Plus),
         Minus(tok::Minus),
         Multiply(tok::Asterisk),
@@ -218,14 +218,14 @@ mod expr {
     #[derive(Clone, Debug)]
     pub struct Unary {
         /// Unary operation.
-        pub op: UnaryOp,
+        pub operation: UnaryOperation,
         /// Operation value.
-        pub value: Box<Expr>,
+        pub value: Box<Expression>,
     }
 
     /// All possible unary operations.
     #[derive(Clone, Debug)]
-    pub enum UnaryOp {
+    pub enum UnaryOperation {
         Not(tok::Bang),
         Negative(tok::Minus),
         Deref(tok::Asterisk),
@@ -237,7 +237,7 @@ mod expr {
     pub struct If {
         pub tok_if: tok::If,
         /// Condition that is being checked.
-        pub condition: Box<Expr>,
+        pub condition: Box<Expression>,
         /// Block if the condition passes.
         pub then: Block,
         /// Optional trailing content of statement.
@@ -279,7 +279,7 @@ mod expr {
     #[derive(Clone, Debug)]
     pub struct While {
         pub tok_while: tok::While,
-        pub condition: Box<Expr>,
+        pub condition: Box<Expression>,
         pub body: Block,
     }
 
@@ -294,7 +294,7 @@ mod expr {
 
     /// An integer literal.
     #[derive(Clone, Debug)]
-    pub struct IntegerLiteral(pub tok::IntLit);
+    pub struct IntegerLiteral(pub tok::IntegerLiteral);
 
     impl IntegerLiteral {
         pub fn as_usize(&self) -> usize {
@@ -324,24 +324,24 @@ mod expr {
         Boolean: BooleanLiteral,
     }
 
-    /// An [`Expr`] wrapped in parentheses.
+    /// An [`Expression`] wrapped in parentheses.
     #[derive(Clone, Debug)]
-    pub struct Paren {
-        pub tok_l_paren: tok::LParen,
+    pub struct Parenthesis {
+        pub tok_l_parenthesis: tok::LParenthesis,
         /// Inner expression.
-        pub expr: Box<Expr>,
-        pub tok_r_paren: tok::RParen,
+        pub expression: Box<Expression>,
+        pub tok_r_parenthesis: tok::RParenthesis,
     }
 
     /// Call expression.
     #[derive(Clone, Debug)]
     pub struct Call {
         /// Callee of the function.
-        pub callee: Box<Expr>,
-        pub tok_l_paren: tok::LParen,
+        pub callee: Box<Expression>,
+        pub tok_l_parenthesis: tok::LParenthesis,
         /// Arguments passed to the call.
-        pub arguments: PunctuatedList<Expr, tok::Comma>,
-        pub tok_r_paren: tok::RParen,
+        pub arguments: PunctuatedList<Expression, tok::Comma>,
+        pub tok_r_parenthesis: tok::RParenthesis,
     }
 
     /// Variable reference.
@@ -352,14 +352,14 @@ mod expr {
     }
 
     enum_conversion! {
-        [Expr]
+        [Expression]
         Assign: Assign,
         Binary: Binary,
         Unary: Unary,
         If: If,
         Loop: Loop,
         Literal: Literal,
-        Paren: Paren,
+        Parenthesis: Parenthesis,
         Call: Call,
         Block: Block,
         Variable: Variable,

@@ -12,8 +12,8 @@ expression: "[] => Unit"
         Eq(
             Type(
                 Function {
-                    params: [],
-                    ret_ty: Unit,
+                    parameters: [],
+                    return_ty: Unit,
                 },
             ),
         ),

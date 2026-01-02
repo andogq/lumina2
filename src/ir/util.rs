@@ -12,9 +12,10 @@ macro_rules! enum_conversion {
                     type Error = $target;
 
                     fn try_from(value: $target) -> Result<Self, $target> {
+                        #[allow(unreachable_patterns)]
                         match value {
                             $target::$variant(value) => Ok(value),
-                            expr => Err(expr)
+                            expression => Err(expression)
                         }
                     }
                 }

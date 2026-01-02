@@ -121,11 +121,11 @@ impl<'src> Lexer<'src> {
             }
             '(' => {
                 self.next_char();
-                Tok::LParen
+                Tok::LParenthesis
             }
             ')' => {
                 self.next_char();
-                Tok::RParen
+                Tok::RParenthesis
             }
             '[' => {
                 self.next_char();
@@ -222,7 +222,7 @@ impl<'src> Lexer<'src> {
                 }
             }
 
-            char if char.is_numeric() => Tok::IntLit(
+            char if char.is_numeric() => Tok::IntegerLiteral(
                 std::iter::from_fn(|| {
                     let c = self
                         .chars
@@ -232,7 +232,7 @@ impl<'src> Lexer<'src> {
                     Some(c)
                 })
                 .reduce(|value, c| (value * 10) + c)
-                .expect("int literal with at least one digit"),
+                .expect("integer literal with at least one digit"),
             ),
 
             char if char.is_alphabetic() || char == '_' => {
@@ -274,8 +274,8 @@ mod test {
     use crate::prelude::*;
 
     #[rstest]
-    #[case("(", &[Tok::LParen, Tok::Eof])]
-    #[case(")", &[Tok::RParen, Tok::Eof])]
+    #[case("(", &[Tok::LParenthesis, Tok::Eof])]
+    #[case(")", &[Tok::RParenthesis, Tok::Eof])]
     #[case("{", &[Tok::LBrace, Tok::Eof])]
     #[case("}", &[Tok::RBrace, Tok::Eof])]
     #[case("[", &[Tok::LBracket, Tok::Eof])]
@@ -310,7 +310,7 @@ mod test {
     #[case("while", &[Tok::While, Tok::Eof])]
     #[case("some_ident", &[Tok::Ident("some_ident".to_string()), Tok::Eof])]
     #[case("u32", &[Tok::Ident("u32".to_string()), Tok::Eof])]
-    #[case("123", &[Tok::IntLit(123), Tok::Eof])]
+    #[case("123", &[Tok::IntegerLiteral(123), Tok::Eof])]
     fn single_token(#[case] source: &str, #[case] toks: &[Tok]) {
         assert_eq!(Lexer::new(source).collect(), toks);
     }

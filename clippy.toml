@@ -1,0 +1,16 @@
+disallowed-names = [
+    # spell-checker:disable
+    "..", # Combine with existing entries.
+    "arg", # Prefer 'argument'
+    "args", # Prefer 'arguments'
+    "cond", # Prefer 'condition'
+    "expr", # Prefer 'expression'
+    "exprs", # Prefer 'expressions'
+    "expr_id", # Prefer 'expression_id'
+    "func", # Prefer 'function'
+    "lit", # Prefer 'literal'
+    "op", # Prefer 'operation'
+    "param", # Prefer 'parameter'
+    "params", # Prefer 'parameters'
+    # spell-checker:enable
+]

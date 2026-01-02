@@ -1,0 +1,11 @@
+---
+source: src/passes/cst_gen.rs
+expression: "1"
+---
+Integer(
+    IntegerLiteral(
+        IntegerLiteral(
+            1,
+        ),
+    ),
+)

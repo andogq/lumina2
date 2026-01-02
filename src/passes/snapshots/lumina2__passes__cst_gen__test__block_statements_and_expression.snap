@@ -1,0 +1,62 @@
+---
+source: src/passes/cst_gen.rs
+expression: "{ let a = 1; let b = 1; 1 }"
+---
+Block {
+    tok_l_brace: LBrace,
+    statements: [
+        Let(
+            LetStatement {
+                tok_let: Let,
+                variable: Ident(
+                    "a",
+                ),
+                tok_eq: Eq,
+                value: Literal(
+                    Integer(
+                        IntegerLiteral(
+                            IntegerLiteral(
+                                1,
+                            ),
+                        ),
+                    ),
+                ),
+                tok_semicolon: SemiColon,
+            },
+        ),
+        Let(
+            LetStatement {
+                tok_let: Let,
+                variable: Ident(
+                    "b",
+                ),
+                tok_eq: Eq,
+                value: Literal(
+                    Integer(
+                        IntegerLiteral(
+                            IntegerLiteral(
+                                1,
+                            ),
+                        ),
+                    ),
+                ),
+                tok_semicolon: SemiColon,
+            },
+        ),
+        Expression(
+            ExpressionStatement {
+                expression: Literal(
+                    Integer(
+                        IntegerLiteral(
+                            IntegerLiteral(
+                                1,
+                            ),
+                        ),
+                    ),
+                ),
+                tok_semicolon: None,
+            },
+        ),
+    ],
+    tok_r_brace: RBrace,
+}

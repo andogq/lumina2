@@ -150,6 +150,7 @@ impl<T> ErrorMeta for CResult<T> {
 /// ```
 #[macro_export]
 macro_rules! run_and_report {
+    // spell-checker:disable-next-line
     ($ctx:expr, $errors:expr, $f:expr) => {
         $f().map_err(|err| $ctx.errors.report(err)).map_err(|err| {
             $errors.push(err);

@@ -1,25 +1,25 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "Assign { variable: ExprId(0), value: ExprId(0) }"
+expression: "Assign { variable: ExpressionId(0), value: ExpressionId(0) }"
 ---
 [
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 0,
             ),
         ),
         Eq(
-            Expr(
-                ExprId(
+            Expression(
+                ExpressionId(
                     0,
                 ),
             ),
         ),
     ),
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 1,
             ),
         ),
@@ -30,8 +30,8 @@ expression: "Assign { variable: ExprId(0), value: ExprId(0) }"
         ),
     ),
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 0,
             ),
         ),
@@ -42,8 +42,8 @@ expression: "Assign { variable: ExprId(0), value: ExprId(0) }"
         ),
     ),
     (
-        Expr(
-            ExprId(
+        Expression(
+            ExpressionId(
                 0,
             ),
         ),

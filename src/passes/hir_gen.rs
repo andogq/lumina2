@@ -58,12 +58,12 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
 
         // Process all of the parameters.
         let parameters = function
-            .params
+            .parameters
             .iter()
-            .map(|param| {
+            .map(|parameter| {
                 (
-                    self.ctx.scopes.declare(function_scope, param.name),
-                    self.ident_to_type(param.ty),
+                    self.ctx.scopes.declare(function_scope, parameter.name),
+                    self.ident_to_type(parameter.ty),
                 )
             })
             .collect();
@@ -102,7 +102,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     let binding = self.ctx.scopes.declare(scope, *variable);
 
                     // Lower the value.
-                    let value = self.lower_expr(&self.ast[*value], scope)?;
+                    let value = self.lower_expression(&self.ast[*value], scope)?;
 
                     // Add the declaration.
                     statements.push(self.hir.statements.insert(Statement::Declare(
@@ -114,49 +114,56 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
 
                     // Add the assignment.
                     statements.push({
-                        let variable = self.hir.exprs.insert(Expr::Variable(Variable { binding }));
-                        let assign_expr = self
+                        let variable = self
                             .hir
-                            .exprs
-                            .insert(Expr::Assign(Assign { variable, value }));
+                            .expressions
+                            .insert(Expression::Variable(Variable { binding }));
+                        let assign_expression = self
+                            .hir
+                            .expressions
+                            .insert(Expression::Assign(Assign { variable, value }));
                         self.hir
                             .statements
-                            .insert(Statement::Expr(ExprStatement { expr: assign_expr }))
+                            .insert(Statement::Expression(ExpressionStatement {
+                                expression: assign_expression,
+                            }))
                     });
                 }
-                ast::Statement::Return(ast::ReturnStatement { expr }) => {
-                    let expr = self.lower_expr(&self.ast[*expr], scope)?;
+                ast::Statement::Return(ast::ReturnStatement { expression }) => {
+                    let expression = self.lower_expression(&self.ast[*expression], scope)?;
                     statements.push(
                         self.hir
                             .statements
-                            .insert(Statement::Return(ReturnStatement { expr })),
+                            .insert(Statement::Return(ReturnStatement { expression })),
                     );
                 }
-                ast::Statement::Break(ast::BreakStatement { expr }) => {
-                    let expr = if let Some(expr) = expr {
-                        self.lower_expr(&self.ast[*expr], scope)?
+                ast::Statement::Break(ast::BreakStatement { expression }) => {
+                    let expression = if let Some(expression) = expression {
+                        self.lower_expression(&self.ast[*expression], scope)?
                     } else {
-                        self.hir.exprs.insert(Expr::Literal(Literal::Unit))
+                        self.hir
+                            .expressions
+                            .insert(Expression::Literal(Literal::Unit))
                     };
                     statements.push(
                         self.hir
                             .statements
-                            .insert(Statement::Break(BreakStatement { expr })),
+                            .insert(Statement::Break(BreakStatement { expression })),
                     )
                 }
-                ast::Statement::Expr(ast::ExprStatement { expr }) => {
-                    let expr = self.lower_expr(&self.ast[*expr], scope)?;
+                ast::Statement::Expression(ast::ExpressionStatement { expression }) => {
+                    let expression = self.lower_expression(&self.ast[*expression], scope)?;
                     statements.push(
                         self.hir
                             .statements
-                            .insert(Statement::Expr(ExprStatement { expr })),
+                            .insert(Statement::Expression(ExpressionStatement { expression })),
                     );
                 }
             }
         }
 
         // Lower the final expression of the block, or fallback to `()` if there is no expression.
-        let expr = match (
+        let expression = match (
             block.expression,
             block
                 .statements
@@ -164,36 +171,52 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 .map(|statement| &self.ast[*statement]),
         ) {
             // Use the provided expression to end the block.
-            (Some(expr), _) => self.lower_expr(&self.ast[expr], scope)?,
+            (Some(expression), _) => self.lower_expression(&self.ast[expression], scope)?,
             // Otherwise, if the final statement is `return` then add an unreachable marker.
-            (None, Some(ast::Statement::Return(_))) => self.hir.exprs.insert(Expr::Unreachable),
+            (None, Some(ast::Statement::Return(_))) => {
+                self.hir.expressions.insert(Expression::Unreachable)
+            }
             // Otherwise, assume unit.
-            (None, _) => self.hir.exprs.insert(Expr::Literal(Literal::Unit)),
+            (None, _) => self
+                .hir
+                .expressions
+                .insert(Expression::Literal(Literal::Unit)),
         };
 
-        Ok(self.hir.blocks.insert(Block { statements, expr }))
+        Ok(self.hir.blocks.insert(Block {
+            statements,
+            expression,
+        }))
     }
 
     /// Lower an expression within the provided scope.
-    pub fn lower_expr(&mut self, expr: &ast::Expr, scope: ScopeId) -> CResult<ExprId> {
-        let expr = match expr {
-            ast::Expr::Assign(ast::Assign { variable, value }) => Assign {
-                variable: self.lower_expr(&self.ast[*variable], scope)?,
-                value: self.lower_expr(&self.ast[*value], scope)?,
+    pub fn lower_expression(
+        &mut self,
+        expression: &ast::Expression,
+        scope: ScopeId,
+    ) -> CResult<ExpressionId> {
+        let expression = match expression {
+            ast::Expression::Assign(ast::Assign { variable, value }) => Assign {
+                variable: self.lower_expression(&self.ast[*variable], scope)?,
+                value: self.lower_expression(&self.ast[*value], scope)?,
             }
             .into(),
-            ast::Expr::Binary(ast::Binary { lhs, op, rhs }) => Binary {
-                lhs: self.lower_expr(&self.ast[*lhs], scope)?,
-                op: op.clone(),
-                rhs: self.lower_expr(&self.ast[*rhs], scope)?,
+            ast::Expression::Binary(ast::Binary {
+                lhs,
+                operation,
+                rhs,
+            }) => Binary {
+                lhs: self.lower_expression(&self.ast[*lhs], scope)?,
+                operation: operation.clone(),
+                rhs: self.lower_expression(&self.ast[*rhs], scope)?,
             }
             .into(),
-            ast::Expr::Unary(ast::Unary { op, value }) => Unary {
-                op: op.clone(),
-                value: self.lower_expr(&self.ast[*value], scope)?,
+            ast::Expression::Unary(ast::Unary { operation, value }) => Unary {
+                operation: operation.clone(),
+                value: self.lower_expression(&self.ast[*value], scope)?,
             }
             .into(),
-            ast::Expr::If(ast::If {
+            ast::Expression::If(ast::If {
                 conditions,
                 otherwise,
             }) => {
@@ -202,13 +225,15 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 // Optional default expression to apply to end of switch statements.
                 let mut default = otherwise
                     .map(|otherwise| {
-                        Ok::<_, CError>(Expr::Block(self.lower_block(&self.ast[otherwise], scope)?))
+                        Ok::<_, CError>(Expression::Block(
+                            self.lower_block(&self.ast[otherwise], scope)?,
+                        ))
                     })
                     .transpose()?;
 
                 for (condition, block) in conditions.iter().rev() {
                     switch = Some(Switch {
-                        discriminator: self.lower_expr(&self.ast[*condition], scope)?,
+                        discriminator: self.lower_expression(&self.ast[*condition], scope)?,
                         branches: vec![(
                             Literal::Boolean(true),
                             self.lower_block(&self.ast[*block], scope)?,
@@ -218,11 +243,11 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                             .take()
                             // Otherwise continue building the switch statement.
                             .or_else(|| Some(switch.take()?.into()))
-                            .map(|expr| {
-                                let expr = self.hir.exprs.insert(expr);
+                            .map(|expression| {
+                                let expression = self.hir.expressions.insert(expression);
                                 self.hir.blocks.insert(Block {
                                     statements: Vec::new(),
-                                    expr,
+                                    expression,
                                 })
                             }),
                     });
@@ -230,32 +255,32 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
 
                 switch.ok_or(HirGenError::IfMustHaveBlock)?.into()
             }
-            ast::Expr::Loop(ast::Loop { body }) => Loop {
+            ast::Expression::Loop(ast::Loop { body }) => Loop {
                 body: self.lower_block(&self.ast[*body], scope)?,
             }
             .into(),
-            ast::Expr::Literal(literal) => match literal {
+            ast::Expression::Literal(literal) => match literal {
                 ast::Literal::Integer(value) => Literal::Integer(*value),
                 ast::Literal::Boolean(value) => Literal::Boolean(*value),
                 ast::Literal::Unit => Literal::Unit,
             }
             .into(),
-            ast::Expr::Call(ast::Call { callee, arguments }) => Call {
-                callee: self.lower_expr(&self.ast[*callee], scope)?,
+            ast::Expression::Call(ast::Call { callee, arguments }) => Call {
+                callee: self.lower_expression(&self.ast[*callee], scope)?,
                 arguments: arguments
                     .iter()
-                    .map(|argument| self.lower_expr(&self.ast[*argument], scope))
+                    .map(|argument| self.lower_expression(&self.ast[*argument], scope))
                     .collect::<Result<_, _>>()?,
             }
             .into(),
-            ast::Expr::Block(block) => self.lower_block(&self.ast[*block], scope)?.into(),
-            ast::Expr::Variable(ast::Variable { variable }) => Variable {
+            ast::Expression::Block(block) => self.lower_block(&self.ast[*block], scope)?.into(),
+            ast::Expression::Variable(ast::Variable { variable }) => Variable {
                 binding: self.ctx.scopes.resolve(scope, *variable),
             }
             .into(),
         };
 
-        Ok(self.hir.exprs.insert(expr))
+        Ok(self.hir.expressions.insert(expression))
     }
 
     /// Attempt to interpret an ident as a [`Type`].
@@ -285,18 +310,18 @@ mod test {
     fn sample_ast() -> ast::Ast {
         let mut ast = ast::Ast::new();
         ast.expressions = indexed_vec![
-            ast::Expr::Variable(ast::Variable {
+            ast::Expression::Variable(ast::Variable {
                 variable: StringId::from_id(0),
             }),
-            ast::Expr::Variable(ast::Variable {
+            ast::Expression::Variable(ast::Variable {
                 variable: StringId::from_id(1),
             }),
-            ast::Expr::Variable(ast::Variable {
+            ast::Expression::Variable(ast::Variable {
                 variable: StringId::from_id(2),
             }),
         ];
-        ast.statements = indexed_vec![ast::Statement::Expr(ast::ExprStatement {
-            expr: ast::ExprId::from_id(0),
+        ast.statements = indexed_vec![ast::Statement::Expression(ast::ExpressionStatement {
+            expression: ast::ExpressionId::from_id(0),
         })];
         ast.blocks = indexed_vec![
             ast::Block {
@@ -338,11 +363,11 @@ mod test {
     })]
     #[case("block_expression", ast::Block {
         statements: vec![],
-        expression: Some(ast::ExprId::from_id(0)),
+        expression: Some(ast::ExpressionId::from_id(0)),
     })]
     #[case("block_everything", ast::Block {
         statements: vec![ast::StatementId::from_id(0)],
-        expression: Some(ast::ExprId::from_id(0)),
+        expression: Some(ast::ExpressionId::from_id(0)),
     })]
     fn lower_block(
         mut ctx: Ctx,
@@ -359,32 +384,32 @@ mod test {
     #[rstest]
     #[case(
         "assign_simple",
-        ast::Assign { variable: ast::ExprId::from_id(0), value: ast::ExprId::from_id(1) }.into()
+        ast::Assign { variable: ast::ExpressionId::from_id(0), value: ast::ExpressionId::from_id(1) }.into()
     )]
     #[case(
         "assign_reassign",
-        ast::Assign { variable: ast::ExprId::from_id(0), value: ast::ExprId::from_id(1) }.into()
+        ast::Assign { variable: ast::ExpressionId::from_id(0), value: ast::ExpressionId::from_id(1) }.into()
     )]
     #[case(
         "binary_simple",
         ast::Binary {
-            lhs: ast::ExprId::from_id(0),
-            op: cst::BinaryOp::Plus(tok::Plus),
-            rhs: ast::ExprId::from_id(1)
+            lhs: ast::ExpressionId::from_id(0),
+            operation: cst::BinaryOperation::Plus(tok::Plus),
+            rhs: ast::ExpressionId::from_id(1)
         }.into()
     )]
     #[case(
         "unary_simple",
-        ast::Unary { value: ast::ExprId::from_id(0), op: cst::UnaryOp::Negative(tok::Minus) }.into()
+        ast::Unary { value: ast::ExpressionId::from_id(0), operation: cst::UnaryOperation::Negative(tok::Minus) }.into()
     )]
     #[case(
         "if_simple",
-        ast::If { conditions: vec![(ast::ExprId::from_id(0), ast::BlockId::from_id(0))], otherwise: None }.into()
+        ast::If { conditions: vec![(ast::ExpressionId::from_id(0), ast::BlockId::from_id(0))], otherwise: None }.into()
     )]
     #[case(
         "if_else",
         ast::If {
-            conditions: vec![(ast::ExprId::from_id(0), ast::BlockId::from_id(0))],
+            conditions: vec![(ast::ExpressionId::from_id(0), ast::BlockId::from_id(0))],
             otherwise: Some(ast::BlockId::from_id(1))
         }.into()
     )]
@@ -392,8 +417,8 @@ mod test {
         "if_else_if",
         ast::If {
             conditions: vec![
-                (ast::ExprId::from_id(0), ast::BlockId::from_id(0)),
-                (ast::ExprId::from_id(1), ast::BlockId::from_id(1))
+                (ast::ExpressionId::from_id(0), ast::BlockId::from_id(0)),
+                (ast::ExpressionId::from_id(1), ast::BlockId::from_id(1))
             ],
             otherwise: None
         }.into()
@@ -402,26 +427,26 @@ mod test {
     #[case("literal_boolean", ast::Literal::Boolean(true).into())]
     #[case("literal_unit", ast::Literal::Unit.into())]
     #[case(
-        "call_no_params",
-        ast::Call { callee: ast::ExprId::from_id(0), arguments: vec![] }.into()
+        "call_no_parameters",
+        ast::Call { callee: ast::ExpressionId::from_id(0), arguments: vec![] }.into()
     )]
     #[case(
-        "call_with_params",
+        "call_with_parameters",
         ast::Call {
-            callee: ast::ExprId::from_id(0),
-            arguments: vec![ast::ExprId::from_id(1), ast::ExprId::from_id(2)]
+            callee: ast::ExpressionId::from_id(0),
+            arguments: vec![ast::ExpressionId::from_id(1), ast::ExpressionId::from_id(2)]
         }.into()
     )]
     #[case("variable_simple", ast::Variable { variable: StringId::from_id(0) }.into())]
-    fn lower_expr(
+    fn lower_expression(
         mut ctx: Ctx,
         sample_ast: &ast::Ast,
         #[case] name: &str,
-        #[case] expr: ast::Expr,
+        #[case] expression: ast::Expression,
     ) {
         let scope = ctx.scopes.nest_scope_global();
         let mut pass = HirGen::new(&mut ctx, sample_ast);
-        let expr_id = pass.lower_expr(&expr, scope).unwrap();
-        assert_debug_snapshot!(name, &pass.hir[expr_id], &format!("{expr:?}"));
+        let expression_id = pass.lower_expression(&expression, scope).unwrap();
+        assert_debug_snapshot!(name, &pass.hir[expression_id], &format!("{expression:?}"));
     }
 }

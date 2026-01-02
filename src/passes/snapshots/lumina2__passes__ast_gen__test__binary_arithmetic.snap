@@ -4,13 +4,13 @@ expression: 1 + 2
 ---
 Binary(
     Binary {
-        lhs: ExprId(
+        lhs: ExpressionId(
             0,
         ),
-        op: Plus(
+        operation: Plus(
             Plus,
         ),
-        rhs: ExprId(
+        rhs: ExpressionId(
             1,
         ),
     },

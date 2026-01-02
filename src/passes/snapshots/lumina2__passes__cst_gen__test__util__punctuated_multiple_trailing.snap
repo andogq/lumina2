@@ -6,21 +6,21 @@ PunctuatedList {
     items: [
         Integer(
             IntegerLiteral(
-                IntLit(
+                IntegerLiteral(
                     123,
                 ),
             ),
         ),
         Integer(
             IntegerLiteral(
-                IntLit(
+                IntegerLiteral(
                     321,
                 ),
             ),
         ),
         Integer(
             IntegerLiteral(
-                IntLit(
+                IntegerLiteral(
                     456,
                 ),
             ),

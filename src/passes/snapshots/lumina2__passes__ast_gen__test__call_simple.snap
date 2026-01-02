@@ -4,7 +4,7 @@ expression: some_ident()
 ---
 Call(
     Call {
-        callee: ExprId(
+        callee: ExpressionId(
             0,
         ),
         arguments: [],

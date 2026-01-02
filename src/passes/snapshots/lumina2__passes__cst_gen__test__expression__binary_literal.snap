@@ -1,0 +1,25 @@
+---
+source: src/passes/cst_gen.rs
+expression: a + 2
+---
+Binary {
+    lhs: Variable(
+        Variable {
+            variable: Ident(
+                "a",
+            ),
+        },
+    ),
+    operation: Plus(
+        Plus,
+    ),
+    rhs: Literal(
+        Integer(
+            IntegerLiteral(
+                IntegerLiteral(
+                    2,
+                ),
+            ),
+        ),
+    ),
+}
