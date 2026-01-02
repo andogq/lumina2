@@ -538,6 +538,25 @@ mod test {
     }
 
     #[rstest]
+    fn expression_statement(mut hir: Hir, mut ctx: Ctx, constraint_ctx: ConstraintCtx) {
+        let expression = hir
+            .expressions
+            .insert(Expression::Literal(Literal::Integer(123)));
+        let statement = hir
+            .statements
+            .insert(Statement::Expression(ExpressionStatement { expression }));
+        let block = hir.blocks.insert(Block {
+            statements: vec![statement],
+            expression: ExpressionId::from_id(0),
+        });
+
+        let mut pass = ThirGen::new(&mut ctx, &hir);
+        pass.add_block_constraints(&constraint_ctx, block);
+        assert_debug_snapshot!("expression_statement", pass.constraints);
+        assert!(pass.errors.is_empty());
+    }
+
+    #[rstest]
     #[case("assign", Assign { variable: ExpressionId::from_id(0), value: ExpressionId::from_id(0) })]
     #[case(
         "plus",
