@@ -1,0 +1,9 @@
+---
+source: src/passes/cst_gen.rs
+expression: abc
+---
+Variable {
+    variable: Ident(
+        "abc",
+    ),
+}

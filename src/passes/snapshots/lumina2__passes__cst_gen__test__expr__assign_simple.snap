@@ -1,0 +1,21 @@
+---
+source: src/passes/cst_gen.rs
+expression: some_ident = some_value
+---
+Assign {
+    assignee: Variable(
+        Variable {
+            variable: Ident(
+                "some_ident",
+            ),
+        },
+    ),
+    tok_eq: Eq,
+    value: Variable(
+        Variable {
+            variable: Ident(
+                "some_value",
+            ),
+        },
+    ),
+}

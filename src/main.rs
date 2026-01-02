@@ -6,7 +6,7 @@ mod ir;
 mod lex;
 mod passes;
 mod prelude;
-mod stages;
+mod ty;
 mod util;
 
 use crate::prelude::*;

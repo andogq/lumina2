@@ -1,0 +1,34 @@
+---
+source: src/passes/cst_gen.rs
+expression: "123,321,456,"
+---
+PunctuatedList {
+    items: [
+        Integer(
+            IntegerLiteral(
+                IntLit(
+                    123,
+                ),
+            ),
+        ),
+        Integer(
+            IntegerLiteral(
+                IntLit(
+                    321,
+                ),
+            ),
+        ),
+        Integer(
+            IntegerLiteral(
+                IntLit(
+                    456,
+                ),
+            ),
+        ),
+    ],
+    punctuation: [
+        Comma,
+        Comma,
+        Comma,
+    ],
+}

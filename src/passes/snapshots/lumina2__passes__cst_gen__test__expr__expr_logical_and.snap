@@ -1,0 +1,25 @@
+---
+source: src/passes/cst_gen.rs
+expression: true && something
+---
+Binary(
+    Binary {
+        lhs: Literal(
+            Boolean(
+                True(
+                    True,
+                ),
+            ),
+        ),
+        op: LogicalAnd(
+            AmpAmp,
+        ),
+        rhs: Variable(
+            Variable {
+                variable: Ident(
+                    "something",
+                ),
+            },
+        ),
+    },
+)

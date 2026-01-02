@@ -1,0 +1,19 @@
+---
+source: src/passes/cst_gen.rs
+expression: a()
+---
+Call {
+    callee: Variable(
+        Variable {
+            variable: Ident(
+                "a",
+            ),
+        },
+    ),
+    tok_l_paren: LParen,
+    arguments: PunctuatedList {
+        items: [],
+        punctuation: [],
+    },
+    tok_r_paren: RParen,
+}

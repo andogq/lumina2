@@ -5,7 +5,7 @@ use ast::*;
 pub struct AstGen<'ctx> {
     ctx: &'ctx mut Ctx,
 
-    ast: Ast,
+    pub ast: Ast,
 }
 
 impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
@@ -29,7 +29,7 @@ impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
 }
 
 impl<'ctx> AstGen<'ctx> {
-    fn new(ctx: &'ctx mut Ctx) -> Self {
+    pub fn new(ctx: &'ctx mut Ctx) -> Self {
         Self {
             ctx,
             ast: Ast::new(),
@@ -108,7 +108,7 @@ impl<'ctx> AstGen<'ctx> {
         })
     }
 
-    fn lower_expr(&mut self, expr: &cst::Expr) -> ExprId {
+    pub fn lower_expr(&mut self, expr: &cst::Expr) -> ExprId {
         let expr = match expr {
             cst::Expr::Assign(cst::Assign {
                 assignee, value, ..
@@ -196,7 +196,7 @@ impl<'ctx> AstGen<'ctx> {
 
 #[cfg(test)]
 mod test {
-    use crate::stages::parse::Parse;
+    use crate::passes::cst_gen::Parse;
 
     use super::*;
 

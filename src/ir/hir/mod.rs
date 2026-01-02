@@ -1,11 +1,8 @@
 pub mod thir;
-mod visitor;
 
 use crate::prelude::*;
 
-pub use self::{
-    block::*, expr::*, functions::*, statement::*, thir::Thir, type_refs::*, visitor::*,
-};
+pub use self::{block::*, expr::*, functions::*, statement::*, type_refs::*};
 
 create_id!(BlockId);
 create_id!(ExprId);

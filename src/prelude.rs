@@ -18,7 +18,7 @@ pub use crate::{
     // TODO: This needs to be  moved
     ir::hir::TypeRefId,
     // TODO: This needs to be  moved
-    stages::ty::TypeVarId,
+    ty::TypeVarId,
     util::{bindings::BindingId, indexed_vec::Id, scopes::ScopeId, string_pool::StringId},
 };
 

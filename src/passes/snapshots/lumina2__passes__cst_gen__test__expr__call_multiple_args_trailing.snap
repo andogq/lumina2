@@ -1,0 +1,51 @@
+---
+source: src/passes/cst_gen.rs
+expression: "a(1, 2, 3,)"
+---
+Call {
+    callee: Variable(
+        Variable {
+            variable: Ident(
+                "a",
+            ),
+        },
+    ),
+    tok_l_paren: LParen,
+    arguments: PunctuatedList {
+        items: [
+            Literal(
+                Integer(
+                    IntegerLiteral(
+                        IntLit(
+                            1,
+                        ),
+                    ),
+                ),
+            ),
+            Literal(
+                Integer(
+                    IntegerLiteral(
+                        IntLit(
+                            2,
+                        ),
+                    ),
+                ),
+            ),
+            Literal(
+                Integer(
+                    IntegerLiteral(
+                        IntLit(
+                            3,
+                        ),
+                    ),
+                ),
+            ),
+        ],
+        punctuation: [
+            Comma,
+            Comma,
+            Comma,
+        ],
+    },
+    tok_r_paren: RParen,
+}

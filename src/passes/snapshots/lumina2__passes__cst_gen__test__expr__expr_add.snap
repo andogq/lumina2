@@ -1,0 +1,29 @@
+---
+source: src/passes/cst_gen.rs
+expression: 123 + 321
+---
+Binary(
+    Binary {
+        lhs: Literal(
+            Integer(
+                IntegerLiteral(
+                    IntLit(
+                        123,
+                    ),
+                ),
+            ),
+        ),
+        op: Plus(
+            Plus,
+        ),
+        rhs: Literal(
+            Integer(
+                IntegerLiteral(
+                    IntLit(
+                        321,
+                    ),
+                ),
+            ),
+        ),
+    },
+)

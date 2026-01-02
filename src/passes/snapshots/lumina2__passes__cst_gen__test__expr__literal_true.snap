@@ -1,0 +1,9 @@
+---
+source: src/passes/cst_gen.rs
+expression: "true"
+---
+Boolean(
+    True(
+        True,
+    ),
+)

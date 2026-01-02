@@ -1,9 +1,0 @@
----
-source: src/stages/ast_builder.rs
-expression: some_ident
----
-Variable {
-    variable: StringId(
-        0,
-    ),
-}

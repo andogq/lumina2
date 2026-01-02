@@ -1,7 +1,7 @@
 use crate::{
     ir::cst::{BinaryOp, UnaryOp},
     prelude::{thir::Thir2, *},
-    stages::ty::{Constraint, IntegerKind, solver::Solver},
+    ty::{Constraint, IntegerKind, solver::Solver},
 };
 
 use hir::*;
@@ -123,13 +123,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                         .errors
                         .push(self.ctx.errors.report(ThirGenError::InvalidBreak)),
                 },
-                Statement::Expr(ExprStatement { expr }) => {
-                    // Expression statements must end in `()` type.
-                    self.constraints
-                        .push(((*expr).into(), Constraint::Eq(Type::Unit.into())));
-
-                    self.add_expr_constraints(ctx, *expr)
-                }
+                Statement::Expr(ExprStatement { expr }) => self.add_expr_constraints(ctx, *expr),
             }
         }
 

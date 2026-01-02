@@ -1,7 +1,0 @@
----
-source: src/stages/hir_builder.rs
-expression: builder.lower_literal(&literal)
----
-Boolean(
-    true,
-)

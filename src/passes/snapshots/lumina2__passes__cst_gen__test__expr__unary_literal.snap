@@ -1,0 +1,18 @@
+---
+source: src/passes/cst_gen.rs
+expression: "!2"
+---
+Unary {
+    op: Not(
+        Bang,
+    ),
+    value: Literal(
+        Integer(
+            IntegerLiteral(
+                IntLit(
+                    2,
+                ),
+            ),
+        ),
+    ),
+}

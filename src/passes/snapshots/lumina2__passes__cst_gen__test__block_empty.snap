@@ -1,0 +1,9 @@
+---
+source: src/passes/cst_gen.rs
+expression: "{ }"
+---
+Block {
+    tok_l_brace: LBrace,
+    statements: [],
+    tok_r_brace: RBrace,
+}

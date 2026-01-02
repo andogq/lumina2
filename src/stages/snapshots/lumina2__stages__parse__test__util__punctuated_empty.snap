@@ -1,8 +1,0 @@
----
-source: src/stages/parse.rs
-expression: ""
----
-PunctuatedList {
-    items: [],
-    punctuation: [],
-}

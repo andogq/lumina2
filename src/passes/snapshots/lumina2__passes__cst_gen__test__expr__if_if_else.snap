@@ -1,0 +1,57 @@
+---
+source: src/passes/cst_gen.rs
+expression: "if condition { something } else { something_else }"
+---
+If {
+    tok_if: If,
+    condition: Variable(
+        Variable {
+            variable: Ident(
+                "condition",
+            ),
+        },
+    ),
+    then: Block {
+        tok_l_brace: LBrace,
+        statements: [
+            Expr(
+                ExprStatement {
+                    expr: Variable(
+                        Variable {
+                            variable: Ident(
+                                "something",
+                            ),
+                        },
+                    ),
+                    tok_semicolon: None,
+                },
+            ),
+        ],
+        tok_r_brace: RBrace,
+    },
+    trailer: Some(
+        IfTrailer {
+            tok_else: Else,
+            if_or_block: Block(
+                Block {
+                    tok_l_brace: LBrace,
+                    statements: [
+                        Expr(
+                            ExprStatement {
+                                expr: Variable(
+                                    Variable {
+                                        variable: Ident(
+                                            "something_else",
+                                        ),
+                                    },
+                                ),
+                                tok_semicolon: None,
+                            },
+                        ),
+                    ],
+                    tok_r_brace: RBrace,
+                },
+            ),
+        },
+    ),
+}

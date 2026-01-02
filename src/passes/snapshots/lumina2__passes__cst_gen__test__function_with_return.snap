@@ -1,0 +1,29 @@
+---
+source: src/passes/cst_gen.rs
+expression: "fn some_func() -> u32 {}"
+---
+FunctionDeclaration {
+    tok_fn: Fn,
+    name: Ident(
+        "some_func",
+    ),
+    tok_lparen: LParen,
+    params: PunctuatedList {
+        items: [],
+        punctuation: [],
+    },
+    tok_rparan: RParen,
+    return_ty: Some(
+        FunctionReturnType {
+            tok_thin_arrow: ThinArrow,
+            ty: Ident(
+                "u32",
+            ),
+        },
+    ),
+    body: Block {
+        tok_l_brace: LBrace,
+        statements: [],
+        tok_r_brace: RBrace,
+    },
+}

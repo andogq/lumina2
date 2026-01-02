@@ -1,0 +1,16 @@
+---
+source: src/passes/cst_gen.rs
+expression: "-b"
+---
+Unary {
+    op: Negative(
+        Minus,
+    ),
+    value: Variable(
+        Variable {
+            variable: Ident(
+                "b",
+            ),
+        },
+    ),
+}
