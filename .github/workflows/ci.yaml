@@ -29,11 +29,6 @@ jobs:
           version: "18.1"
           directory: "${{ env.LLVM_PATH }}"
 
-      - run: ls -la "${{ env.LLVM_PATH }}/bin"
-
-      - name: llvm-config
-        run: llvm-config --version --bindir --libdir
-
       - name: Install rust
         run: |
           rustup toolchain install stable --profile minimal --no-self-update
@@ -41,19 +36,31 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       - uses: Swatinem/rust-cache@v2
 
       - name: Test with code coverage
         run: |
-          cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+          cargo llvm-cov nextest --all-features --workspace --lcov --profile=ci --output-path lcov.info
         env:
           LLVM_SYS_181_PREFIX: "${{ env.LLVM_PATH }}"
+
+      - name: Upload test results to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: target/nextest/ci/junit.xml
+          report_type: test_results
+          fail_ci_if_error: false
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
+          report_type: coverage
           fail_ci_if_error: false
 
   clippy:
@@ -74,11 +81,9 @@ jobs:
           version: "18.1"
           directory: "${{ env.LLVM_PATH }}"
 
-      - name: llvm-config
-        run: llvm-config --version --bindir --libdir
-
       - name: Install rust
-        run: rustup toolchain install stable --profile minimal --no-self-update
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
 
       - uses: Swatinem/rust-cache@v2
 
