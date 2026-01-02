@@ -82,11 +82,6 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             parameters,
             return_ty,
             entry,
-
-            // TODO: Delete these.
-            blocks: vec![],
-            statements: vec![],
-            expressions: vec![],
         }))
     }
 
@@ -277,7 +272,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum HirGenError {
-    #[error("an `if` expression must contain atleast one block.")]
+    #[error("an `if` expression must contain at least one block.")]
     IfMustHaveBlock,
 }
 

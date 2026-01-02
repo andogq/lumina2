@@ -393,9 +393,6 @@ mod test {
             parameters: params.into_iter().collect(),
             return_ty,
             entry: BlockId::from_id(0),
-            blocks: vec![],
-            statements: vec![],
-            expressions: vec![],
         };
 
         // Used for debugging.
