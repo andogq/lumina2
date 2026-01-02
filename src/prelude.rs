@@ -7,7 +7,7 @@ pub use crate::{
     error::{CError, CErrorId, CErrorKind, CErrorList, CResult, ErrorMeta},
     lex::{Lexer, Tok, tok},
     passes::{Pass, PassResult, PassSuccess},
-    util::{bindings::Bindings, indexed_vec::IndexedVec, scopes::Scopes, string_pool::StringPool},
+    util::{indexed_vec::IndexedVec, scopes::Scopes, string_pool::StringPool},
 };
 
 // Macros
@@ -19,7 +19,11 @@ pub use crate::{
     ir::hir::TypeRefId,
     // TODO: This needs to be  moved
     ty::TypeVarId,
-    util::{bindings::BindingId, indexed_vec::Id, scopes::ScopeId, string_pool::StringId},
+    util::{
+        indexed_vec::Id,
+        scopes::{BindingId, ScopeId},
+        string_pool::StringId,
+    },
 };
 
 // Common items from standard library.

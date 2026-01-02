@@ -1,6 +1,7 @@
 use crate::prelude::*;
 
 create_id!(ScopeId);
+create_id!(BindingId);
 
 #[derive(Clone, Debug, Default)]
 struct Scope {
