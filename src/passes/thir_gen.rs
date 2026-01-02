@@ -117,17 +117,22 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                         Constraint::Eq(self.hir[ctx.function].return_ty.clone().into()),
                     ));
                 }
-                Statement::Break(BreakStatement { expression }) => match ctx.loops.last() {
-                    // Break expression must match the expression of the inner most loop.
-                    Some(current_loop) => self
-                        .constraints
-                        .push(((*expression).into(), Constraint::Eq((*current_loop).into()))),
-                    // Not currently in a loop, so report that it's invalid, and continue
-                    // generating constraints.
-                    None => self
-                        .errors
-                        .push(self.ctx.errors.report(ThirGenError::InvalidBreak)),
-                },
+                Statement::Break(BreakStatement { expression }) => {
+                    // Generate constraints for the break expression.
+                    self.add_expression_constraints(ctx, *expression);
+
+                    match ctx.loops.last() {
+                        // Break expression must match the expression of the inner most loop.
+                        Some(current_loop) => self
+                            .constraints
+                            .push(((*expression).into(), Constraint::Eq((*current_loop).into()))),
+                        // Not currently in a loop, so report that it's invalid, and continue
+                        // generating constraints.
+                        None => self
+                            .errors
+                            .push(self.ctx.errors.report(ThirGenError::InvalidBreak)),
+                    }
+                }
                 Statement::Expression(ExpressionStatement { expression }) => {
                     self.add_expression_constraints(ctx, *expression)
                 }
@@ -474,6 +479,62 @@ mod test {
         pass.add_block_constraints(&constraint_ctx, block);
         assert_debug_snapshot!("return_statement", pass.constraints);
         assert!(pass.errors.is_empty());
+    }
+
+    #[rstest]
+    #[case("single loop", [ExpressionId::from_id(1)])]
+    #[case("deep loop", [ExpressionId::from_id(1), ExpressionId::from_id(2),ExpressionId::from_id(3)])]
+    fn break_statement(
+        mut hir: Hir,
+        mut ctx: Ctx,
+        mut constraint_ctx: ConstraintCtx,
+        #[case] name: &str,
+        #[case] loops: impl IntoIterator<Item = ExpressionId>,
+    ) {
+        constraint_ctx.loops = Vec::from_iter(loops);
+
+        // Add some dummy expressions for the loops.
+        (0..3).for_each(|_| {
+            hir.expressions.insert(Expression::Unreachable);
+        });
+
+        let expression = hir
+            .expressions
+            .insert(Expression::Literal(Literal::Integer(123)));
+        let statement = hir
+            .statements
+            .insert(Statement::Break(BreakStatement { expression }));
+        let block = hir.blocks.insert(Block {
+            statements: vec![statement],
+            expression: ExpressionId::from_id(0),
+        });
+
+        let mut pass = ThirGen::new(&mut ctx, &hir);
+        pass.add_block_constraints(&constraint_ctx, block);
+        assert_debug_snapshot!(name, pass.constraints);
+        assert!(pass.errors.is_empty());
+    }
+
+    #[rstest]
+    fn break_statement_no_loop(mut hir: Hir, mut ctx: Ctx, constraint_ctx: ConstraintCtx) {
+        let expression = hir
+            .expressions
+            .insert(Expression::Literal(Literal::Integer(123)));
+        let statement = hir
+            .statements
+            .insert(Statement::Break(BreakStatement { expression }));
+        let block = hir.blocks.insert(Block {
+            statements: vec![statement],
+            expression: ExpressionId::from_id(0),
+        });
+
+        let mut pass = ThirGen::new(&mut ctx, &hir);
+        pass.add_block_constraints(&constraint_ctx, block);
+        assert_eq!(pass.errors.len(), 1);
+        assert!(matches!(
+            *pass.ctx.errors[pass.errors[0]],
+            CErrorKind::ThirGen(ThirGenError::InvalidBreak)
+        ));
     }
 
     #[rstest]

@@ -1,0 +1,42 @@
+---
+source: src/passes/thir_gen.rs
+expression: pass.constraints
+---
+[
+    (
+        Expression(
+            ExpressionId(
+                4,
+            ),
+        ),
+        Integer(
+            Any,
+        ),
+    ),
+    (
+        Expression(
+            ExpressionId(
+                4,
+            ),
+        ),
+        Eq(
+            Expression(
+                ExpressionId(
+                    3,
+                ),
+            ),
+        ),
+    ),
+    (
+        Expression(
+            ExpressionId(
+                0,
+            ),
+        ),
+        Eq(
+            Type(
+                Unit,
+            ),
+        ),
+    ),
+]
