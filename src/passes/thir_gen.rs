@@ -107,10 +107,16 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     },
                 )),
                 // Expression must equal the return type of the current function.
-                Statement::Return(ReturnStatement { expression }) => self.constraints.push((
-                    (*expression).into(),
-                    Constraint::Eq(self.hir[ctx.function].return_ty.clone().into()),
-                )),
+                Statement::Return(ReturnStatement { expression }) => {
+                    // Generate constraints for the return expression.
+                    self.add_expression_constraints(ctx, *expression);
+
+                    // Ensure the return expression matches the function return type.
+                    self.constraints.push((
+                        (*expression).into(),
+                        Constraint::Eq(self.hir[ctx.function].return_ty.clone().into()),
+                    ));
+                }
                 Statement::Break(BreakStatement { expression }) => match ctx.loops.last() {
                     // Break expression must match the expression of the inner most loop.
                     Some(current_loop) => self
@@ -440,6 +446,33 @@ mod test {
         let mut pass = ThirGen::new(&mut ctx, &hir);
         pass.add_block_constraints(&constraint_ctx, block);
         assert_debug_snapshot!(name, pass.constraints, &format!("{ty:?}"));
+        assert!(pass.errors.is_empty());
+    }
+
+    #[rstest]
+    fn return_statement(mut hir: Hir, mut ctx: Ctx, constraint_ctx: ConstraintCtx) {
+        let expression = hir
+            .expressions
+            .insert(Expression::Literal(Literal::Integer(123)));
+        let statement = hir
+            .statements
+            .insert(Statement::Return(ReturnStatement { expression }));
+        let block = hir.blocks.insert(Block {
+            statements: vec![statement],
+            expression: ExpressionId::from_id(0),
+        });
+
+        // Insert a fake function to pull the return type.
+        hir.functions.insert(Function {
+            binding: BindingId::from_id(0),
+            parameters: Vec::new(),
+            return_ty: Type::U8,
+            entry: block,
+        });
+
+        let mut pass = ThirGen::new(&mut ctx, &hir);
+        pass.add_block_constraints(&constraint_ctx, block);
+        assert_debug_snapshot!("return_statement", pass.constraints);
         assert!(pass.errors.is_empty());
     }
 
