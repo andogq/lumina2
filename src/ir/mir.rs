@@ -9,6 +9,8 @@ create_id!(BasicBlockId);
 create_id!(StatementId);
 create_id!(TerminatorId);
 create_id!(FunctionId);
+create_id!(OperandId);
+create_id!(PlaceId);
 
 #[derive(Clone, Debug, Default)]
 pub struct Mir {
@@ -16,6 +18,8 @@ pub struct Mir {
     pub basic_blocks: IndexedVec<BasicBlockId, BasicBlock>,
     pub statements: IndexedVec<StatementId, Statement>,
     pub terminators: IndexedVec<TerminatorId, Terminator>,
+    pub operands: IndexedVec<OperandId, Operand>,
+    pub places: IndexedVec<PlaceId, Place>,
 }
 
 impl Mir {
@@ -72,6 +76,30 @@ impl IndexMut<TerminatorId> for Mir {
         &mut self.terminators[index]
     }
 }
+impl Index<PlaceId> for Mir {
+    type Output = Place;
+
+    fn index(&self, index: PlaceId) -> &Self::Output {
+        &self.places[index]
+    }
+}
+impl IndexMut<PlaceId> for Mir {
+    fn index_mut(&mut self, index: PlaceId) -> &mut Self::Output {
+        &mut self.places[index]
+    }
+}
+impl Index<OperandId> for Mir {
+    type Output = Operand;
+
+    fn index(&self, index: OperandId) -> &Self::Output {
+        &self.operands[index]
+    }
+}
+impl IndexMut<OperandId> for Mir {
+    fn index_mut(&mut self, index: OperandId) -> &mut Self::Output {
+        &mut self.operands[index]
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Function {
@@ -119,7 +147,7 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub struct Assign {
-        pub place: Place,
+        pub place: PlaceId,
         pub rvalue: RValue,
     }
 
@@ -148,9 +176,9 @@ mod terminator {
 
     #[derive(Clone, Debug)]
     pub struct Call {
-        pub func: Operand,
-        pub args: Vec<Operand>,
-        pub destination: Place,
+        pub func: OperandId,
+        pub args: Vec<OperandId>,
+        pub destination: PlaceId,
         pub target: BasicBlockId,
     }
 
@@ -161,7 +189,7 @@ mod terminator {
 
     #[derive(Clone, Debug)]
     pub struct SwitchInt {
-        pub discriminator: Operand,
+        pub discriminator: OperandId,
         pub targets: Vec<(Constant, BasicBlockId)>,
         pub otherwise: BasicBlockId,
     }
@@ -189,23 +217,23 @@ mod rvalue {
 
     #[derive(Clone, Debug)]
     pub enum RValue {
-        Use(Operand),
-        Ref(Place),
+        Use(OperandId),
+        Ref(PlaceId),
         Binary(Binary),
         Unary(Unary),
     }
 
     #[derive(Clone, Debug)]
     pub struct Binary {
-        pub lhs: Operand,
+        pub lhs: OperandId,
         pub op: BinaryOp,
-        pub rhs: Operand,
+        pub rhs: OperandId,
     }
 
     #[derive(Clone, Debug)]
     pub struct Unary {
         pub op: UnaryOp,
-        pub value: Operand,
+        pub value: OperandId,
     }
 }
 
@@ -214,7 +242,7 @@ mod operand {
 
     #[derive(Clone, Debug)]
     pub enum Operand {
-        Place(Place),
+        Place(PlaceId),
         Constant(Constant),
     }
 

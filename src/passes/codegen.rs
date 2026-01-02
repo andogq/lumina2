@@ -183,7 +183,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         for statement in &block.statements {
             match &self.mir[*statement] {
                 Statement::Assign(Assign { place, rvalue }) => {
-                    let (ptr, ptr_ty) = self.resolve_place(&builder, function_id, place);
+                    let (ptr, ptr_ty) = self.resolve_place(&builder, function_id, *place);
                     let (value, ty) = self.resolve_rvalue(&builder, function_id, rvalue);
 
                     assert_eq!(ptr_ty, ty);
@@ -206,11 +206,11 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                 // Lower arguments.
                 let args = args
                     .iter()
-                    .map(|arg| self.resolve_operand(&builder, function_id, arg).0.into())
+                    .map(|arg| self.resolve_operand(&builder, function_id, *arg).0.into())
                     .collect::<Vec<_>>();
 
                 // Lower function call.
-                let ret_value = match &func {
+                let ret_value = match &self.mir[*func] {
                     // If possible. use a direct call.
                     Operand::Constant(Constant::Function(function_id)) => {
                         let function = self.functions[*function_id];
@@ -228,8 +228,9 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .unwrap()
                     }
                     // Otherwise fall back to an indirect call.
-                    func => {
-                        let (func_ptr, func_ty) = self.resolve_operand(&builder, function_id, func);
+                    _ => {
+                        let (func_ptr, func_ty) =
+                            self.resolve_operand(&builder, function_id, *func);
                         let Type::Function { params, ret_ty } = func_ty else {
                             panic!();
                         };
@@ -250,7 +251,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                 };
 
                 // Save the return value to the relevant local.
-                let (ret_value_ptr, _) = self.resolve_place(&builder, function_id, destination);
+                let (ret_value_ptr, _) = self.resolve_place(&builder, function_id, *destination);
                 builder.build_store(ret_value_ptr, ret_value).unwrap();
 
                 // Since function calls aren't a terminator in LLVM, manually terminate this block.
@@ -275,7 +276,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                 otherwise,
             }) => {
                 let (discriminator, discriminator_ty) =
-                    self.resolve_operand(&builder, function_id, discriminator);
+                    self.resolve_operand(&builder, function_id, *discriminator);
                 assert!(matches!(
                     discriminator_ty,
                     Type::I8 | Type::U8 | Type::Boolean
@@ -307,11 +308,11 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         &mut self,
         builder: &Builder<'ink>,
         function_id: FunctionId,
-        operand: &Operand,
+        operand: OperandId,
     ) -> (BasicValueEnum<'ink>, Type) {
-        match operand {
+        match &self.mir[operand] {
             Operand::Place(place) => {
-                let (ptr, ty) = self.resolve_place(builder, function_id, place);
+                let (ptr, ty) = self.resolve_place(builder, function_id, *place);
                 (
                     builder.build_load(self.basic_ty(&ty), ptr, "load").unwrap(),
                     ty,
@@ -325,8 +326,10 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         &mut self,
         builder: &Builder<'ink>,
         function_id: FunctionId,
-        place: &Place,
+        place: PlaceId,
     ) -> (PointerValue<'ink>, Type) {
+        let place = &self.mir[place];
+
         let (mut ptr, mut ty) = self.locals[function_id][place.local].clone();
 
         for projection in &place.projection {
@@ -352,16 +355,16 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         rvalue: &RValue,
     ) -> (BasicValueEnum<'ink>, Type) {
         match rvalue {
-            RValue::Use(operand) => self.resolve_operand(builder, function_id, operand),
+            RValue::Use(operand) => self.resolve_operand(builder, function_id, *operand),
             RValue::Ref(place) => {
                 // Resolve the place.
-                let (ptr, ty) = self.resolve_place(builder, function_id, place);
+                let (ptr, ty) = self.resolve_place(builder, function_id, *place);
                 // Produce a pointer value.
                 (ptr.as_basic_value_enum(), Type::Ref(Box::new(ty)))
             }
             RValue::Binary(binary) => {
-                let (lhs, lhs_ty) = self.resolve_operand(builder, function_id, &binary.lhs);
-                let (rhs, rhs_ty) = self.resolve_operand(builder, function_id, &binary.rhs);
+                let (lhs, lhs_ty) = self.resolve_operand(builder, function_id, binary.lhs);
+                let (rhs, rhs_ty) = self.resolve_operand(builder, function_id, binary.rhs);
 
                 match (lhs_ty, &binary.op, rhs_ty) {
                     (
@@ -584,8 +587,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
             }
             RValue::Unary(unary) => match unary.op {
                 UnaryOp::Not(_) => {
-                    let (value, value_ty) =
-                        self.resolve_operand(builder, function_id, &unary.value);
+                    let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
 
                     if !matches!(value_ty, Type::U8 | Type::I8 | Type::Boolean) {
                         panic!("cannot apply unary op NOT on {value_ty:?}");
@@ -600,8 +602,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     )
                 }
                 UnaryOp::Negative(_) => {
-                    let (value, value_ty) =
-                        self.resolve_operand(builder, function_id, &unary.value);
+                    let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
 
                     if !matches!(value_ty, Type::I8) {
                         panic!("cannot apply unary op NEG on {value_ty:?}");
@@ -616,8 +617,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     )
                 }
                 UnaryOp::Deref(_) => {
-                    let (value, value_ty) =
-                        self.resolve_operand(builder, function_id, &unary.value);
+                    let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
 
                     let Type::Ref(inner_ty) = value_ty else {
                         panic!("cannot dereference value of type: {value_ty:?}");
@@ -636,11 +636,11 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     )
                 }
                 UnaryOp::Ref(_) => {
-                    let Operand::Place(place) = &unary.value else {
+                    let Operand::Place(place) = &self.mir[unary.value] else {
                         panic!("can only take reference of place");
                     };
 
-                    let (ptr, ty) = self.resolve_place(builder, function_id, place);
+                    let (ptr, ty) = self.resolve_place(builder, function_id, *place);
 
                     (ptr.as_basic_value_enum(), Type::Ref(Box::new(ty)))
                 }
