@@ -80,8 +80,22 @@ pub struct Function {
     pub params: Vec<Type>,
     pub binding: BindingId,
 
-    pub locals: Vec<(Option<BindingId>, Type)>,
+    pub locals: IndexedVec<LocalId, (Option<BindingId>, Type)>,
     pub entry: BasicBlockId,
+}
+
+impl Index<LocalId> for Function {
+    type Output = (Option<BindingId>, Type);
+
+    fn index(&self, index: LocalId) -> &Self::Output {
+        &self.locals[index]
+    }
+}
+
+impl IndexMut<LocalId> for Function {
+    fn index_mut(&mut self, index: LocalId) -> &mut Self::Output {
+        &mut self.locals[index]
+    }
 }
 
 mod basic_blocks {

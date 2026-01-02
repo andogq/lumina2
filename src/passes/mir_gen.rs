@@ -492,14 +492,19 @@ impl FunctionLocals {
             .insert((ty, Some(binding)))
     }
 
-    pub fn generate_locals(&self, function: FunctionId) -> Vec<(Option<BindingId>, Type)> {
-        match self.0.get(&function) {
-            Some(locals) => locals
-                .iter()
-                .map(|(ty, binding)| (binding.clone(), ty.clone()))
-                .collect(),
-            None => Vec::new(),
+    pub fn generate_locals(
+        &self,
+        function: FunctionId,
+    ) -> IndexedVec<LocalId, (Option<BindingId>, Type)> {
+        let mut locals = IndexedVec::new();
+
+        if let Some(function_locals) = self.0.get(&function) {
+            for (ty, binding) in function_locals.iter() {
+                locals.insert((*binding, ty.clone()));
+            }
         }
+
+        locals
     }
 
     /// Fetch the local corresponding with the return value for a given function.
