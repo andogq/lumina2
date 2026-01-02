@@ -1,4 +1,6 @@
-use super::*;
+use crate::prelude::*;
+
+use hir::*;
 
 #[derive(Clone, Debug)]
 pub struct Thir<'hir> {

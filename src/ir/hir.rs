@@ -1,5 +1,3 @@
-pub mod thir;
-
 use crate::prelude::*;
 
 pub use self::{block::*, expression::*, functions::*, statement::*, type_refs::*};
