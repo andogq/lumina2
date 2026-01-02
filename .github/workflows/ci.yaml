@@ -93,3 +93,4 @@ jobs:
         env:
           LLVM_SYS_181_PREFIX: "${{ env.LLVM_PATH }}"
 
+# spell-checker:ignore libtinfo,Swatinem

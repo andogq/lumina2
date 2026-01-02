@@ -3,8 +3,11 @@
     "language": "en-GB",
     "ignorePaths": [".cspell.json"],
     "words": [
+        "color",
+
         "insta",
         "mockall",
+        "nextest",
         "rstest",
         "thiserror",
 
@@ -21,6 +24,9 @@
         "toks",
         "unsize",
         "vars",
+
+        "clippy",
+        "rustup",
     ],
     "flagWords": [
         "arg",
