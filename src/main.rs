@@ -133,15 +133,15 @@ fn main() {
     let result = run(r#"fn main() -> u8 {
             let count = 0;
 
-            loop {
+            let output = loop {
                 if count >= 3 {
-                    break;
+                    break 10;
                 }
 
                 count = count + 1;
-            }
+            };
 
-            count
+            output
         }"#);
 
     dbg!(result);
@@ -292,6 +292,46 @@ mod test {
                     "fn main() -> u8 { let a = 1; let b = { let old_a = a; let a = 5; a + old_a }; a + b }"
                 ),
                 7
+            );
+        }
+
+        #[test]
+        fn break_nothing() {
+            assert_eq!(
+                run(r#"fn main() -> u8 {
+                    let count = 0;
+
+                    loop {
+                        if count >= 3 {
+                            break;
+                        }
+
+                        count = count + 1;
+                    };
+
+                    count
+                }"#),
+                3
+            );
+        }
+
+        #[test]
+        fn break_expression() {
+            assert_eq!(
+                run(r#"fn main() -> u8 {
+                    let count = 0;
+
+                    let output = loop {
+                        if count >= 3 {
+                            break 10;
+                        }
+
+                        count = count + 1;
+                    };
+
+                    output
+                }"#),
+                10
             );
         }
     }

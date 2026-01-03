@@ -85,7 +85,8 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
         }
 
         // Lower the entry block.
-        let block = self.lower_block(function_id, function.entry);
+        let ctx = FunctionCtx::new(function_id);
+        let block = self.lower_block(&ctx, function.entry);
 
         // If the block resolves to a value of the same type as the return value, then it's an
         // implicit return.
@@ -123,7 +124,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
     }
 
     /// Lower a block within a function.
-    fn lower_block(&mut self, function: FunctionId, block_id: hir::BlockId) -> LoweredBlock {
+    fn lower_block(&mut self, ctx: &FunctionCtx, block_id: hir::BlockId) -> LoweredBlock {
         let block = &self.thir[block_id];
 
         // Create a new (empty) basic block to lower into.
@@ -141,7 +142,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     // Create a local for the binding.
                     let local = self
                         .locals
-                        .create_with_binding(function, ty.clone(), *binding);
+                        .create_with_binding(ctx.function, ty.clone(), *binding);
 
                     // Register the local against the binding.
                     self.bindings.insert(*binding, Binding::Local(local));
@@ -149,12 +150,12 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 hir::Statement::Return(hir::ReturnStatement { expression }) => {
                     // If a value is present, store it within the return local.
                     if let Some(value) =
-                        self.lower_expression(function, &mut current_basic_block, *expression)
+                        self.lower_expression(ctx, &mut current_basic_block, *expression)
                     {
                         let place = self
                             .mir
                             .places
-                            .insert(self.locals.return_local(function).into());
+                            .insert(self.locals.return_local(ctx.function).into());
                         self.mir.add_statement(
                             entry,
                             Assign {
@@ -167,22 +168,38 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     self.mir.terminate(entry, Terminator::Return);
                 }
                 hir::Statement::Break(hir::BreakStatement { expression }) => {
-                    if let Some(_value) =
-                        self.lower_expression(function, &mut current_basic_block, *expression)
+                    let (loop_place, loop_exit) =
+                        ctx.current_loop().expect("currently within a loop");
+
+                    if let Some(value) =
+                        self.lower_expression(ctx, &mut current_basic_block, *expression)
+                        // HACK: This check shouldn't be required, as `Constant::Unit` shouldn't exist
+                        // in MIR
+                        && !matches!(self.thir.type_of(*expression), Type::Unit)
                     {
-                        // TODO: Store resulting expression in the local for the current loop.
-                        unimplemented!();
+                        self.mir.add_statement(
+                            current_basic_block,
+                            Assign {
+                                place: loop_place,
+                                rvalue: RValue::Use(value),
+                            },
+                        );
                     }
 
-                    todo!("work out which block to jump to");
+                    self.mir.terminate(
+                        entry,
+                        Goto {
+                            basic_block: loop_exit,
+                        },
+                    );
                 }
                 hir::Statement::Expression(hir::ExpressionStatement { expression }) => {
-                    self.lower_expression(function, &mut current_basic_block, *expression);
+                    self.lower_expression(ctx, &mut current_basic_block, *expression);
                 }
             }
         }
 
-        let value = self.lower_expression(function, &mut current_basic_block, block.expression);
+        let value = self.lower_expression(ctx, &mut current_basic_block, block.expression);
 
         LoweredBlock {
             entry,
@@ -195,13 +212,13 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
     /// may be updated as new blocks are created for sub-expressions.
     fn lower_expression(
         &mut self,
-        function: FunctionId,
+        ctx: &FunctionCtx,
         basic_block: &mut BasicBlockId,
         expression_id: hir::ExpressionId,
     ) -> Option<OperandId> {
         Some(match &self.thir[expression_id] {
             hir::Expression::Assign(hir::Assign { variable, value }) => {
-                let value = self.lower_expression(function, basic_block, *value)?;
+                let value = self.lower_expression(ctx, basic_block, *value)?;
                 let place = self.expression_to_place(*variable);
                 let place = self.mir.places.insert(place);
 
@@ -220,12 +237,12 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 operation,
                 rhs,
             }) => {
-                let lhs = self.lower_expression(function, basic_block, *lhs)?;
-                let rhs = self.lower_expression(function, basic_block, *rhs)?;
+                let lhs = self.lower_expression(ctx, basic_block, *lhs)?;
+                let rhs = self.lower_expression(ctx, basic_block, *rhs)?;
 
                 let result = self
                     .locals
-                    .create(function, self.thir.type_of(expression_id).clone());
+                    .create(ctx.function, self.thir.type_of(expression_id).clone());
                 let result_place = self.mir.places.insert(result.into());
 
                 self.mir.add_statement(
@@ -243,7 +260,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 self.mir.operands.insert(Operand::Place(result_place))
             }
             hir::Expression::Unary(hir::Unary { operation, value }) => {
-                let value = self.lower_expression(function, basic_block, *value)?;
+                let value = self.lower_expression(ctx, basic_block, *value)?;
 
                 /// Helper to create a new place to store the result of the unary operation.
                 #[inline]
@@ -289,7 +306,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     // Standard `!` operation.
                     crate::ir::UnaryOperation::Not => create_unary_operation(
                         self,
-                        function,
+                        ctx.function,
                         basic_block,
                         expression_id,
                         value,
@@ -298,7 +315,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     // Standard `-` operation.
                     crate::ir::UnaryOperation::Negative => create_unary_operation(
                         self,
-                        function,
+                        ctx.function,
                         basic_block,
                         expression_id,
                         value,
@@ -306,7 +323,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     ),
                     // Modifies a `Place` by adding the `Deref` projection.
                     crate::ir::UnaryOperation::Deref => {
-                        let target_place = self.operand_as_place(function, basic_block, value);
+                        let target_place = self.operand_as_place(ctx.function, basic_block, value);
 
                         // TODO: Make sure that `target_place` is only used in one place, otherwise
                         // clone it.
@@ -319,9 +336,9 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     }
                     // Uses `RValue::Ref`.
                     crate::ir::UnaryOperation::Ref => {
-                        let result_place = create_result_place(self, function, expression_id);
+                        let result_place = create_result_place(self, ctx.function, expression_id);
 
-                        let target_place = self.operand_as_place(function, basic_block, value);
+                        let target_place = self.operand_as_place(ctx.function, basic_block, value);
                         self.mir.add_statement(
                             *basic_block,
                             Assign {
@@ -340,10 +357,10 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 default,
             }) => {
                 let discriminator_ty = self.thir.type_of(*discriminator);
-                let discriminator = self.lower_expression(function, basic_block, *discriminator)?;
+                let discriminator = self.lower_expression(ctx, basic_block, *discriminator)?;
 
                 let switch_ty = self.thir.type_of(expression_id);
-                let switch_value = self.locals.create(function, switch_ty.clone());
+                let switch_value = self.locals.create(ctx.function, switch_ty.clone());
                 let switch_place = self.mir.places.insert(switch_value.into());
 
                 let end_block = self.mir.add_basic_block();
@@ -353,7 +370,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     .iter()
                     .map(|(target, block)| {
                         // Lower the block.
-                        let lowered_block = self.lower_block(function, *block);
+                        let lowered_block = self.lower_block(ctx, *block);
 
                         // Store the resulting block value.
                         if let Some(result) = lowered_block.operand
@@ -386,7 +403,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 // Generate the otherwise branch.
                 let otherwise = if let Some(default) = default {
                     // Lower the block.
-                    let lowered_block = self.lower_block(function, *default);
+                    let lowered_block = self.lower_block(ctx, *default);
 
                     // Store the resulting block value.
                     if let Some(result) = lowered_block.operand
@@ -430,11 +447,18 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 self.mir.operands.insert(Operand::Place(switch_place))
             }
             hir::Expression::Loop(hir::Loop { body }) => {
-                // TODO: Create a new local for the loop break value, and register it somewhere.
+                // Create a new local for the loop break value.
+                let loop_local = self
+                    .locals
+                    .create(ctx.function, self.thir.type_of(expression_id).clone());
+                let loop_place = self.mir.places.insert(loop_local.into());
+
+                // Create exit basic block.
+                let exit = self.mir.add_basic_block();
 
                 // Lower the loop body.
-                let lowered_block = self.lower_block(function, *body);
-                assert!(lowered_block.operand.is_none());
+                let loop_ctx = ctx.push_loop(loop_place, exit);
+                let lowered_block = self.lower_block(&loop_ctx, *body);
 
                 // If the loop exits unterminated, loop back to the entry.
                 self.mir.terminate_if_unterminated(
@@ -452,8 +476,11 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     },
                 );
 
-                // TODO: When break expressions are supported, produce the local here.
-                self.mir.operands.insert(Operand::Constant(Constant::Unit))
+                // Continue lowering into exit basic block.
+                *basic_block = exit;
+
+                // Produce the local for the break value.
+                self.mir.operands.insert(Operand::Place(loop_place))
             }
             hir::Expression::Literal(literal) => {
                 self.mir
@@ -467,20 +494,18 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 // Create a local to store the resulting value.
                 let result = self.mir.places.insert(
                     self.locals
-                        .create(function, self.thir.type_of(expression_id).clone())
+                        .create(ctx.function, self.thir.type_of(expression_id).clone())
                         .into(),
                 );
                 // Create a basic block to return to after the function returns.
                 let target = self.mir.add_basic_block();
 
                 // Lower function expression and arguments.
-                let callee = self
-                    .lower_expression(function, basic_block, *callee)
-                    .unwrap();
+                let callee = self.lower_expression(ctx, basic_block, *callee).unwrap();
                 let arguments = arguments
                     .iter()
                     .map(|expression| {
-                        self.lower_expression(function, basic_block, *expression)
+                        self.lower_expression(ctx, basic_block, *expression)
                             .unwrap()
                     })
                     .collect();
@@ -504,7 +529,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             }
             hir::Expression::Block(block_id) => {
                 // Lower the block
-                let lowered_block = self.lower_block(function, *block_id);
+                let lowered_block = self.lower_block(ctx, *block_id);
 
                 // Jump to the block's entry.
                 self.mir.terminate(
@@ -670,6 +695,37 @@ impl FunctionLocals {
     pub fn return_local(&self, _function: FunctionId) -> LocalId {
         // HACK: Not ideal to be manually creating this.
         LocalId::from_id(0)
+    }
+}
+
+/// Context used when lowering things within a [`Function`].
+#[derive(Clone, Debug)]
+struct FunctionCtx {
+    /// Current function.
+    function: FunctionId,
+    /// [`PlaceId`] for result, and [`BasicBlockId`] for exit, each corresponding to enclosing loops.
+    loops: Vec<(PlaceId, BasicBlockId)>,
+}
+
+impl FunctionCtx {
+    /// Create a new context within the provided function.
+    pub fn new(function: FunctionId) -> Self {
+        Self {
+            function,
+            loops: Vec::new(),
+        }
+    }
+
+    /// Enter a new loop, with the provided [`PlaceId`] and exit [`BasicBlockId`].
+    pub fn push_loop(&self, place: PlaceId, exit: BasicBlockId) -> Self {
+        let mut ctx = self.clone();
+        ctx.loops.push((place, exit));
+        ctx
+    }
+
+    /// Produce the [`PlaceId`] and exit [`BasicBlockId`] corresponding to the inner-most loop.
+    pub fn current_loop(&self) -> Option<(PlaceId, BasicBlockId)> {
+        self.loops.last().cloned()
     }
 }
 
