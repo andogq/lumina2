@@ -1,0 +1,19 @@
+---
+source: src/passes/cst_gen.rs
+expression: break 1;
+---
+BreakStatement {
+    tok_break: Break,
+    value: Some(
+        Literal(
+            Integer(
+                IntegerLiteral(
+                    IntegerLiteral(
+                        1,
+                    ),
+                ),
+            ),
+        ),
+    ),
+    tok_semicolon: SemiColon,
+}

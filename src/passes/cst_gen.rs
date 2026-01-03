@@ -125,7 +125,9 @@ mod statement {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
             Self {
                 tok_return: lexer.expect().unwrap(),
-                value: cst::Expression::parse(lexer),
+                // If the next token isn't a semicolon, continue parsing.
+                value: (!matches!(lexer.peek(), Tok::SemiColon))
+                    .then(|| cst::Expression::parse(lexer)),
                 tok_semicolon: lexer.expect().unwrap(),
             }
         }
@@ -620,11 +622,22 @@ mod test {
         }
 
         #[rstest]
-        #[case("return_simple", "return 1;")]
+        #[case("return_expression", "return 1;")]
+        #[case("return_nothing", "return;")]
         fn return_statement(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
                 let return_statement = cst::ReturnStatement::parse(lexer);
                 assert_debug_snapshot!(name, return_statement, source);
+            });
+        }
+
+        #[rstest]
+        #[case("break_expression", "break 1;")]
+        #[case("break_nothing", "break;")]
+        fn break_statement(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let break_statement = cst::BreakStatement::parse(lexer);
+                assert_debug_snapshot!(name, break_statement, source);
             });
         }
 

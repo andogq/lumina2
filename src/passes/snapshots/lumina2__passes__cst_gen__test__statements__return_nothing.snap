@@ -1,0 +1,9 @@
+---
+source: src/passes/cst_gen.rs
+expression: return;
+---
+ReturnStatement {
+    tok_return: Return,
+    value: None,
+    tok_semicolon: SemiColon,
+}

@@ -113,7 +113,7 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub struct BreakStatement {
-        pub expression: Option<ExpressionId>,
+        pub expression: ExpressionId,
     }
 
     #[derive(Clone, Debug)]

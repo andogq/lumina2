@@ -138,13 +138,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     );
                 }
                 ast::Statement::Break(ast::BreakStatement { expression }) => {
-                    let expression = if let Some(expression) = expression {
-                        self.lower_expression(&self.ast[*expression], scope)?
-                    } else {
-                        self.hir
-                            .expressions
-                            .insert(Expression::Literal(Literal::Unit))
-                    };
+                    let expression = self.lower_expression(&self.ast[*expression], scope)?;
                     statements.push(
                         self.hir
                             .statements

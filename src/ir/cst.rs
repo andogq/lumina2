@@ -133,7 +133,7 @@ mod statement {
         #[expect(dead_code, reason = "token field")]
         pub tok_return: tok::Return,
         /// Value that is being returned.
-        pub value: Expression,
+        pub value: Option<Expression>,
         #[expect(dead_code, reason = "token field")]
         pub tok_semicolon: tok::SemiColon,
     }

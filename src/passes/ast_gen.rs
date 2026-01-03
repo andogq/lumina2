@@ -80,7 +80,10 @@ impl<'ctx> AstGen<'ctx> {
                     )
                 }
                 cst::Statement::Return(cst::ReturnStatement { value, .. }) => {
-                    let expression = self.lower_expression(value);
+                    let expression = value
+                        .as_ref()
+                        .map(|expression| self.lower_expression(expression))
+                        .unwrap_or_else(|| self.ast.expressions.insert(Literal::Unit.into()));
                     statements.push(
                         self.ast
                             .statements
@@ -90,7 +93,8 @@ impl<'ctx> AstGen<'ctx> {
                 cst::Statement::Break(cst::BreakStatement { value, .. }) => {
                     let expression = value
                         .as_ref()
-                        .map(|expression| self.lower_expression(expression));
+                        .map(|expression| self.lower_expression(expression))
+                        .unwrap_or_else(|| self.ast.expressions.insert(Literal::Unit.into()));
                     statements.push(
                         self.ast
                             .statements

@@ -1,0 +1,9 @@
+---
+source: src/passes/cst_gen.rs
+expression: break;
+---
+BreakStatement {
+    tok_break: Break,
+    value: None,
+    tok_semicolon: SemiColon,
+}

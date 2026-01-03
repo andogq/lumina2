@@ -5,11 +5,13 @@ expression: return 1;
 Return(
     ReturnStatement {
         tok_return: Return,
-        value: Literal(
-            Integer(
-                IntegerLiteral(
+        value: Some(
+            Literal(
+                Integer(
                     IntegerLiteral(
-                        1,
+                        IntegerLiteral(
+                            1,
+                        ),
                     ),
                 ),
             ),
