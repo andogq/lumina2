@@ -78,9 +78,12 @@ impl Literal {
 pub enum IntegerKind {
     Any,
     Signed,
-    #[expect(
-        dead_code,
-        reason = "future constraints may require an unsigned integer."
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "future constraints may require an unsigned integer."
+        )
     )]
     Unsigned,
 }

@@ -88,9 +88,12 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub enum DeclarationTy {
-        #[expect(
-            dead_code,
-            reason = "will be used when variable declarations can be explicitly typed."
+        #[cfg_attr(
+            not(test),
+            expect(
+                dead_code,
+                reason = "will be used when variable declarations can be explicitly typed."
+            )
         )]
         Type(Type),
         Inferred(ExpressionId),

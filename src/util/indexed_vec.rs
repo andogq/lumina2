@@ -9,7 +9,10 @@ impl<K, V> IndexedVec<K, V> {
     }
 
     #[doc(hidden)]
-    #[expect(dead_code, reason = "used within `indexed_vec` macro")]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used within `indexed_vec` macro")
+    )]
     pub fn from_vec(vec: Vec<V>) -> Self {
         Self(vec, PhantomData)
     }
