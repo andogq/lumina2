@@ -21,7 +21,9 @@ expression: pass.constraints
         ),
         Eq(
             Type(
-                U8,
+                TypeId(
+                    3,
+                ),
             ),
         ),
     ),
@@ -33,7 +35,9 @@ expression: pass.constraints
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),

@@ -5,6 +5,7 @@ pub struct Ctx {
     pub strings: StringPool,
     pub scopes: Scopes,
     pub errors: CErrorList,
+    pub types: Types,
 }
 
 impl Ctx {

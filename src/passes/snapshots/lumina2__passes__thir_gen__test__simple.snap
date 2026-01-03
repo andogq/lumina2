@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "[] => Unit"
+expression: "[] => TypeId(0)"
 ---
 [
     (
@@ -11,10 +11,9 @@ expression: "[] => Unit"
         ),
         Eq(
             Type(
-                Function {
-                    parameters: [],
-                    return_ty: Unit,
-                },
+                TypeId(
+                    5,
+                ),
             ),
         ),
     ),

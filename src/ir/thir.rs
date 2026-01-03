@@ -5,7 +5,7 @@ use hir::*;
 #[derive(Clone, Debug)]
 pub struct Thir<'hir> {
     pub hir: &'hir Hir,
-    pub types: HashMap<TypeVarId, Type>,
+    pub types: HashMap<TypeVarId, TypeId>,
 }
 
 impl Deref for Thir<'_> {
@@ -17,11 +17,11 @@ impl Deref for Thir<'_> {
 }
 
 impl<'hir> Thir<'hir> {
-    pub fn new(hir: &'hir Hir, types: HashMap<TypeVarId, Type>) -> Self {
+    pub fn new(hir: &'hir Hir, types: HashMap<TypeVarId, TypeId>) -> Self {
         Self { hir, types }
     }
 
-    pub fn type_of(&self, id: impl Into<TypeVarId>) -> &Type {
-        &self.types[&id.into()]
+    pub fn type_of(&self, id: impl Into<TypeVarId>) -> TypeId {
+        self.types[&id.into()]
     }
 }

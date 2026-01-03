@@ -1,10 +1,10 @@
 use crate::prelude::*;
 
-use hir::Type;
 use mir::{UnaryOperation, *};
 use thir::Thir;
 
-pub struct MirGen<'hir, 'thir> {
+pub struct MirGen<'ctx, 'hir, 'thir> {
+    ctx: &'ctx mut Ctx,
     thir: &'thir Thir<'hir>,
 
     mir: Mir,
@@ -15,13 +15,13 @@ pub struct MirGen<'hir, 'thir> {
     function_ids: IndexedVec<FunctionId, hir::FunctionId>,
 }
 
-impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'hir, 'thir> {
+impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'ctx, 'hir, 'thir> {
     type Input = Thir<'hir>;
     type Output = Mir;
     type Extra = ();
 
     fn run(ctx: &'ctx mut Ctx, thir: &'thir Self::Input, _extra: ()) -> PassResult<Self::Output> {
-        let mut mir_gen = Self::new(thir);
+        let mut mir_gen = Self::new(ctx, thir);
 
         let mut errors = Vec::new();
 
@@ -32,21 +32,22 @@ impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'hir, 'thir> {
 
         // Lower each function.
         for function in mir_gen.thir.functions.iter_keys() {
-            let _ = run_and_report!(ctx, errors, || mir_gen.lower_function(function).map_err(
-                |err| CError::from(err)
+            let _ = run_and_report!(mir_gen.ctx, errors, || mir_gen
+                .lower_function(function)
+                .map_err(|err| CError::from(err)
                     .fatal()
-                    .with_message("failed to lower function to MIR")
-            ));
+                    .with_message("failed to lower function to MIR")));
         }
 
         Ok(PassSuccess::new(mir_gen.mir, errors))
     }
 }
 
-impl<'hir, 'thir> MirGen<'hir, 'thir> {
+impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
     /// Create a new instance.
-    pub fn new(thir: &'thir Thir<'hir>) -> Self {
+    pub fn new(ctx: &'ctx mut Ctx, thir: &'thir Thir<'hir>) -> Self {
         Self {
+            ctx,
             thir,
             mir: Mir::new(),
             bindings: HashMap::new(),
@@ -76,11 +77,11 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
         // Create local for return value, as it must be the first.
         // TODO: Store this local in some context somewhere, to use it as the return local.
-        let return_local = self.locals.create(function_id, function.return_ty.clone());
+        let return_local = self.locals.create(function_id, function.return_ty);
 
         // Following locals are all for the parameters.
         for (binding, ty) in &function.parameters {
-            let local = self.locals.create(function_id, ty.clone());
+            let local = self.locals.create(function_id, *ty);
             self.bindings.insert(*binding, Binding::Local(local));
         }
 
@@ -92,7 +93,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
         // implicit return.
         let body = &self.thir[function.entry];
         if let Some(result) = block.operand
-            && self.thir.type_of(body.expression) == &function.return_ty
+            && self.thir.type_of(body.expression) == function.return_ty
         {
             let place = self.mir.places.insert(return_local.into());
             self.mir.add_statement(
@@ -109,12 +110,8 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             .terminate_if_unterminated(block.exit, Terminator::Return);
 
         self.mir.functions.insert(Function {
-            return_ty: function.return_ty.clone(),
-            parameters: function
-                .parameters
-                .iter()
-                .map(|(_, ty)| ty.clone())
-                .collect(),
+            return_ty: function.return_ty,
+            parameters: function.parameters.iter().map(|(_, ty)| *ty).collect(),
             binding: function.binding,
             locals: self.locals.generate_locals(function_id),
             entry: block.entry,
@@ -140,9 +137,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     let ty = self.thir.type_of(*binding);
 
                     // Create a local for the binding.
-                    let local = self
-                        .locals
-                        .create_with_binding(ctx.function, ty.clone(), *binding);
+                    let local = self.locals.create_with_binding(ctx.function, ty, *binding);
 
                     // Register the local against the binding.
                     self.bindings.insert(*binding, Binding::Local(local));
@@ -175,7 +170,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                         self.lower_expression(ctx, &mut current_basic_block, *expression)
                         // HACK: This check shouldn't be required, as `Constant::Unit` shouldn't exist
                         // in MIR
-                        && !matches!(self.thir.type_of(*expression), Type::Unit)
+                        && self.thir.type_of(*expression) != self.ctx.types.unit()
                     {
                         self.mir.add_statement(
                             current_basic_block,
@@ -242,7 +237,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                 let result = self
                     .locals
-                    .create(ctx.function, self.thir.type_of(expression_id).clone());
+                    .create(ctx.function, self.thir.type_of(expression_id));
                 let result_place = self.mir.places.insert(result.into());
 
                 self.mir.add_statement(
@@ -271,7 +266,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 ) -> PlaceId {
                     let result = mir_gen
                         .locals
-                        .create(function, mir_gen.thir.type_of(expression_id).clone());
+                        .create(function, mir_gen.thir.type_of(expression_id));
                     mir_gen.mir.places.insert(result.into())
                 }
 
@@ -360,7 +355,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 let discriminator = self.lower_expression(ctx, basic_block, *discriminator)?;
 
                 let switch_ty = self.thir.type_of(expression_id);
-                let switch_value = self.locals.create(ctx.function, switch_ty.clone());
+                let switch_value = self.locals.create(ctx.function, switch_ty);
                 let switch_place = self.mir.places.insert(switch_value.into());
 
                 let end_block = self.mir.add_basic_block();
@@ -374,7 +369,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                         // Store the resulting block value.
                         if let Some(result) = lowered_block.operand
-                            && !matches!(switch_ty, Type::Unit | Type::Never)
+                            && !matches!(&self.ctx.types[switch_ty], Type::Unit | Type::Never)
                         {
                             self.mir.add_statement(
                                 lowered_block.exit,
@@ -394,7 +389,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                         );
 
                         (
-                            literal_to_constant(target, discriminator_ty),
+                            literal_to_constant(&self.ctx.types, target, discriminator_ty),
                             lowered_block.entry,
                         )
                     })
@@ -407,7 +402,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
 
                     // Store the resulting block value.
                     if let Some(result) = lowered_block.operand
-                        && !matches!(switch_ty, Type::Unit | Type::Never)
+                        && !matches!(&self.ctx.types[switch_ty], Type::Unit | Type::Never)
                     {
                         self.mir.add_statement(
                             lowered_block.exit,
@@ -450,7 +445,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 // Create a new local for the loop break value.
                 let loop_local = self
                     .locals
-                    .create(ctx.function, self.thir.type_of(expression_id).clone());
+                    .create(ctx.function, self.thir.type_of(expression_id));
                 let loop_place = self.mir.places.insert(loop_local.into());
 
                 // Create exit basic block.
@@ -486,6 +481,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 self.mir
                     .operands
                     .insert(Operand::Constant(literal_to_constant(
+                        &self.ctx.types,
                         literal,
                         self.thir.type_of(expression_id),
                     )))
@@ -494,7 +490,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 // Create a local to store the resulting value.
                 let result = self.mir.places.insert(
                     self.locals
-                        .create(ctx.function, self.thir.type_of(expression_id).clone())
+                        .create(ctx.function, self.thir.type_of(expression_id))
                         .into(),
                 );
                 // Create a basic block to return to after the function returns.
@@ -577,23 +573,6 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
         }
     }
 
-    /// Determine the type of a constant.
-    fn constant_to_type(&self, constant: &Constant) -> Type {
-        match constant {
-            Constant::U8(_) => Type::U8,
-            Constant::I8(_) => Type::I8,
-            Constant::Boolean(_) => Type::Boolean,
-            Constant::Unit => Type::Unit,
-            Constant::Function(function_id) => {
-                let function = &self.mir[*function_id];
-                Type::Function {
-                    parameters: function.parameters.clone(),
-                    return_ty: Box::new(function.return_ty.clone()),
-                }
-            }
-        }
-    }
-
     /// Produce a [`Place`] for an [`Operand`]. If [`Operand::Constant`] is encountered, it will
     /// be loaded into a local.
     fn operand_as_place(
@@ -607,9 +586,19 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             Operand::Place(place_id) => *place_id,
             // Put the constant into a local.
             Operand::Constant(constant) => {
-                let constant_local = self
-                    .locals
-                    .create(function, self.constant_to_type(constant));
+                let constant_ty = match constant {
+                    Constant::U8(_) => self.ctx.types.u8(),
+                    Constant::I8(_) => self.ctx.types.i8(),
+                    Constant::Boolean(_) => self.ctx.types.boolean(),
+                    Constant::Unit => self.ctx.types.unit(),
+                    Constant::Function(function_id) => {
+                        let function = &self.mir[*function_id];
+                        self.ctx
+                            .types
+                            .function(function.parameters.iter().cloned(), function.return_ty)
+                    }
+                };
+                let constant_local = self.locals.create(function, constant_ty);
                 let constant_place = self.mir.places.insert(constant_local.into());
                 self.mir.add_statement(
                     *basic_block,
@@ -652,7 +641,7 @@ impl Binding {
 
 /// Track available locals within a function.
 #[derive(Clone, Debug, Default)]
-struct FunctionLocals(HashMap<FunctionId, IndexedVec<LocalId, (Type, Option<BindingId>)>>);
+struct FunctionLocals(HashMap<FunctionId, IndexedVec<LocalId, (TypeId, Option<BindingId>)>>);
 impl FunctionLocals {
     /// Create a new instance.
     pub fn new() -> Self {
@@ -660,14 +649,14 @@ impl FunctionLocals {
     }
 
     /// Create a new local in the provided function, with the provided type.
-    pub fn create(&mut self, function: FunctionId, ty: Type) -> LocalId {
+    pub fn create(&mut self, function: FunctionId, ty: TypeId) -> LocalId {
         self.0.entry(function).or_default().insert((ty, None))
     }
 
     pub fn create_with_binding(
         &mut self,
         function: FunctionId,
-        ty: Type,
+        ty: TypeId,
         binding: BindingId,
     ) -> LocalId {
         self.0
@@ -679,12 +668,12 @@ impl FunctionLocals {
     pub fn generate_locals(
         &self,
         function: FunctionId,
-    ) -> IndexedVec<LocalId, (Option<BindingId>, Type)> {
+    ) -> IndexedVec<LocalId, (Option<BindingId>, TypeId)> {
         let mut locals = IndexedVec::new();
 
         if let Some(function_locals) = self.0.get(&function) {
             for (ty, binding) in function_locals.iter() {
-                locals.insert((*binding, ty.clone()));
+                locals.insert((*binding, *ty));
             }
         }
 
@@ -729,8 +718,8 @@ impl FunctionCtx {
     }
 }
 
-fn literal_to_constant(literal: &hir::Literal, ty: &Type) -> Constant {
-    match (literal, ty) {
+fn literal_to_constant(types: &Types, literal: &hir::Literal, ty: TypeId) -> Constant {
+    match (literal, &types[ty]) {
         (hir::Literal::Integer(value), Type::I8) => Constant::I8(*value as i8),
         (hir::Literal::Integer(value), Type::U8) => Constant::U8(*value as u8),
         (hir::Literal::Boolean(value), Type::Boolean) => Constant::Boolean(*value),

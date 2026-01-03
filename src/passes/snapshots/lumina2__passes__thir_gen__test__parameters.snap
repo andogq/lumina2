@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "[(BindingId(1), I8), (BindingId(2), Boolean)] => Boolean"
+expression: "[(BindingId(1), TypeId(2)), (BindingId(2), TypeId(4))] => TypeId(4)"
 ---
 [
     (
@@ -11,13 +11,9 @@ expression: "[(BindingId(1), I8), (BindingId(2), Boolean)] => Boolean"
         ),
         Eq(
             Type(
-                Function {
-                    parameters: [
-                        I8,
-                        Boolean,
-                    ],
-                    return_ty: Boolean,
-                },
+                TypeId(
+                    5,
+                ),
             ),
         ),
     ),

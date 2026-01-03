@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-pub use self::{block::*, expression::*, functions::*, statement::*, type_refs::*};
+pub use self::{block::*, expression::*, functions::*, statement::*};
 
 create_id!(BlockId);
 create_id!(ExpressionId);
@@ -53,8 +53,8 @@ mod functions {
     #[derive(Clone, Debug)]
     pub struct Function {
         pub binding: BindingId,
-        pub parameters: Vec<(BindingId, Type)>,
-        pub return_ty: Type,
+        pub parameters: Vec<(BindingId, TypeId)>,
+        pub return_ty: TypeId,
         pub entry: BlockId,
     }
 }
@@ -95,7 +95,7 @@ mod statement {
                 reason = "will be used when variable declarations can be explicitly typed."
             )
         )]
-        Type(Type),
+        Type(TypeId),
         Inferred(ExpressionId),
     }
 
@@ -192,23 +192,5 @@ mod expression {
         Call: Call,
         Block: BlockId,
         Variable: Variable,
-    }
-}
-
-mod type_refs {
-    use super::*;
-
-    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-    pub enum Type {
-        Never,
-        Unit,
-        I8,
-        U8,
-        Boolean,
-        Ref(Box<Type>),
-        Function {
-            parameters: Vec<Type>,
-            return_ty: Box<Type>,
-        },
     }
 }

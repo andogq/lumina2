@@ -11,7 +11,6 @@ use inkwell::{
 
 use crate::prelude::*;
 
-use hir::Type;
 use mir::{UnaryOperation, *};
 
 pub struct Codegen<'ctx, 'mir, 'ink> {
@@ -22,7 +21,7 @@ pub struct Codegen<'ctx, 'mir, 'ink> {
     module: Module<'ink>,
 
     functions: IndexedVec<FunctionId, FunctionValue<'ink>>,
-    locals: IndexedVec<FunctionId, IndexedVec<LocalId, (PointerValue<'ink>, Type)>>,
+    locals: IndexedVec<FunctionId, IndexedVec<LocalId, (PointerValue<'ink>, TypeId)>>,
     basic_blocks: HashMap<BasicBlockId, IBasicBlock<'ink>>,
 }
 
@@ -80,7 +79,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
             self.ctx
                 .strings
                 .get(self.ctx.scopes.to_string(function.binding)),
-            self.function_ty(&function.return_ty, &function.parameters),
+            self.function_ty(function.return_ty, &function.parameters),
             None,
         );
 
@@ -122,16 +121,16 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         for (i, (binding, ty)) in function.locals.iter().enumerate() {
             let alloca = match binding {
                 Some(binding) => builder.build_alloca(
-                    self.basic_ty(ty),
+                    self.basic_ty(*ty),
                     self.ctx.strings.get(self.ctx.scopes.to_string(*binding)),
                 ),
-                None => builder.build_alloca(self.basic_ty(ty), format!("local_{i}").as_str()),
+                None => builder.build_alloca(self.basic_ty(*ty), format!("local_{i}").as_str()),
             }
             .unwrap();
 
             // TODO: Find better way to collect all locals against their `LocalId`.
             assert_eq!(
-                self.locals[function_id].insert((alloca, ty.clone())),
+                self.locals[function_id].insert((alloca, *ty)),
                 LocalId::from_id(i)
             );
         }
@@ -234,11 +233,11 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                         let Type::Function {
                             parameters,
                             return_ty,
-                        } = function_ty
+                        } = &self.ctx.types[function_ty]
                         else {
                             panic!();
                         };
-                        let function_ty = self.function_ty(&return_ty, &parameters);
+                        let function_ty = self.function_ty(*return_ty, parameters);
 
                         builder
                             .build_indirect_call(
@@ -270,7 +269,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                 // TODO: Don't just create return value local.
                 let (ptr, ptr_ty) = &self.locals[function_id][LocalId::from_id(0)];
                 let return_value = builder
-                    .build_load(self.basic_ty(ptr_ty), *ptr, "load-return")
+                    .build_load(self.basic_ty(*ptr_ty), *ptr, "load-return")
                     .unwrap();
                 builder.build_return(Some(&return_value)).unwrap();
             }
@@ -282,7 +281,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                 let (discriminator, discriminator_ty) =
                     self.resolve_operand(&builder, function_id, *discriminator);
                 assert!(matches!(
-                    discriminator_ty,
+                    &self.ctx.types[discriminator_ty],
                     Type::I8 | Type::U8 | Type::Boolean
                 ));
 
@@ -313,12 +312,12 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         builder: &Builder<'ink>,
         function_id: FunctionId,
         operand: OperandId,
-    ) -> (BasicValueEnum<'ink>, Type) {
+    ) -> (BasicValueEnum<'ink>, TypeId) {
         match &self.mir[operand] {
             Operand::Place(place) => {
                 let (ptr, ty) = self.resolve_place(builder, function_id, *place);
                 (
-                    builder.build_load(self.basic_ty(&ty), ptr, "load").unwrap(),
+                    builder.build_load(self.basic_ty(ty), ptr, "load").unwrap(),
                     ty,
                 )
             }
@@ -331,19 +330,19 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         builder: &Builder<'ink>,
         function_id: FunctionId,
         place: PlaceId,
-    ) -> (PointerValue<'ink>, Type) {
+    ) -> (PointerValue<'ink>, TypeId) {
         let place = &self.mir[place];
 
-        let (mut ptr, mut ty) = self.locals[function_id][place.local].clone();
+        let (mut ptr, mut ty) = self.locals[function_id][place.local];
 
         for projection in &place.projection {
-            (ptr, ty) = match (projection, ty) {
-                (Projection::Deref, ref ty @ Type::Ref(ref inner_ty)) => (
+            (ptr, ty) = match (projection, &self.ctx.types[ty]) {
+                (Projection::Deref, Type::Ref(inner_ty)) => (
                     builder
                         .build_load(self.basic_ty(ty), ptr, "deref")
                         .unwrap()
                         .into_pointer_value(),
-                    (**inner_ty).clone(),
+                    *inner_ty,
                 ),
                 (Projection::Deref, ty) => panic!("cannot dereference {ty:?}"),
             }
@@ -357,20 +356,24 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         builder: &Builder<'ink>,
         function_id: FunctionId,
         rvalue: &RValue,
-    ) -> (BasicValueEnum<'ink>, Type) {
+    ) -> (BasicValueEnum<'ink>, TypeId) {
         match rvalue {
             RValue::Use(operand) => self.resolve_operand(builder, function_id, *operand),
             RValue::Ref(place) => {
                 // Resolve the place.
                 let (ptr, ty) = self.resolve_place(builder, function_id, *place);
                 // Produce a pointer value.
-                (ptr.as_basic_value_enum(), Type::Ref(Box::new(ty)))
+                (ptr.as_basic_value_enum(), self.ctx.types.ref_of(ty))
             }
             RValue::Binary(binary) => {
-                let (lhs, lhs_ty) = self.resolve_operand(builder, function_id, binary.lhs);
-                let (rhs, rhs_ty) = self.resolve_operand(builder, function_id, binary.rhs);
+                let (lhs, lhs_ty_id) = self.resolve_operand(builder, function_id, binary.lhs);
+                let (rhs, rhs_ty_id) = self.resolve_operand(builder, function_id, binary.rhs);
 
-                match (lhs_ty, &binary.operation, rhs_ty) {
+                match (
+                    &self.ctx.types[lhs_ty_id],
+                    &binary.operation,
+                    &self.ctx.types[rhs_ty_id],
+                ) {
                     (
                         lhs_ty @ (Type::U8 | Type::I8),
                         BinaryOperation::Plus,
@@ -380,7 +383,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .build_int_add(lhs.into_int_value(), rhs.into_int_value(), "add")
                             .unwrap()
                             .as_basic_value_enum(),
-                        lhs_ty,
+                        lhs_ty_id,
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8),
@@ -391,7 +394,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .build_int_sub(lhs.into_int_value(), rhs.into_int_value(), "add")
                             .unwrap()
                             .as_basic_value_enum(),
-                        lhs_ty,
+                        lhs_ty_id,
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8),
@@ -402,7 +405,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .build_int_mul(lhs.into_int_value(), rhs.into_int_value(), "add")
                             .unwrap()
                             .as_basic_value_enum(),
-                        lhs_ty,
+                        lhs_ty_id,
                     ),
                     (Type::U8, BinaryOperation::Divide, Type::U8) => (
                         builder
@@ -413,28 +416,28 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::U8,
+                        self.ctx.types.u8(),
                     ),
                     (Type::I8, BinaryOperation::Divide, Type::I8) => (
                         builder
                             .build_int_signed_div(lhs.into_int_value(), rhs.into_int_value(), "add")
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::I8,
+                        self.ctx.types.i8(),
                     ),
                     (Type::Boolean, BinaryOperation::LogicalAnd, Type::Boolean) => (
                         builder
                             .build_and(lhs.into_int_value(), rhs.into_int_value(), "logical_and")
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (Type::Boolean, BinaryOperation::LogicalOr, Type::Boolean) => (
                         builder
                             .build_or(lhs.into_int_value(), rhs.into_int_value(), "logical_or")
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
@@ -445,7 +448,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .build_and(lhs.into_int_value(), rhs.into_int_value(), "binary_and")
                             .unwrap()
                             .as_basic_value_enum(),
-                        lhs_ty,
+                        lhs_ty_id,
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
@@ -456,7 +459,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .build_or(lhs.into_int_value(), rhs.into_int_value(), "binary_or")
                             .unwrap()
                             .as_basic_value_enum(),
-                        lhs_ty,
+                        lhs_ty_id,
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
@@ -472,7 +475,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (
                         lhs_ty @ (Type::U8 | Type::I8 | Type::Boolean),
@@ -488,7 +491,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (Type::U8, BinaryOperation::Less, Type::U8) => (
                         builder
@@ -500,7 +503,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (Type::I8, BinaryOperation::Less, Type::I8) => (
                         builder
@@ -512,7 +515,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (Type::U8, BinaryOperation::LessEqual, Type::U8) => (
                         builder
@@ -524,7 +527,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (Type::I8, BinaryOperation::LessEqual, Type::I8) => (
                         builder
@@ -536,7 +539,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (Type::U8, BinaryOperation::Greater, Type::U8) => (
                         builder
@@ -548,7 +551,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (Type::I8, BinaryOperation::Greater, Type::I8) => (
                         builder
@@ -560,7 +563,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (Type::U8, BinaryOperation::GreaterEqual, Type::U8) => (
                         builder
@@ -572,7 +575,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     (Type::I8, BinaryOperation::GreaterEqual, Type::I8) => (
                         builder
@@ -584,7 +587,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::Boolean,
+                        self.ctx.types.boolean(),
                     ),
                     _ => todo!(),
                 }
@@ -593,7 +596,10 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                 UnaryOperation::Not => {
                     let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
 
-                    if !matches!(value_ty, Type::U8 | Type::I8 | Type::Boolean) {
+                    if !matches!(
+                        &self.ctx.types[value_ty],
+                        Type::U8 | Type::I8 | Type::Boolean
+                    ) {
                         panic!("cannot apply unary operation NOT on {value_ty:?}");
                     }
 
@@ -608,7 +614,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                 UnaryOperation::Negative => {
                     let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
 
-                    if !matches!(value_ty, Type::I8) {
+                    if value_ty != self.ctx.types.i8() {
                         panic!("cannot apply unary operation NEG on {value_ty:?}");
                     }
 
@@ -617,7 +623,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .build_int_neg(value.into_int_value(), "neg")
                             .unwrap()
                             .as_basic_value_enum(),
-                        Type::I8,
+                        self.ctx.types.i8(),
                     )
                 }
             },
@@ -625,21 +631,21 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
     }
 
     /// Fetch the [`FunctionType`] for a given function signature.
-    fn function_ty(&self, return_ty: &Type, parameters: &[Type]) -> FunctionType<'ink> {
+    fn function_ty(&self, return_ty: TypeId, parameters: &[TypeId]) -> FunctionType<'ink> {
         let parameters = parameters
             .iter()
-            .map(|parameter| self.basic_ty(parameter).into())
+            .map(|parameter| self.basic_ty(*parameter).into())
             .collect::<Vec<_>>();
 
-        match return_ty {
+        match &self.ctx.types[return_ty] {
             Type::Unit => self.ink.void_type().fn_type(&parameters, false),
-            return_ty => self.basic_ty(return_ty).fn_type(&parameters, false),
+            _ => self.basic_ty(return_ty).fn_type(&parameters, false),
         }
     }
 
     /// Fetch [`BasicTypeEnum`] for a given [`Type`].
-    fn basic_ty(&self, ty: &Type) -> BasicTypeEnum<'ink> {
-        match ty {
+    fn basic_ty(&self, ty: TypeId) -> BasicTypeEnum<'ink> {
+        match &self.ctx.types[ty] {
             Type::Unit => self.ink.struct_type(&[], true).into(),
             Type::I8 => self.ink.i8_type().into(),
             Type::U8 => self.ink.i8_type().into(),
@@ -650,14 +656,14 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         }
     }
 
-    fn constant(&self, constant: &Constant) -> (BasicValueEnum<'ink>, Type) {
+    fn constant(&mut self, constant: &Constant) -> (BasicValueEnum<'ink>, TypeId) {
         match constant {
             Constant::U8(value) => (
                 self.ink
                     .i8_type()
                     .const_int(*value as u64, false)
                     .as_basic_value_enum(),
-                Type::U8,
+                self.ctx.types.u8(),
             ),
             Constant::I8(value) => (
                 self.ink
@@ -665,24 +671,24 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     // NOTE: Extra cast here to preserve sign.
                     .const_int(*value as i64 as u64, true)
                     .as_basic_value_enum(),
-                Type::I8,
+                self.ctx.types.i8(),
             ),
             Constant::Boolean(value) => (
                 self.ink
                     .bool_type()
                     .const_int(if *value { 1 } else { 0 }, false)
                     .as_basic_value_enum(),
-                Type::Boolean,
+                self.ctx.types.boolean(),
             ),
             Constant::Unit => unreachable!(),
             Constant::Function(id) => {
                 let function_value = self.functions[*id];
                 (
                     function_value.as_global_value().as_pointer_value().into(),
-                    Type::Function {
-                        parameters: self.mir.functions[*id].parameters.clone(),
-                        return_ty: Box::new(self.mir.functions[*id].return_ty.clone()),
-                    },
+                    self.ctx.types.function(
+                        self.mir.functions[*id].parameters.iter().cloned(),
+                        self.mir.functions[*id].return_ty,
+                    ),
                 )
             }
         }

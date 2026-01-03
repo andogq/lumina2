@@ -6,18 +6,118 @@ use crate::prelude::*;
 use self::disjoint_union_set::DisjointUnionSet;
 use crate::{enum_conversion, ir::hir::*};
 
+create_id!(TypeId);
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Type {
+    Never,
+    Unit,
+    I8,
+    U8,
+    Boolean,
+    Ref(TypeId),
+    Function {
+        parameters: Vec<TypeId>,
+        return_ty: TypeId,
+    },
+}
+
+/// Interned collection of types.
+#[derive(Clone, Debug)]
+pub struct Types {
+    /// Types which are already inserted.
+    inserted: HashMap<Type, TypeId>,
+    /// Interned types.
+    types: IndexedVec<TypeId, Type>,
+}
+impl Types {
+    /// Create a new instance, with primitive types already inserted.
+    pub fn new() -> Self {
+        let mut types = IndexedVec::new();
+
+        let inserted = [Type::Unit, Type::Never, Type::I8, Type::U8, Type::Boolean]
+            .into_iter()
+            .map(|ty| (ty.clone(), types.insert(ty)))
+            .collect();
+
+        Self { types, inserted }
+    }
+
+    /// Get the [`TypeId`] for the provided [`Type`], inserting it if it doesn't currently exist.
+    pub fn get(&mut self, ty: Type) -> TypeId {
+        *self
+            .inserted
+            .entry(ty.clone())
+            .or_insert_with(|| self.types.insert(ty))
+    }
+
+    /// Fetch the type for [`Type::Unit`].
+    pub fn unit(&self) -> TypeId {
+        self.inserted[&Type::Unit]
+    }
+
+    /// Fetch the type for [`Type::Never`].
+    pub fn never(&self) -> TypeId {
+        self.inserted[&Type::Never]
+    }
+
+    /// Fetch the type for [`Type::I8`].
+    pub fn i8(&self) -> TypeId {
+        self.inserted[&Type::I8]
+    }
+
+    /// Fetch the type for [`Type::U8`].
+    pub fn u8(&self) -> TypeId {
+        self.inserted[&Type::U8]
+    }
+
+    /// Fetch the type for [`Type::Boolean`].
+    pub fn boolean(&self) -> TypeId {
+        self.inserted[&Type::Boolean]
+    }
+
+    /// Fetch the type for a [`Type::Function`] with the provided parameters and return type.
+    pub fn function(
+        &mut self,
+        parameters: impl IntoIterator<Item = TypeId>,
+        return_ty: TypeId,
+    ) -> TypeId {
+        self.get(Type::Function {
+            parameters: Vec::from_iter(parameters),
+            return_ty,
+        })
+    }
+
+    /// Fetch the type for a [`Type::Ref`] of a given type.
+    pub fn ref_of(&mut self, ty: TypeId) -> TypeId {
+        self.get(Type::Ref(ty))
+    }
+}
+impl Index<TypeId> for Types {
+    type Output = Type;
+
+    fn index(&self, index: TypeId) -> &Self::Output {
+        &self.types[index]
+    }
+}
+impl Default for Types {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TypeVarId {
     Expression(ExpressionId),
     Binding(BindingId),
-    Type(Type),
+    Type(TypeId),
 }
 
 enum_conversion! {
     [TypeVarId]
     Expression: ExpressionId,
     Binding: BindingId,
-    Type: Type,
+    Type: TypeId,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,14 +133,14 @@ pub enum Constraint {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Solution {
-    Type(Type),
+    Type(TypeId),
     Reference(TypeVarId),
     Literal(Literal),
 }
 
 enum_conversion! {
     [Solution]
-    Type: Type,
+    Type: TypeId,
     Literal: Literal,
 }
 
@@ -55,15 +155,15 @@ enum_conversion! {
 }
 
 impl Literal {
-    pub fn to_type(&self) -> Type {
+    pub fn to_type(&self, types: &Types) -> TypeId {
         match self {
-            Self::Integer(integer_literal) => integer_literal.to_type(),
+            Self::Integer(integer_literal) => integer_literal.to_type(types),
         }
     }
 
-    pub fn can_coerce(&self, ty: &Type) -> bool {
+    pub fn can_coerce(&self, types: &Types, ty: TypeId) -> bool {
         match self {
-            Self::Integer(integer_literal) => integer_literal.can_coerce(ty),
+            Self::Integer(integer_literal) => integer_literal.can_coerce(types, ty),
         }
     }
 
@@ -89,16 +189,16 @@ pub enum IntegerKind {
 }
 
 impl IntegerKind {
-    pub fn to_type(&self) -> Type {
+    pub fn to_type(&self, types: &Types) -> TypeId {
         match self {
-            IntegerKind::Signed | IntegerKind::Any => Type::I8,
-            IntegerKind::Unsigned => Type::U8,
+            IntegerKind::Signed | IntegerKind::Any => types.i8(),
+            IntegerKind::Unsigned => types.u8(),
         }
     }
 
-    pub fn can_coerce(&self, ty: &Type) -> bool {
+    pub fn can_coerce(&self, types: &Types, ty: TypeId) -> bool {
         matches!(
-            (self, ty),
+            (self, &types[ty]),
             (Self::Any, Type::U8 | Type::I8)
                 | (Self::Signed, Type::I8)
                 | (Self::Unsigned, Type::U8)
@@ -180,7 +280,8 @@ mod test {
         };
 
         // The type of the binding will correspond with the type of the expression.
-        thir.types.get(&binding.into()).unwrap().clone()
+        let ty = *thir.types.get(&binding.into()).unwrap();
+        ctx.types[ty].clone()
     }
 
     #[rstest]

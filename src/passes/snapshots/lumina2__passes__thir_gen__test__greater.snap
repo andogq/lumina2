@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "Binary { lhs: ExpressionId(0), operation: Greater(RAngle), rhs: ExpressionId(0) }"
+expression: "Binary { lhs: ExpressionId(0), operation: Greater, rhs: ExpressionId(0) }"
 ---
 [
     (
@@ -11,7 +11,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: Greater(RAngle), rhs: Exp
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),
@@ -23,7 +25,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: Greater(RAngle), rhs: Exp
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),
@@ -69,7 +73,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: Greater(RAngle), rhs: Exp
         ),
         Eq(
             Type(
-                Boolean,
+                TypeId(
+                    4,
+                ),
             ),
         ),
     ),

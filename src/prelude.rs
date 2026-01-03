@@ -7,6 +7,7 @@ pub use crate::{
     error::{CError, CErrorId, CErrorList, CResult, ErrorMeta},
     lex::{Lexer, Tok, tok},
     passes::{Pass, PassResult, PassSuccess},
+    ty::{Type, Types},
     util::{indexed_vec::IndexedVec, scopes::Scopes, string_pool::StringPool},
 };
 
@@ -16,7 +17,7 @@ pub use crate::{create_id, enum_conversion, run_and_report};
 // IDs and associated traits.
 pub use crate::{
     // TODO: This needs to be  moved
-    ty::TypeVarId,
+    ty::{TypeId, TypeVarId},
     util::{
         indexed_vec::Id,
         scopes::{BindingId, ScopeId},

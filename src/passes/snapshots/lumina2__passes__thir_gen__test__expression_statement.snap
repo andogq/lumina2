@@ -21,7 +21,9 @@ expression: pass.constraints
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),

@@ -25,7 +25,9 @@ expression: "Assign { variable: ExpressionId(0), value: ExpressionId(0) }"
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),
@@ -37,7 +39,9 @@ expression: "Assign { variable: ExpressionId(0), value: ExpressionId(0) }"
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),
@@ -49,7 +53,9 @@ expression: "Assign { variable: ExpressionId(0), value: ExpressionId(0) }"
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),

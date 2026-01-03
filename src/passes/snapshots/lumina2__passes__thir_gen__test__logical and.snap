@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "Binary { lhs: ExpressionId(0), operation: LogicalAnd(AmpAmp), rhs: ExpressionId(0) }"
+expression: "Binary { lhs: ExpressionId(0), operation: LogicalAnd, rhs: ExpressionId(0) }"
 ---
 [
     (
@@ -11,7 +11,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: LogicalAnd(AmpAmp), rhs: 
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),
@@ -23,7 +25,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: LogicalAnd(AmpAmp), rhs: 
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),
@@ -35,7 +39,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: LogicalAnd(AmpAmp), rhs: 
         ),
         Eq(
             Type(
-                Boolean,
+                TypeId(
+                    4,
+                ),
             ),
         ),
     ),
@@ -47,7 +53,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: LogicalAnd(AmpAmp), rhs: 
         ),
         Eq(
             Type(
-                Boolean,
+                TypeId(
+                    4,
+                ),
             ),
         ),
     ),
@@ -59,7 +67,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: LogicalAnd(AmpAmp), rhs: 
         ),
         Eq(
             Type(
-                Boolean,
+                TypeId(
+                    4,
+                ),
             ),
         ),
     ),

@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: Type(I8)
+expression: Type(TypeId(2))
 ---
 [
     (
@@ -11,7 +11,9 @@ expression: Type(I8)
         ),
         Eq(
             Type(
-                I8,
+                TypeId(
+                    2,
+                ),
             ),
         ),
     ),
@@ -23,7 +25,9 @@ expression: Type(I8)
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),

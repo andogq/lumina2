@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "[] => I8"
+expression: "[] => TypeId(2)"
 ---
 [
     (
@@ -11,10 +11,9 @@ expression: "[] => I8"
         ),
         Eq(
             Type(
-                Function {
-                    parameters: [],
-                    return_ty: I8,
-                },
+                TypeId(
+                    5,
+                ),
             ),
         ),
     ),

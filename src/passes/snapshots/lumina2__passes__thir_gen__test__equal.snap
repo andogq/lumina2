@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "Binary { lhs: ExpressionId(0), operation: Equal(EqEq), rhs: ExpressionId(0) }"
+expression: "Binary { lhs: ExpressionId(0), operation: Equal, rhs: ExpressionId(0) }"
 ---
 [
     (
@@ -11,7 +11,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: Equal(EqEq), rhs: Express
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),
@@ -23,7 +25,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: Equal(EqEq), rhs: Express
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),
@@ -49,7 +53,9 @@ expression: "Binary { lhs: ExpressionId(0), operation: Equal(EqEq), rhs: Express
         ),
         Eq(
             Type(
-                Boolean,
+                TypeId(
+                    4,
+                ),
             ),
         ),
     ),

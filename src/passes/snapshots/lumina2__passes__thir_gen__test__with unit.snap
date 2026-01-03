@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: Type(Unit)
+expression: Type(TypeId(0))
 ---
 [
     (
@@ -11,7 +11,9 @@ expression: Type(Unit)
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),
@@ -23,7 +25,9 @@ expression: Type(Unit)
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),

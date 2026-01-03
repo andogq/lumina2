@@ -71,7 +71,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         // If no return type is provided, assume `()`.
         let return_ty = match function.return_ty {
             Some(return_ty) => self.ident_to_type(return_ty),
-            None => Type::Unit,
+            None => self.ctx.types.unit(),
         };
 
         // Lower the body of the function.
@@ -277,13 +277,13 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         Ok(self.hir.expressions.insert(expression))
     }
 
-    /// Attempt to interpret an ident as a [`Type`].
-    fn ident_to_type(&self, ident: StringId) -> Type {
+    /// Attempt to interpret an ident as a [`TypeId`].
+    fn ident_to_type(&mut self, ident: StringId) -> TypeId {
         // HACK: This only handles built-in types.
         match self.ctx.strings.get(ident) {
-            "u8" => Type::U8,
-            "i8" => Type::I8,
-            "bool" => Type::Boolean,
+            "u8" => self.ctx.types.u8(),
+            "i8" => self.ctx.types.i8(),
+            "bool" => self.ctx.types.boolean(),
             ty => panic!("unknown type: {ty}"),
         }
     }

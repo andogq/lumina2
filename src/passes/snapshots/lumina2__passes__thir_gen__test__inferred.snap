@@ -25,7 +25,9 @@ expression: Inferred(ExpressionId(0))
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),

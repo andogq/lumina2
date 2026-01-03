@@ -1,7 +1,5 @@
 use crate::prelude::*;
 
-use hir::Type;
-
 pub use self::{
     basic_blocks::*,
     operand::*,
@@ -164,16 +162,16 @@ impl IndexMut<OperandId> for Mir {
 
 #[derive(Clone, Debug)]
 pub struct Function {
-    pub return_ty: Type,
-    pub parameters: Vec<Type>,
+    pub return_ty: TypeId,
+    pub parameters: Vec<TypeId>,
     pub binding: BindingId,
 
-    pub locals: IndexedVec<LocalId, (Option<BindingId>, Type)>,
+    pub locals: IndexedVec<LocalId, (Option<BindingId>, TypeId)>,
     pub entry: BasicBlockId,
 }
 
 impl Index<LocalId> for Function {
-    type Output = (Option<BindingId>, Type);
+    type Output = (Option<BindingId>, TypeId);
 
     fn index(&self, index: LocalId) -> &Self::Output {
         &self.locals[index]

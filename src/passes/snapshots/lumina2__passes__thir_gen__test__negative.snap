@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "Unary { operation: Negative(Minus), value: ExpressionId(0) }"
+expression: "Unary { operation: Negative, value: ExpressionId(0) }"
 ---
 [
     (
@@ -11,7 +11,9 @@ expression: "Unary { operation: Negative(Minus), value: ExpressionId(0) }"
         ),
         Eq(
             Type(
-                Unit,
+                TypeId(
+                    0,
+                ),
             ),
         ),
     ),
