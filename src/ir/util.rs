@@ -15,7 +15,10 @@ macro_rules! enum_conversion {
                 type Error = $target;
 
                 fn try_from(value: $target) -> Result<Self, $target> {
-                    #[allow(unreachable_patterns)]
+                    #[allow(
+                        unreachable_patterns,
+                        reason = "expanded code doesn't know available variants in target"
+                    )]
                     match value {
                         $target::$variant(value) => Ok(value),
                         expression => Err(expression)

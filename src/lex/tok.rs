@@ -44,7 +44,7 @@ macro_rules! toks {
             pub struct $variant$((pub $inner))?;
 
             impl ::std::convert::From<$variant> for Tok {
-                fn from(#[allow(unused)] value: $variant) -> Self {
+                fn from(#[allow(unused, reason = "variants without fields may not be used.")] value: $variant) -> Self {
                     toks!(@from_impl value => $variant $(($inner))?)
                 }
             }

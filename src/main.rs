@@ -1,4 +1,5 @@
 #![recursion_limit = "256"]
+#![warn(clippy::allow_attributes_without_reason)]
 
 mod ctx;
 mod error;
