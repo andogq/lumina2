@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 use hir::Type;
-use mir::*;
+use mir::{UnaryOperation, *};
 use thir::Thir;
 
 pub struct MirGen<'hir, 'thir> {
@@ -243,26 +243,96 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 self.mir.operands.insert(Operand::Place(result_place))
             }
             hir::Expression::Unary(hir::Unary { operation, value }) => {
-                // TODO: Don't lower Ref into MIR, use `RValue::Ref` instead.
                 let value = self.lower_expression(function, basic_block, *value)?;
 
-                let result = self
-                    .locals
-                    .create(function, self.thir.type_of(expression_id).clone());
-                let result_place = self.mir.places.insert(result.into());
+                /// Helper to create a new place to store the result of the unary operation.
+                #[inline]
+                fn create_result_place(
+                    mir_gen: &mut MirGen,
+                    function: FunctionId,
+                    expression_id: hir::ExpressionId,
+                ) -> PlaceId {
+                    let result = mir_gen
+                        .locals
+                        .create(function, mir_gen.thir.type_of(expression_id).clone());
+                    mir_gen.mir.places.insert(result.into())
+                }
 
-                self.mir.add_statement(
-                    *basic_block,
-                    Assign {
-                        place: result_place,
-                        rvalue: RValue::Unary(Unary {
-                            operation: *operation,
-                            value,
-                        }),
-                    },
-                );
+                /// Perform a unary operation, by creating a new [`Place`] for the result, adding a
+                /// [`Statement`] with the operation, and returning an [`OperandId`] to the result.
+                #[inline]
+                fn create_unary_operation(
+                    mir_gen: &mut MirGen,
+                    function: FunctionId,
+                    basic_block: &BasicBlockId,
+                    expression_id: hir::ExpressionId,
+                    value: OperandId,
+                    operation: UnaryOperation,
+                ) -> OperandId {
+                    // Create a place for the result to be inserted.
+                    let result_place = create_result_place(mir_gen, function, expression_id);
 
-                self.mir.operands.insert(Operand::Place(result_place))
+                    // Perform the operation.
+                    mir_gen.mir.add_statement(
+                        *basic_block,
+                        Assign {
+                            place: result_place,
+                            rvalue: RValue::Unary(Unary { operation, value }),
+                        },
+                    );
+
+                    // Produce the operation result.
+                    mir_gen.mir.operands.insert(Operand::Place(result_place))
+                }
+
+                match operation {
+                    // Standard `!` operation.
+                    crate::ir::UnaryOperation::Not => create_unary_operation(
+                        self,
+                        function,
+                        basic_block,
+                        expression_id,
+                        value,
+                        UnaryOperation::Not,
+                    ),
+                    // Standard `-` operation.
+                    crate::ir::UnaryOperation::Negative => create_unary_operation(
+                        self,
+                        function,
+                        basic_block,
+                        expression_id,
+                        value,
+                        UnaryOperation::Negative,
+                    ),
+                    // Modifies a `Place` by adding the `Deref` projection.
+                    crate::ir::UnaryOperation::Deref => {
+                        let target_place = self.operand_as_place(function, basic_block, value);
+
+                        // TODO: Make sure that `target_place` is only used in one place, otherwise
+                        // clone it.
+                        let mut place = self.mir[target_place].clone();
+                        place.projection.push(Projection::Deref);
+
+                        self.mir
+                            .operands
+                            .insert(Operand::Place(self.mir.places.insert(place)))
+                    }
+                    // Uses `RValue::Ref`.
+                    crate::ir::UnaryOperation::Ref => {
+                        let result_place = create_result_place(self, function, expression_id);
+
+                        let target_place = self.operand_as_place(function, basic_block, value);
+                        self.mir.add_statement(
+                            *basic_block,
+                            Assign {
+                                place: result_place,
+                                rvalue: RValue::Ref(target_place),
+                            },
+                        );
+
+                        self.mir.operands.insert(Operand::Place(result_place))
+                    }
+                }
             }
             hir::Expression::Switch(hir::Switch {
                 discriminator,
@@ -470,7 +540,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 self.bindings[binding].clone().into_local().into()
             }
             hir::Expression::Unary(hir::Unary {
-                operation: UnaryOperation::Deref,
+                operation: crate::ir::UnaryOperation::Deref,
                 value,
             }) => {
                 let mut value = self.expression_to_place(*value);
@@ -479,6 +549,52 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 value
             }
             expression => panic!("invalid lhs: {expression:?}"),
+        }
+    }
+
+    /// Determine the type of a constant.
+    fn constant_to_type(&self, constant: &Constant) -> Type {
+        match constant {
+            Constant::U8(_) => Type::U8,
+            Constant::I8(_) => Type::I8,
+            Constant::Boolean(_) => Type::Boolean,
+            Constant::Unit => Type::Unit,
+            Constant::Function(function_id) => {
+                let function = &self.mir[*function_id];
+                Type::Function {
+                    parameters: function.parameters.clone(),
+                    return_ty: Box::new(function.return_ty.clone()),
+                }
+            }
+        }
+    }
+
+    /// Produce a [`Place`] for an [`Operand`]. If [`Operand::Constant`] is encountered, it will
+    /// be loaded into a local.
+    fn operand_as_place(
+        &mut self,
+        function: FunctionId,
+        basic_block: &BasicBlockId,
+        operand: OperandId,
+    ) -> PlaceId {
+        match &self.mir[operand] {
+            // Operand is already a place, so use that directly.
+            Operand::Place(place_id) => *place_id,
+            // Put the constant into a local.
+            Operand::Constant(constant) => {
+                let constant_local = self
+                    .locals
+                    .create(function, self.constant_to_type(constant));
+                let constant_place = self.mir.places.insert(constant_local.into());
+                self.mir.add_statement(
+                    *basic_block,
+                    Assign {
+                        place: constant_place,
+                        rvalue: RValue::Use(operand),
+                    },
+                );
+                constant_place
+            }
         }
     }
 }

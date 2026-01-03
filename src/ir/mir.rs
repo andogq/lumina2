@@ -2,7 +2,14 @@ use crate::prelude::*;
 
 use hir::Type;
 
-pub use self::{basic_blocks::*, operand::*, place::*, rvalue::*, statement::*, terminator::*};
+pub use self::{
+    basic_blocks::*,
+    operand::*,
+    place::*,
+    rvalue::{UnaryOperation, *},
+    statement::*,
+    terminator::*,
+};
 
 create_id!(LocalId);
 create_id!(BasicBlockId);
@@ -301,10 +308,6 @@ mod rvalue {
     #[derive(Clone, Debug)]
     pub enum RValue {
         Use(OperandId),
-        #[expect(
-            dead_code,
-            reason = "will soon remove ref from `UnaryOperation` for MIR"
-        )]
         Ref(PlaceId),
         Binary(Binary),
         Unary(Unary),
@@ -317,10 +320,18 @@ mod rvalue {
         pub rhs: OperandId,
     }
 
+    pub use crate::prelude::BinaryOperation;
+
     #[derive(Clone, Debug)]
     pub struct Unary {
         pub operation: UnaryOperation,
         pub value: OperandId,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub enum UnaryOperation {
+        Not,
+        Negative,
     }
 }
 

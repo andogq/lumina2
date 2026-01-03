@@ -12,7 +12,7 @@ use inkwell::{
 use crate::prelude::*;
 
 use hir::Type;
-use mir::*;
+use mir::{UnaryOperation, *};
 
 pub struct Codegen<'ctx, 'mir, 'ink> {
     ctx: &'ctx mut Ctx,
@@ -619,34 +619,6 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         Type::I8,
                     )
-                }
-                UnaryOperation::Deref => {
-                    let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
-
-                    let Type::Ref(inner_ty) = value_ty else {
-                        panic!("cannot dereference value of type: {value_ty:?}");
-                    };
-
-                    (
-                        builder
-                            .build_load(
-                                self.basic_ty(&inner_ty),
-                                value.into_pointer_value(),
-                                "deref",
-                            )
-                            .unwrap()
-                            .as_basic_value_enum(),
-                        *inner_ty,
-                    )
-                }
-                UnaryOperation::Ref => {
-                    let Operand::Place(place) = &self.mir[unary.value] else {
-                        panic!("can only take reference of place");
-                    };
-
-                    let (ptr, ty) = self.resolve_place(builder, function_id, *place);
-
-                    (ptr.as_basic_value_enum(), Type::Ref(Box::new(ty)))
                 }
             },
         }
