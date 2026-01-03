@@ -81,7 +81,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
         // Following locals are all for the parameters.
         for (binding, ty) in &function.parameters {
-            let local = self.locals.create(function_id, *ty);
+            let local = self.locals.create_with_binding(function_id, *ty, *binding);
             self.bindings.insert(*binding, Binding::Local(local));
         }
 
