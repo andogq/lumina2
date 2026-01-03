@@ -20,8 +20,10 @@ impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'hir, 'thir> {
     type Output = Mir;
     type Extra = ();
 
-    fn run(_ctx: &'ctx mut Ctx, thir: &'thir Self::Input, _extra: ()) -> PassResult<Self::Output> {
+    fn run(ctx: &'ctx mut Ctx, thir: &'thir Self::Input, _extra: ()) -> PassResult<Self::Output> {
         let mut mir_gen = Self::new(thir);
+
+        let mut errors = Vec::new();
 
         // Declare all functions.
         for function in mir_gen.thir.functions.iter_keys() {
@@ -30,10 +32,14 @@ impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'hir, 'thir> {
 
         // Lower each function.
         for function in mir_gen.thir.functions.iter_keys() {
-            mir_gen.lower_function(function);
+            let _ = run_and_report!(ctx, errors, || mir_gen.lower_function(function).map_err(
+                |err| CError::from(err)
+                    .fatal()
+                    .with_message("failed to lower function to MIR")
+            ));
         }
 
-        Ok(PassSuccess::Ok(mir_gen.mir))
+        Ok(PassSuccess::new(mir_gen.mir, errors))
     }
 }
 
@@ -60,13 +66,13 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
     }
 
     /// Lower a function.
-    fn lower_function(&mut self, hir_function_id: hir::FunctionId) {
+    fn lower_function(&mut self, hir_function_id: hir::FunctionId) -> Result<(), MirGenError> {
         let function = &self.thir[hir_function_id];
         let (function_id, _) = self
             .function_ids
             .iter_pairs()
             .find(|(_, id)| **id == hir_function_id)
-            .unwrap();
+            .ok_or(MirGenError::FunctionNotFound(hir_function_id))?;
 
         // Create local for return value, as it must be the first.
         // TODO: Store this local in some context somewhere, to use it as the return local.
@@ -112,6 +118,8 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
             locals: self.locals.generate_locals(function_id),
             entry: block.entry,
         });
+
+        Ok(())
     }
 
     /// Lower a block within a function.
@@ -131,7 +139,9 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     let ty = self.thir.type_of(*binding);
 
                     // Create a local for the binding.
-                    let local = self.locals.create(function, ty.clone());
+                    let local = self
+                        .locals
+                        .create_with_binding(function, ty.clone(), *binding);
 
                     // Register the local against the binding.
                     self.bindings.insert(*binding, Binding::Local(local));
@@ -157,17 +167,14 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     self.mir.terminate(entry, Terminator::Return);
                 }
                 hir::Statement::Break(hir::BreakStatement { expression }) => {
-                    if let Some(value) =
+                    if let Some(_value) =
                         self.lower_expression(function, &mut current_basic_block, *expression)
                     {
                         // TODO: Store resulting expression in the local for the current loop.
                         unimplemented!();
                     }
 
-                    self.mir.terminate(
-                        entry,
-                        Terminator::Goto(todo!("work out which block to jump to")),
-                    );
+                    todo!("work out which block to jump to");
                 }
                 hir::Statement::Expression(hir::ExpressionStatement { expression }) => {
                     self.lower_expression(function, &mut current_basic_block, *expression);
@@ -227,7 +234,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                         place: result_place,
                         rvalue: RValue::Binary(Binary {
                             lhs,
-                            operation: operation.clone(),
+                            operation: *operation,
                             rhs,
                         }),
                     },
@@ -236,6 +243,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                 self.mir.operands.insert(Operand::Place(result_place))
             }
             hir::Expression::Unary(hir::Unary { operation, value }) => {
+                // TODO: Don't lower Ref into MIR, use `RValue::Ref` instead.
                 let value = self.lower_expression(function, basic_block, *value)?;
 
                 let result = self
@@ -248,7 +256,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
                     Assign {
                         place: result_place,
                         rvalue: RValue::Unary(Unary {
-                            operation: operation.clone(),
+                            operation: *operation,
                             value,
                         }),
                     },
@@ -459,7 +467,7 @@ impl<'hir, 'thir> MirGen<'hir, 'thir> {
     fn expression_to_place(&mut self, expression_id: hir::ExpressionId) -> Place {
         match &self.thir[expression_id] {
             hir::Expression::Variable(hir::Variable { binding }) => {
-                self.bindings[binding].clone().as_local().into()
+                self.bindings[binding].clone().into_local().into()
             }
             hir::Expression::Unary(hir::Unary {
                 operation: UnaryOperation::Deref,
@@ -493,7 +501,7 @@ enum Binding {
 }
 
 impl Binding {
-    pub fn as_local(self) -> LocalId {
+    pub fn into_local(self) -> LocalId {
         match self {
             Self::Local(local) => local,
             _ => panic!("expected local"),
@@ -543,7 +551,7 @@ impl FunctionLocals {
     }
 
     /// Fetch the local corresponding with the return value for a given function.
-    pub fn return_local(&self, function: FunctionId) -> LocalId {
+    pub fn return_local(&self, _function: FunctionId) -> LocalId {
         // HACK: Not ideal to be manually creating this.
         LocalId::from_id(0)
     }
@@ -557,4 +565,10 @@ fn literal_to_constant(literal: &hir::Literal, ty: &Type) -> Constant {
         (hir::Literal::Unit, Type::Unit) => Constant::Unit,
         (literal, ty) => panic!("invalid literal {literal:?} for type {ty:?}"),
     }
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum MirGenError {
+    #[error("could not find function {0:?}")]
+    FunctionNotFound(hir::FunctionId),
 }

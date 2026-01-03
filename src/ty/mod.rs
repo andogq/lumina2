@@ -70,7 +70,6 @@ impl Literal {
     pub fn narrow(&self, other: &Literal) -> Option<Literal> {
         match (self, other) {
             (Self::Integer(lhs), Self::Integer(rhs)) => Some(Self::Integer(lhs.narrow(rhs)?)),
-            _ => None,
         }
     }
 }
@@ -79,6 +78,10 @@ impl Literal {
 pub enum IntegerKind {
     Any,
     Signed,
+    #[allow(
+        dead_code,
+        reason = "future constraints may require an unsigned integer."
+    )]
     Unsigned,
 }
 

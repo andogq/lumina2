@@ -4,19 +4,17 @@ pub use crate::ir::{BinaryOperation, UnaryOperation, ast, cst, hir, mir, thir};
 // Common items.
 pub use crate::{
     ctx::Ctx,
-    error::{CError, CErrorId, CErrorKind, CErrorList, CResult, ErrorMeta},
+    error::{CError, CErrorId, CErrorList, CResult, ErrorMeta},
     lex::{Lexer, Tok, tok},
     passes::{Pass, PassResult, PassSuccess},
     util::{indexed_vec::IndexedVec, scopes::Scopes, string_pool::StringPool},
 };
 
 // Macros
-pub use crate::{create_id, enum_conversion, indexed_vec, run_and_report};
+pub use crate::{create_id, enum_conversion, run_and_report};
 
 // IDs and associated traits.
 pub use crate::{
-    // TODO: This needs to be  moved
-    ir::hir::TypeRefId,
     // TODO: This needs to be  moved
     ty::TypeVarId,
     util::{
@@ -32,15 +30,16 @@ pub use ::std::{
     fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
-    ops::{Deref, DerefMut, Index, IndexMut},
+    ops::{Deref, Index, IndexMut},
 };
 
-#[allow(clippy::items_after_test_module)]
+// Test utilities.
 #[cfg(test)]
-mod test {
-    pub use insta::*;
-    pub use rstest::*;
-}
-
+pub use crate::{
+    // Allow inspection of error kinds within tests.
+    error::CErrorKind,
+    // Allow manual creation of `IndexedVec`.
+    indexed_vec,
+};
 #[cfg(test)]
-pub use test::*;
+pub use ::{insta::*, rstest::*};

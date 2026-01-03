@@ -9,6 +9,7 @@ impl<K, V> IndexedVec<K, V> {
     }
 
     #[doc(hidden)]
+    #[allow(dead_code, reason = "used within `indexed_vec` macro")]
     pub fn from_vec(vec: Vec<V>) -> Self {
         Self(vec, PhantomData)
     }

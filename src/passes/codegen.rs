@@ -186,8 +186,8 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
 
                     builder.build_store(ptr, value).unwrap();
                 }
-                Statement::StorageLive(storage_live) => todo!(),
-                Statement::StorageDead(storage_dead) => todo!(),
+                Statement::StorageLive(_) => todo!(),
+                Statement::StorageDead(_) => todo!(),
             }
         }
 
@@ -674,10 +674,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
             Type::Boolean => self.ink.bool_type().into(),
             Type::Ref(_) => self.ink.ptr_type(AddressSpace::default()).into(),
             Type::Never => unreachable!(),
-            Type::Function {
-                parameters,
-                return_ty,
-            } => self.ink.ptr_type(AddressSpace::default()).into(),
+            Type::Function { .. } => self.ink.ptr_type(AddressSpace::default()).into(),
         }
     }
 

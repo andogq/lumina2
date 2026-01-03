@@ -8,9 +8,6 @@ enum MergeResult {
     /// Merge the provided type variables, and substitute with a solution referencing the resulting
     /// root node.
     MergeAndReference(TypeVarId, TypeVarId),
-    /// Use [`Solution::Reference`] as the solution, where the reference is to the root of the
-    /// merged nodes.
-    ReferenceRoot,
     /// Merge is not possible due to an incompatibility.
     Incompatible(IncompatibleKind),
 }
@@ -47,12 +44,6 @@ impl Solver {
             root: DisjointUnionSet::new(),
             solutions: HashMap::new(),
         }
-    }
-
-    fn prefill(solutions: impl IntoIterator<Item = (TypeVarId, Solution)>) -> Self {
-        let mut solver = Self::new();
-        solver.solutions.extend(solutions);
-        solver
     }
 
     pub fn run(constraints: &[(TypeVarId, Constraint)]) -> HashMap<TypeVarId, Type> {
@@ -210,7 +201,6 @@ impl Solver {
                     MergeResult::MergeAndReference(lhs, rhs) => {
                         self.merge(&lhs, &rhs).map(Solution::Reference)
                     }
-                    MergeResult::ReferenceRoot => None,
                     MergeResult::Incompatible(kind) => return Err(kind),
                 },
                 true,
@@ -253,7 +243,7 @@ impl Solver {
                     Some(NonConcreteType::Type(solved_ty)) => {
                         IncompatibleKind::Type(ty.clone(), Type::Ref(Box::new(solved_ty)))
                     }
-                    Some(NonConcreteType::Literal(literal)) => IncompatibleKind::ReferenceLiteral,
+                    Some(NonConcreteType::Literal(_)) => IncompatibleKind::ReferenceLiteral,
                     None => IncompatibleKind::NotReference(ty.clone()),
                 })
             }
@@ -363,22 +353,28 @@ mod test {
     }
 
     #[rstest]
-    fn prefilled(expression: [TypeVarId; 1]) {
-        let solver = Solver::prefill([(expression[0].clone(), Solution::Type(Type::I8))]);
+    fn prefilled(mut solver: Solver, expression: [TypeVarId; 1]) {
+        solver
+            .solutions
+            .extend([(expression[0].clone(), Solution::Type(Type::I8))]);
         assert_eq!(solver.get_type(&expression[0]).unwrap(), Type::I8);
     }
 
     #[rstest]
-    fn simple_constraint(expression: [TypeVarId; 2]) {
-        let mut solver = Solver::prefill([(expression[0].clone(), Solution::Type(Type::I8))]);
+    fn simple_constraint(mut solver: Solver, expression: [TypeVarId; 2]) {
+        solver
+            .solutions
+            .extend([(expression[0].clone(), Solution::Type(Type::I8))]);
 
         assert!(solver.process_constraint(&expression[0], &Constraint::Eq(expression[1].clone())));
         assert_eq!(solver.get_type(&expression[1]).unwrap(), Type::I8);
     }
 
     #[rstest]
-    fn deep_constraint(expression: [TypeVarId; 3]) {
-        let mut solver = Solver::prefill([(expression[0].clone(), Solution::Type(Type::I8))]);
+    fn deep_constraint(mut solver: Solver, expression: [TypeVarId; 3]) {
+        solver
+            .solutions
+            .extend([(expression[0].clone(), Solution::Type(Type::I8))]);
 
         assert!(solver.process_constraint(&expression[0], &Constraint::Eq(expression[1].clone())));
         assert!(solver.process_constraint(&expression[1], &Constraint::Eq(expression[2].clone())));
@@ -387,8 +383,10 @@ mod test {
     }
 
     #[rstest]
-    fn deep_constraint_reversed(expression: [TypeVarId; 3]) {
-        let mut solver = Solver::prefill([(expression[0].clone(), Solution::Type(Type::I8))]);
+    fn deep_constraint_reversed(mut solver: Solver, expression: [TypeVarId; 3]) {
+        solver
+            .solutions
+            .extend([(expression[0].clone(), Solution::Type(Type::I8))]);
 
         // Solve equality constraint before constraint with solution.
         assert!(solver.process_constraint(&expression[1], &Constraint::Eq(expression[2].clone())));
@@ -398,8 +396,8 @@ mod test {
     }
 
     #[rstest]
-    fn literal(expression: [TypeVarId; 1]) {
-        let solver = Solver::prefill([
+    fn literal(mut solver: Solver, expression: [TypeVarId; 1]) {
+        solver.solutions.extend([
             // Manually solve expression as literal.
             (
                 expression[0].clone(),

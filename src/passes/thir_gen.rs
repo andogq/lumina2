@@ -38,7 +38,7 @@ impl<'ctx, 'hir> Pass<'ctx, 'hir> for ThirGen<'ctx, 'hir> {
         // Run the solver.
         let types = Solver::run(&thir_gen.constraints);
 
-        Ok(PassSuccess::new(Thir { hir, types }, thir_gen.errors))
+        Ok(PassSuccess::new(Thir::new(hir, types), thir_gen.errors))
     }
 }
 

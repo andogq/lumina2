@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use crate::passes::{hir_gen::HirGenError, thir_gen::ThirGenError};
+use crate::passes::{hir_gen::HirGenError, mir_gen::MirGenError, thir_gen::ThirGenError};
 
 /// Compiler result, an alias for [`Result`] with [`CError`] as the error value.
 pub type CResult<T> = Result<T, CError>;
@@ -8,9 +8,14 @@ pub type CResult<T> = Result<T, CError>;
 /// Collection of errors which may occur during compilation.
 #[derive(Clone, Debug, thiserror::Error)]
 #[error(transparent)]
+#[allow(
+    clippy::enum_variant_names,
+    reason = "postfix `Gen` refers to the name of the pass from which the errors originate"
+)]
 pub enum CErrorKind {
     HirGen(#[from] HirGenError),
     ThirGen(#[from] ThirGenError),
+    MirGen(#[from] MirGenError),
 }
 
 /// An error that may occur during compilation.
@@ -71,11 +76,6 @@ create_id!(CErrorId);
 pub struct CErrorList(IndexedVec<CErrorId, CError>);
 
 impl CErrorList {
-    /// Create a new instance.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Report the provided error, returning it's ID.
     pub fn report(&mut self, error: impl Into<CError>) -> CErrorId {
         self.0.insert(error.into())
@@ -89,6 +89,11 @@ impl CErrorList {
     /// Produce an iterator over all fatal errors.
     pub fn iter_fatal(&self) -> impl Iterator<Item = &CError> {
         self.iter().filter(|err| err.fatal)
+    }
+
+    /// Produce an iterator over all non-fatal errors.
+    pub fn iter_non_fatal(&self) -> impl Iterator<Item = &CError> {
+        self.iter().filter(|err| !err.fatal)
     }
 }
 

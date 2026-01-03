@@ -86,6 +86,38 @@ fn run(source: &str) -> u8 {
         }
     };
 
+    let fatal_error_count = ctx.errors.iter_fatal().count();
+    if fatal_error_count > 0 {
+        let error_plural = if fatal_error_count == 1 {
+            "error"
+        } else {
+            "errors"
+        };
+        eprintln!("{fatal_error_count} fatal {error_plural} occurred during compilation:");
+
+        for (i, error) in ctx.errors.iter_fatal().enumerate() {
+            eprintln!("Error {i}/{fatal_error_count}:");
+            eprintln!("{error}");
+            eprintln!();
+        }
+    }
+
+    let non_fatal_count = ctx.errors.iter_non_fatal().count();
+    if non_fatal_count > 0 {
+        let error_plural = if non_fatal_count == 1 {
+            "error"
+        } else {
+            "errors"
+        };
+        eprintln!("{non_fatal_count} {error_plural} occurred during compilation:");
+
+        for (i, error) in ctx.errors.iter_non_fatal().enumerate() {
+            eprintln!("Error {i}/{fatal_error_count}:");
+            eprintln!("{error}");
+            eprintln!();
+        }
+    }
+
     {
         let engine = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)

@@ -37,6 +37,10 @@ pub enum PassSuccess<T> {
         /// Outcome of this pass.
         outcome: T,
         /// Produced (non-fatal) errors.
+        #[allow(
+            dead_code,
+            reason = "will be useful when better error handling is implemented."
+        )]
         errors: Vec<CErrorId>,
     },
 }
@@ -53,6 +57,10 @@ impl<T> PassSuccess<T> {
     }
 
     /// Produce a reference to the outcome.
+    #[allow(
+        dead_code,
+        reason = "will be useful when better error handling is implemented."
+    )]
     pub fn outcome(&self) -> &T {
         match self {
             Self::Ok(outcome) => outcome,
@@ -61,6 +69,10 @@ impl<T> PassSuccess<T> {
     }
 
     /// Produce a slice to the errors.
+    #[allow(
+        dead_code,
+        reason = "will be useful when better error handling is implemented."
+    )]
     pub fn errors(&self) -> &[CErrorId] {
         match self {
             Self::Ok(_) => &[],

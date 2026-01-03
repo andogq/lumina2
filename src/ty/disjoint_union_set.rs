@@ -34,14 +34,6 @@ impl DisjointUnionSet {
         self.0.keys()
     }
 
-    fn depth(&self, id: &TypeVarId) -> usize {
-        self.get(id).1
-    }
-
-    fn is_root(&self, id: &TypeVarId) -> bool {
-        self.depth(id) == 0
-    }
-
     fn get<'i, 'u: 'i>(&'u self, id: &'i TypeVarId) -> (&'i TypeVarId, usize) {
         let Some((parent, depth)) = self.0.get(id) else {
             return (id, 0);

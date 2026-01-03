@@ -166,6 +166,7 @@ mod expression {
         Sum,
         Multiply,
         Prefix,
+        #[allow(dead_code, reason = "cast expressions are not currently implemented.")]
         Cast,
         Call,
     }
@@ -312,7 +313,6 @@ mod expression {
                 | Self::Less(_) => Precedence::Equality,
                 Self::LogicalAnd(_) | Self::LogicalOr(_) => Precedence::Logical,
                 Self::BinaryAnd(_) | Self::BinaryOr(_) => Precedence::Binary,
-                _ => Precedence::Lowest,
             }
         }
     }

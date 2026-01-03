@@ -188,6 +188,7 @@ impl<'ctx> AstGen<'ctx> {
                 cst::Literal::Boolean(boolean_literal) => {
                     Literal::Boolean(boolean_literal.as_bool())
                 }
+                cst::Literal::Unit(_) => Literal::Unit,
             }
             .into(),
             cst::Expression::Parenthesis(cst::Parenthesis { expression, .. }) => {

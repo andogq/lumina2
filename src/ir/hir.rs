@@ -88,6 +88,10 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub enum DeclarationTy {
+        #[allow(
+            dead_code,
+            reason = "will be used when variable declarations can be explicitly typed."
+        )]
         Type(Type),
         Inferred(ExpressionId),
     }
@@ -191,20 +195,6 @@ mod expression {
 mod type_refs {
     use super::*;
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct TypeRefId(usize);
-    impl TypeRefId {
-        pub fn new(id: usize) -> Self {
-            Self(id)
-        }
-    }
-
-    #[derive(Clone, Debug)]
-    pub struct TypeRef {
-        pub name: StringId,
-        pub ty: Option<Type>,
-    }
-
     #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     pub enum Type {
         Never,
@@ -217,11 +207,5 @@ mod type_refs {
             parameters: Vec<Type>,
             return_ty: Box<Type>,
         },
-    }
-
-    impl Type {
-        pub fn is_integer(&self) -> bool {
-            matches!(self, Self::U8 | Self::I8)
-        }
     }
 }

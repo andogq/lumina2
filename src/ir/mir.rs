@@ -214,11 +214,19 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub struct StorageLive {
+        #[allow(
+            dead_code,
+            reason = "storage statements are not currently implemented."
+        )]
         pub local: LocalId,
     }
 
     #[derive(Clone, Debug)]
     pub struct StorageDead {
+        #[allow(
+            dead_code,
+            reason = "storage statements are not currently implemented."
+        )]
         pub local: LocalId,
     }
 }
@@ -293,6 +301,10 @@ mod rvalue {
     #[derive(Clone, Debug)]
     pub enum RValue {
         Use(OperandId),
+        #[allow(
+            dead_code,
+            reason = "will soon remove ref from `UnaryOperation` for MIR"
+        )]
         Ref(PlaceId),
         Binary(Binary),
         Unary(Unary),

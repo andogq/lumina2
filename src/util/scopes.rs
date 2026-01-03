@@ -7,7 +7,6 @@ create_id!(BindingId);
 struct Scope {
     parent: Option<ScopeId>,
     bindings: HashMap<StringId, BindingId>,
-    types: HashMap<StringId, TypeRefId>,
 }
 
 impl Scope {
@@ -24,7 +23,10 @@ impl Scope {
 
 #[derive(Clone, Debug)]
 struct BindingMeta {
+    /// Scope in which this binding exists.
+    #[allow(dead_code, reason = "will be useful information in the future")]
     scope: ScopeId,
+    /// String this binding was created from.
     string: StringId,
 }
 
@@ -76,6 +78,7 @@ impl Scopes {
     }
 
     /// Search through all scopes for the provided string.
+    #[cfg(test)]
     pub fn find_scope(&self, string: StringId) -> Vec<(ScopeId, BindingId)> {
         self.scopes
             .iter_pairs()

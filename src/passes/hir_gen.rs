@@ -207,12 +207,12 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 rhs,
             }) => Binary {
                 lhs: self.lower_expression(&self.ast[*lhs], scope)?,
-                operation: operation.clone(),
+                operation: *operation,
                 rhs: self.lower_expression(&self.ast[*rhs], scope)?,
             }
             .into(),
             ast::Expression::Unary(ast::Unary { operation, value }) => Unary {
-                operation: operation.clone(),
+                operation: *operation,
                 value: self.lower_expression(&self.ast[*value], scope)?,
             }
             .into(),
