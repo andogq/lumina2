@@ -214,7 +214,7 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub struct StorageLive {
-        #[allow(
+        #[expect(
             dead_code,
             reason = "storage statements are not currently implemented."
         )]
@@ -223,7 +223,7 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub struct StorageDead {
-        #[allow(
+        #[expect(
             dead_code,
             reason = "storage statements are not currently implemented."
         )]
@@ -301,7 +301,7 @@ mod rvalue {
     #[derive(Clone, Debug)]
     pub enum RValue {
         Use(OperandId),
-        #[allow(
+        #[expect(
             dead_code,
             reason = "will soon remove ref from `UnaryOperation` for MIR"
         )]

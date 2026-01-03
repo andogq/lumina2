@@ -166,7 +166,7 @@ mod expression {
         Sum,
         Multiply,
         Prefix,
-        #[allow(dead_code, reason = "cast expressions are not currently implemented.")]
+        #[expect(dead_code, reason = "cast expressions are not currently implemented.")]
         Cast,
         Call,
     }

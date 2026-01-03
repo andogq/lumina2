@@ -88,7 +88,7 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub enum DeclarationTy {
-        #[allow(
+        #[expect(
             dead_code,
             reason = "will be used when variable declarations can be explicitly typed."
         )]

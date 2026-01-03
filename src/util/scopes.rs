@@ -24,7 +24,7 @@ impl Scope {
 #[derive(Clone, Debug)]
 struct BindingMeta {
     /// Scope in which this binding exists.
-    #[allow(dead_code, reason = "will be useful information in the future")]
+    #[expect(dead_code, reason = "will be useful information in the future")]
     scope: ScopeId,
     /// String this binding was created from.
     string: StringId,

@@ -43,15 +43,15 @@ mod function {
     /// ```
     #[derive(Clone, Debug)]
     pub struct FunctionDeclaration {
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_fn: tok::Fn,
         /// Name of the function.
         pub name: tok::Ident,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_l_parenthesis: tok::LParenthesis,
         /// Parameters for the function.
         pub parameters: PunctuatedList<FunctionParameter, tok::Comma>,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_r_parenthesis: tok::RParenthesis,
         /// Optional return type for the function.
         pub return_ty: Option<FunctionReturnType>,
@@ -67,7 +67,7 @@ mod function {
     pub struct FunctionParameter {
         /// Name of the parameter.
         pub name: tok::Ident,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_colon: tok::Colon,
         /// Type of the parameter.
         pub ty: tok::Ident,
@@ -80,7 +80,7 @@ mod function {
     /// ```
     #[derive(Clone, Debug)]
     pub struct FunctionReturnType {
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_thin_arrow: tok::ThinArrow,
         /// Return type.
         pub ty: tok::Ident,
@@ -90,11 +90,11 @@ mod function {
 /// Block, containing a collection of [`Statement`]s.
 #[derive(Clone, Debug)]
 pub struct Block {
-    #[allow(dead_code, reason = "token field")]
+    #[expect(dead_code, reason = "token field")]
     pub tok_l_brace: tok::LBrace,
     /// Collection of statements.
     pub statements: Vec<Statement>,
-    #[allow(dead_code, reason = "token field")]
+    #[expect(dead_code, reason = "token field")]
     pub tok_r_brace: tok::RBrace,
 }
 
@@ -115,35 +115,35 @@ mod statement {
     /// A `let` statement creates a new binding (`name`), and assigns `value` to it.
     #[derive(Clone, Debug)]
     pub struct LetStatement {
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_let: tok::Let,
         /// Name of the variable.
         pub variable: tok::Ident,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_eq: tok::Eq,
         /// Value that was assigned.
         pub value: Expression,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_semicolon: tok::SemiColon,
     }
 
     /// A `return` statement returns `value`.
     #[derive(Clone, Debug)]
     pub struct ReturnStatement {
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_return: tok::Return,
         /// Value that is being returned.
         pub value: Expression,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_semicolon: tok::SemiColon,
     }
 
     #[derive(Clone, Debug)]
     pub struct BreakStatement {
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_break: tok::Break,
         pub value: Option<Expression>,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_semicolon: tok::SemiColon,
     }
 
@@ -153,7 +153,6 @@ mod statement {
         /// Expression.
         pub expression: Expression,
         /// Can be optionally terminated by semicolon.
-        #[allow(dead_code, reason = "token field")]
         pub tok_semicolon: Option<tok::SemiColon>,
     }
 
@@ -196,7 +195,7 @@ mod expression {
     pub struct Assign {
         /// Variable being assigned to.
         pub assignee: Box<Expression>,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_eq: tok::Eq,
         /// Value of the assignment.
         pub value: Box<Expression>,
@@ -256,7 +255,7 @@ mod expression {
     /// An `if` statement
     #[derive(Clone, Debug)]
     pub struct If {
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_if: tok::If,
         /// Condition that is being checked.
         pub condition: Box<Expression>,
@@ -269,7 +268,7 @@ mod expression {
     /// Optional trailing section of an `if` statement.
     #[derive(Clone, Debug)]
     pub struct IfTrailer {
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_else: tok::Else,
         /// Can be followed by `if` with another condition, or a final block.
         pub if_or_block: IfOrBlock,
@@ -295,16 +294,15 @@ mod expression {
 
     #[derive(Clone, Debug)]
     pub struct Loop {
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_loop: tok::Loop,
         pub body: Block,
     }
 
     // TODO: Implement while loops
     #[derive(Clone, Debug)]
-    #[allow(dead_code, reason = "while statements will be implemented after loops")]
+    #[expect(dead_code, reason = "while statements will be implemented after loops")]
     pub struct While {
-        #[allow(dead_code, reason = "token field")]
         pub tok_while: tok::While,
         pub condition: Box<Expression>,
         pub body: Block,
@@ -349,9 +347,9 @@ mod expression {
 
     #[derive(Clone, Debug)]
     pub struct UnitLiteral {
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_l_parenthesis: tok::LParenthesis,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_r_parenthesis: tok::RParenthesis,
     }
 
@@ -365,11 +363,11 @@ mod expression {
     /// An [`Expression`] wrapped in parentheses.
     #[derive(Clone, Debug)]
     pub struct Parenthesis {
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_l_parenthesis: tok::LParenthesis,
         /// Inner expression.
         pub expression: Box<Expression>,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_r_parenthesis: tok::RParenthesis,
     }
 
@@ -378,11 +376,11 @@ mod expression {
     pub struct Call {
         /// Callee of the function.
         pub callee: Box<Expression>,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_l_parenthesis: tok::LParenthesis,
         /// Arguments passed to the call.
         pub arguments: PunctuatedList<Expression, tok::Comma>,
-        #[allow(dead_code, reason = "token field")]
+        #[expect(dead_code, reason = "token field")]
         pub tok_r_parenthesis: tok::RParenthesis,
     }
 

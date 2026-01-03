@@ -8,7 +8,7 @@ pub type CResult<T> = Result<T, CError>;
 /// Collection of errors which may occur during compilation.
 #[derive(Clone, Debug, thiserror::Error)]
 #[error(transparent)]
-#[allow(
+#[expect(
     clippy::enum_variant_names,
     reason = "postfix `Gen` refers to the name of the pass from which the errors originate"
 )]

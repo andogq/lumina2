@@ -37,10 +37,6 @@ pub enum PassSuccess<T> {
         /// Outcome of this pass.
         outcome: T,
         /// Produced (non-fatal) errors.
-        #[allow(
-            dead_code,
-            reason = "will be useful when better error handling is implemented."
-        )]
         errors: Vec<CErrorId>,
     },
 }
@@ -57,7 +53,7 @@ impl<T> PassSuccess<T> {
     }
 
     /// Produce a reference to the outcome.
-    #[allow(
+    #[expect(
         dead_code,
         reason = "will be useful when better error handling is implemented."
     )]
@@ -69,7 +65,7 @@ impl<T> PassSuccess<T> {
     }
 
     /// Produce a slice to the errors.
-    #[allow(
+    #[expect(
         dead_code,
         reason = "will be useful when better error handling is implemented."
     )]

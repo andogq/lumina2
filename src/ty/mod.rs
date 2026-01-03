@@ -78,7 +78,7 @@ impl Literal {
 pub enum IntegerKind {
     Any,
     Signed,
-    #[allow(
+    #[expect(
         dead_code,
         reason = "future constraints may require an unsigned integer."
     )]
