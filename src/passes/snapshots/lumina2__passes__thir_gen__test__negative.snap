@@ -9,12 +9,8 @@ expression: "Unary { operation: Negative, value: ExpressionId(0) }"
                 0,
             ),
         ),
-        Eq(
-            Type(
-                TypeId(
-                    0,
-                ),
-            ),
+        Aggregate(
+            [],
         ),
     ),
     (

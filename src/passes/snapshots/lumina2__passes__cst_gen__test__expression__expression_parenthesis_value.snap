@@ -1,0 +1,19 @@
+---
+source: src/passes/cst_gen.rs
+expression: (1)
+---
+Parenthesis(
+    Parenthesis {
+        tok_l_parenthesis: LParenthesis,
+        expression: Literal(
+            Integer(
+                IntegerLiteral(
+                    IntegerLiteral(
+                        1,
+                    ),
+                ),
+            ),
+        ),
+        tok_r_parenthesis: RParenthesis,
+    },
+)

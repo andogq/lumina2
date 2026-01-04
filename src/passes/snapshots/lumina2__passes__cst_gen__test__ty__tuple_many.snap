@@ -1,0 +1,33 @@
+---
+source: src/passes/cst_gen.rs
+expression: "(i8, bool, u8)"
+---
+Tuple(
+    Tuple {
+        tok_l_parenthesis: LParenthesis,
+        items: PunctuatedList {
+            items: [
+                Named(
+                    Ident(
+                        "i8",
+                    ),
+                ),
+                Named(
+                    Ident(
+                        "bool",
+                    ),
+                ),
+                Named(
+                    Ident(
+                        "u8",
+                    ),
+                ),
+            ],
+            punctuation: [
+                Comma,
+                Comma,
+            ],
+        },
+        tok_r_parenthesis: RParenthesis,
+    },
+)

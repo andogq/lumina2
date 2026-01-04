@@ -16,8 +16,10 @@ FunctionDeclaration {
     return_ty: Some(
         FunctionReturnType {
             tok_thin_arrow: ThinArrow,
-            ty: Ident(
-                "u32",
+            ty: Named(
+                Ident(
+                    "u32",
+                ),
             ),
         },
     ),

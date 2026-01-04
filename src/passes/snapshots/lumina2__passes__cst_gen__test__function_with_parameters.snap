@@ -15,8 +15,10 @@ FunctionDeclaration {
                     "a",
                 ),
                 tok_colon: Colon,
-                ty: Ident(
-                    "u32",
+                ty: Named(
+                    Ident(
+                        "u32",
+                    ),
                 ),
             },
             FunctionParameter {
@@ -24,8 +26,10 @@ FunctionDeclaration {
                     "b",
                 ),
                 tok_colon: Colon,
-                ty: Ident(
-                    "bool",
+                ty: Named(
+                    Ident(
+                        "bool",
+                    ),
                 ),
             },
         ],

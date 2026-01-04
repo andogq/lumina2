@@ -9,12 +9,8 @@ expression: "Binary { lhs: ExpressionId(0), operation: Greater, rhs: ExpressionI
                 0,
             ),
         ),
-        Eq(
-            Type(
-                TypeId(
-                    0,
-                ),
-            ),
+        Aggregate(
+            [],
         ),
     ),
     (
@@ -23,12 +19,8 @@ expression: "Binary { lhs: ExpressionId(0), operation: Greater, rhs: ExpressionI
                 0,
             ),
         ),
-        Eq(
-            Type(
-                TypeId(
-                    0,
-                ),
-            ),
+        Aggregate(
+            [],
         ),
     ),
     (

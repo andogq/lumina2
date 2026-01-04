@@ -334,5 +334,10 @@ mod test {
                 10
             );
         }
+
+        #[test]
+        fn tuple() {
+            assert_eq!(run("fn main() -> u8 { let a = (1, 2, true); 123 }"), 123)
+        }
     }
 }

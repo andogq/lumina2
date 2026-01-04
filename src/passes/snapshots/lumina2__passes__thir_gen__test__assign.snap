@@ -26,7 +26,7 @@ expression: "Assign { variable: ExpressionId(0), value: ExpressionId(0) }"
         Eq(
             Type(
                 TypeId(
-                    0,
+                    1,
                 ),
             ),
         ),
@@ -37,12 +37,8 @@ expression: "Assign { variable: ExpressionId(0), value: ExpressionId(0) }"
                 0,
             ),
         ),
-        Eq(
-            Type(
-                TypeId(
-                    0,
-                ),
-            ),
+        Aggregate(
+            [],
         ),
     ),
     (
@@ -51,12 +47,8 @@ expression: "Assign { variable: ExpressionId(0), value: ExpressionId(0) }"
                 0,
             ),
         ),
-        Eq(
-            Type(
-                TypeId(
-                    0,
-                ),
-            ),
+        Aggregate(
+            [],
         ),
     ),
 ]

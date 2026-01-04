@@ -1,6 +1,6 @@
 ---
 source: src/passes/thir_gen.rs
-expression: Type(TypeId(0))
+expression: Type(TypeId(1))
 ---
 [
     (
@@ -12,7 +12,7 @@ expression: Type(TypeId(0))
         Eq(
             Type(
                 TypeId(
-                    0,
+                    1,
                 ),
             ),
         ),
@@ -23,12 +23,8 @@ expression: Type(TypeId(0))
                 0,
             ),
         ),
-        Eq(
-            Type(
-                TypeId(
-                    0,
-                ),
-            ),
+        Aggregate(
+            [],
         ),
     ),
 ]

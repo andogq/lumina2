@@ -130,6 +130,7 @@ mod expression {
         Block(BlockId),
         Variable(Variable),
         Unreachable,
+        Aggregate(Aggregate),
     }
 
     #[derive(Clone, Debug)]
@@ -167,7 +168,6 @@ mod expression {
     pub enum Literal {
         Integer(usize),
         Boolean(bool),
-        Unit,
     }
 
     #[derive(Clone, Debug)]
@@ -181,6 +181,15 @@ mod expression {
         pub binding: BindingId,
     }
 
+    #[derive(Clone, Debug)]
+    pub struct Aggregate {
+        pub values: Vec<ExpressionId>,
+    }
+
+    impl Aggregate {
+        pub const UNIT: Self = Self { values: Vec::new() };
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -192,5 +201,6 @@ mod expression {
         Call: Call,
         Block: BlockId,
         Variable: Variable,
+        Aggregate: Aggregate,
     }
 }
