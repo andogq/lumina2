@@ -627,6 +627,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     )
                 }
             },
+            RValue::Aggregate(_) => todo!(),
         }
     }
 

@@ -309,6 +309,7 @@ mod rvalue {
         Ref(PlaceId),
         Binary(Binary),
         Unary(Unary),
+        Aggregate(Aggregate),
     }
 
     #[derive(Clone, Debug)]
@@ -330,6 +331,11 @@ mod rvalue {
     pub enum UnaryOperation {
         Not,
         Negative,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct Aggregate {
+        pub values: Vec<OperandId>,
     }
 }
 

@@ -552,7 +552,31 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                     .insert(Operand::Constant(Constant::Function(function_id))),
             },
             hir::Expression::Unreachable => return None,
-            hir::Expression::Aggregate(_) => todo!(),
+            hir::Expression::Aggregate(hir::Aggregate { values }) => {
+                // Create a local to store the resulting value in.
+                let result = self
+                    .locals
+                    .create(ctx.function, self.thir.type_of(expression_id));
+                let result_place = self.mir.places.insert(result.into());
+
+                // Create the RValue.
+                let aggregate = Aggregate {
+                    values: values
+                        .iter()
+                        .map(|value| self.lower_expression(ctx, basic_block, *value).unwrap())
+                        .collect(),
+                };
+                self.mir.add_statement(
+                    *basic_block,
+                    Assign {
+                        place: result_place,
+                        rvalue: RValue::Aggregate(aggregate),
+                    },
+                );
+
+                // Produce the resulting place.
+                self.mir.operands.insert(Operand::Place(result_place))
+            }
         })
     }
 
