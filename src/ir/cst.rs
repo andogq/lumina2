@@ -121,15 +121,6 @@ mod ty {
         Tuple(Tuple<CstType>),
     }
 
-    impl CstType {
-        pub fn as_named(&self) -> &tok::Ident {
-            match self {
-                Self::Named(ident) => ident,
-                _ => panic!(),
-            }
-        }
-    }
-
     enum_conversion! {
         [CstType]
         Named: tok::Ident,

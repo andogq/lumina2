@@ -63,14 +63,14 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             .map(|parameter| {
                 (
                     self.ctx.scopes.declare(function_scope, parameter.name),
-                    self.ident_to_type(parameter.ty),
+                    self.lower_ast_type(parameter.ty),
                 )
             })
             .collect();
 
         // If no return type is provided, assume `()`.
         let return_ty = match function.return_ty {
-            Some(return_ty) => self.ident_to_type(return_ty),
+            Some(return_ty) => self.lower_ast_type(return_ty),
             None => self.ctx.types.unit(),
         };
 
@@ -277,14 +277,21 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         Ok(self.hir.expressions.insert(expression))
     }
 
-    /// Attempt to interpret an ident as a [`TypeId`].
-    fn ident_to_type(&mut self, ident: StringId) -> TypeId {
-        // HACK: This only handles built-in types.
-        match self.ctx.strings.get(ident) {
-            "u8" => self.ctx.types.u8(),
-            "i8" => self.ctx.types.i8(),
-            "bool" => self.ctx.types.boolean(),
-            ty => panic!("unknown type: {ty}"),
+    /// Lower an [`ast::AstType`] into a unique [`TypeId`].
+    ///
+    /// This will handle ensure that types are correctly equated where necessary.
+    fn lower_ast_type(&mut self, ty: ast::AstTypeId) -> TypeId {
+        match &self.ast[ty] {
+            ast::AstType::Named(string_id) => {
+                // HACK: This only handles built-in types.
+                match self.ctx.strings.get(*string_id) {
+                    "u8" => self.ctx.types.u8(),
+                    "i8" => self.ctx.types.i8(),
+                    "bool" => self.ctx.types.boolean(),
+                    ty => panic!("unknown type: {ty}"),
+                }
+            }
+            ast::AstType::Tuple(_ast_type_ids) => todo!(),
         }
     }
 }

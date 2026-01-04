@@ -44,13 +44,13 @@ impl<'ctx> AstGen<'ctx> {
                 .iter_items()
                 .map(|parameter| FunctionParameter {
                     name: self.ctx.strings.intern(&parameter.name.0),
-                    ty: self.ctx.strings.intern(&parameter.ty.as_named().0),
+                    ty: self.lower_type(&parameter.ty),
                 })
                 .collect(),
             return_ty: function
                 .return_ty
                 .as_ref()
-                .map(|ty| self.ctx.strings.intern(&ty.ty.as_named().0)),
+                .map(|ty| self.lower_type(&ty.ty)),
             body: self.lower_block(&function.body),
         };
         self.ast.function_declarations.insert(function_declaration);
@@ -217,6 +217,24 @@ impl<'ctx> AstGen<'ctx> {
         };
 
         self.ast.expressions.insert(expression)
+    }
+
+    /// Lower a [`cst::CstType`] into an [`AstType`], returning the interned ID.
+    ///
+    /// Note: No de-duplication of types is done at this stage, so lowering `CstType::Named("i8")`
+    /// twice will result in two different [`AstTypeId`]s.
+    fn lower_type(&mut self, ty: &cst::CstType) -> AstTypeId {
+        let ty = match ty {
+            cst::CstType::Named(ident) => AstType::Named(self.ctx.strings.intern(&ident.0)),
+            cst::CstType::Tuple(tuple) => AstType::Tuple(
+                tuple
+                    .items
+                    .iter_items()
+                    .map(|ty| self.lower_type(ty))
+                    .collect(),
+            ),
+        };
+        self.ast.types.insert(ty)
     }
 }
 
