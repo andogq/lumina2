@@ -179,11 +179,9 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
             match &self.mir[*statement] {
                 Statement::Assign(Assign { place, rvalue }) => {
                     let (ptr, ptr_ty) = self.resolve_place(&builder, function_id, *place);
-                    let (value, ty) = self.resolve_rvalue(&builder, function_id, rvalue);
+                    let ty = self.store_rvalue(&builder, function_id, rvalue, ptr);
 
                     assert_eq!(ptr_ty, ty);
-
-                    builder.build_store(ptr, value).unwrap();
                 }
                 Statement::StorageLive(_) => todo!(),
                 Statement::StorageDead(_) => todo!(),
@@ -351,25 +349,31 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
         (ptr, ty)
     }
 
-    fn resolve_rvalue(
+    fn store_rvalue(
         &mut self,
         builder: &Builder<'ink>,
         function_id: FunctionId,
         rvalue: &RValue,
-    ) -> (BasicValueEnum<'ink>, TypeId) {
+        ptr: PointerValue<'ink>,
+    ) -> TypeId {
         match rvalue {
-            RValue::Use(operand) => self.resolve_operand(builder, function_id, *operand),
+            RValue::Use(operand) => {
+                let (value, ty) = self.resolve_operand(builder, function_id, *operand);
+                builder.build_store(ptr, value).unwrap();
+                ty
+            }
             RValue::Ref(place) => {
                 // Resolve the place.
-                let (ptr, ty) = self.resolve_place(builder, function_id, *place);
-                // Produce a pointer value.
-                (ptr.as_basic_value_enum(), self.ctx.types.ref_of(ty))
+                let (ref_ptr, ref_ty) = self.resolve_place(builder, function_id, *place);
+                // Store pointer value.
+                builder.build_store(ptr, ref_ptr).unwrap();
+                self.ctx.types.ref_of(ref_ty)
             }
             RValue::Binary(binary) => {
                 let (lhs, lhs_ty_id) = self.resolve_operand(builder, function_id, binary.lhs);
                 let (rhs, rhs_ty_id) = self.resolve_operand(builder, function_id, binary.rhs);
 
-                match (
+                let (value, ty) = match (
                     &self.ctx.types[lhs_ty_id],
                     &binary.operation,
                     &self.ctx.types[rhs_ty_id],
@@ -590,44 +594,77 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                         self.ctx.types.boolean(),
                     ),
                     _ => todo!(),
-                }
+                };
+
+                builder.build_store(ptr, value).unwrap();
+
+                ty
             }
-            RValue::Unary(unary) => match unary.operation {
-                UnaryOperation::Not => {
-                    let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
+            RValue::Unary(unary) => {
+                let (value, ty) = match unary.operation {
+                    UnaryOperation::Not => {
+                        let (value, value_ty) =
+                            self.resolve_operand(builder, function_id, unary.value);
 
-                    if !matches!(
-                        &self.ctx.types[value_ty],
-                        Type::U8 | Type::I8 | Type::Boolean
-                    ) {
-                        panic!("cannot apply unary operation NOT on {value_ty:?}");
+                        if !matches!(
+                            &self.ctx.types[value_ty],
+                            Type::U8 | Type::I8 | Type::Boolean
+                        ) {
+                            panic!("cannot apply unary operation NOT on {value_ty:?}");
+                        }
+
+                        (
+                            builder
+                                .build_not(value.into_int_value(), "not")
+                                .unwrap()
+                                .as_basic_value_enum(),
+                            value_ty,
+                        )
                     }
+                    UnaryOperation::Negative => {
+                        let (value, value_ty) =
+                            self.resolve_operand(builder, function_id, unary.value);
 
-                    (
-                        builder
-                            .build_not(value.into_int_value(), "not")
-                            .unwrap()
-                            .as_basic_value_enum(),
-                        value_ty,
-                    )
-                }
-                UnaryOperation::Negative => {
-                    let (value, value_ty) = self.resolve_operand(builder, function_id, unary.value);
+                        if value_ty != self.ctx.types.i8() {
+                            panic!("cannot apply unary operation NEG on {value_ty:?}");
+                        }
 
-                    if value_ty != self.ctx.types.i8() {
-                        panic!("cannot apply unary operation NEG on {value_ty:?}");
+                        (
+                            builder
+                                .build_int_neg(value.into_int_value(), "neg")
+                                .unwrap()
+                                .as_basic_value_enum(),
+                            self.ctx.types.i8(),
+                        )
                     }
+                };
 
-                    (
-                        builder
-                            .build_int_neg(value.into_int_value(), "neg")
-                            .unwrap()
-                            .as_basic_value_enum(),
-                        self.ctx.types.i8(),
-                    )
+                builder.build_store(ptr, value).unwrap();
+
+                ty
+            }
+            RValue::Aggregate(Aggregate { values, ty }) => {
+                let byte_ty = self.ink.i8_type();
+
+                for (field, value) in values.iter().enumerate() {
+                    // Lower the value.
+                    let (value, value_ty) = self.resolve_operand(builder, function_id, *value);
+
+                    // Calculate the offset to the field.
+                    let offset = self.ctx.types.offset_of(*ty, field).unwrap();
+                    let offset = self.ink.i64_type().const_int(offset as u64, false);
+
+                    // Find the pointer to the field.
+                    let ptr = unsafe {
+                        builder.build_in_bounds_gep(byte_ty, ptr, &[offset], "aggregate_offset")
+                    }
+                    .unwrap();
+
+                    builder.build_store(ptr, value).unwrap();
                 }
-            },
-            RValue::Aggregate(_) => todo!(),
+
+                *ty
+            }
         }
     }
 
@@ -654,7 +691,11 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
             Type::Ref(_) => self.ink.ptr_type(AddressSpace::default()).into(),
             Type::Never => unreachable!(),
             Type::Function { .. } => self.ink.ptr_type(AddressSpace::default()).into(),
-            Type::Tuple(_) => todo!(),
+            Type::Tuple(_) => self
+                .ink
+                .i8_type()
+                .array_type(self.ctx.types.size_of(ty) as u32)
+                .as_basic_type_enum(),
         }
     }
 

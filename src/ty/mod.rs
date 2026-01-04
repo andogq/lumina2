@@ -98,6 +98,47 @@ impl Types {
     pub fn ref_of(&mut self, ty: TypeId) -> TypeId {
         self.get(Type::Ref(ty))
     }
+
+    /// Calculate the size of a type.
+    pub fn size_of(&self, ty: TypeId) -> usize {
+        match &self[ty] {
+            Type::Never => todo!("work out what to do with this"),
+            Type::Unit => todo!("merge with tuple"),
+            Type::I8 => 1,
+            Type::U8 => 1,
+            Type::Boolean => 1,
+            Type::Ref(_) => todo!("pointer size"),
+            Type::Function { .. } => todo!("pointer size"),
+            Type::Tuple(type_ids) => type_ids.clone().iter().map(|ty| self.size_of(*ty)).sum(),
+        }
+    }
+
+    /// Calculate the offset of a field in a type.
+    pub fn offset_of(&self, ty: TypeId, field: usize) -> Option<usize> {
+        match &self[ty] {
+            Type::Tuple(type_ids) => {
+                if field >= type_ids.len() {
+                    return None;
+                }
+
+                // Calculate offset by adding size of all previous fields.
+                Some(
+                    type_ids
+                        .iter()
+                        .take(field)
+                        .map(|ty| self.size_of(*ty))
+                        .sum(),
+                )
+            }
+            _ => {
+                if field == 0 {
+                    Some(0)
+                } else {
+                    None
+                }
+            }
+        }
+    }
 }
 impl Index<TypeId> for Types {
     type Output = Type;

@@ -336,6 +336,7 @@ mod rvalue {
     #[derive(Clone, Debug)]
     pub struct Aggregate {
         pub values: Vec<OperandId>,
+        pub ty: TypeId,
     }
 }
 

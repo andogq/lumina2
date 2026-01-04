@@ -553,10 +553,10 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
             },
             hir::Expression::Unreachable => return None,
             hir::Expression::Aggregate(hir::Aggregate { values }) => {
+                let ty = self.thir.type_of(expression_id);
+
                 // Create a local to store the resulting value in.
-                let result = self
-                    .locals
-                    .create(ctx.function, self.thir.type_of(expression_id));
+                let result = self.locals.create(ctx.function, ty);
                 let result_place = self.mir.places.insert(result.into());
 
                 // Create the RValue.
@@ -565,6 +565,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                         .iter()
                         .map(|value| self.lower_expression(ctx, basic_block, *value).unwrap())
                         .collect(),
+                    ty,
                 };
                 self.mir.add_statement(
                     *basic_block,
