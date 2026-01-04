@@ -272,6 +272,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 binding: self.ctx.scopes.resolve(scope, *variable),
             }
             .into(),
+            ast::Expression::Tuple(_) => todo!(),
         };
 
         Ok(self.hir.expressions.insert(expression))

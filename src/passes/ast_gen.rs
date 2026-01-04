@@ -213,7 +213,13 @@ impl<'ctx> AstGen<'ctx> {
                 variable: self.ctx.strings.intern(&variable.0),
             }
             .into(),
-            cst::Expression::Tuple(_) => todo!(),
+            cst::Expression::Tuple(cst::Tuple { items, .. }) => Tuple {
+                values: items
+                    .iter_items()
+                    .map(|item| self.lower_expression(item))
+                    .collect(),
+            }
+            .into(),
         };
 
         self.ast.expressions.insert(expression)
@@ -275,6 +281,10 @@ mod test {
     #[case("call_simple", "some_ident()")]
     #[case("call_arguments", "some_ident(1, something, true)")]
     #[case("variable_simple", "some_ident")]
+    #[case("tuple_empty", "()")]
+    #[case("tuple_single", "(1,)")]
+    #[case("tuple_many", "(1, true, 3)")]
+    #[case("tuple_nested", "(1, (2, true), 4)")]
     fn lower_expression(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
         let mut pass = AstGen::new(&mut ctx);
         let expression_id = pass.lower_expression(&parse::<cst::Expression>(source));

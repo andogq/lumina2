@@ -165,6 +165,7 @@ mod expression {
         Call(Call),
         Block(BlockId),
         Variable(Variable),
+        Tuple(Tuple),
     }
 
     #[derive(Clone, Debug)]
@@ -215,6 +216,11 @@ mod expression {
         pub variable: StringId,
     }
 
+    #[derive(Clone, Debug)]
+    pub struct Tuple {
+        pub values: Vec<ExpressionId>,
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -226,5 +232,6 @@ mod expression {
         Call: Call,
         Block: BlockId,
         Variable: Variable,
+        Tuple: Tuple,
     }
 }
