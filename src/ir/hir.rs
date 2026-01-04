@@ -131,6 +131,7 @@ mod expression {
         Variable(Variable),
         Unreachable,
         Aggregate(Aggregate),
+        Field(Field),
     }
 
     #[derive(Clone, Debug)]
@@ -185,9 +186,14 @@ mod expression {
     pub struct Aggregate {
         pub values: Vec<ExpressionId>,
     }
-
     impl Aggregate {
         pub const UNIT: Self = Self { values: Vec::new() };
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct Field {
+        pub lhs: ExpressionId,
+        pub field: usize,
     }
 
     enum_conversion! {
@@ -202,5 +208,6 @@ mod expression {
         Block: BlockId,
         Variable: Variable,
         Aggregate: Aggregate,
+        Field: Field,
     }
 }

@@ -576,6 +576,17 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 // Produce the resulting place.
                 Some(self.mir.operands.insert(Operand::Place(result_place)))
             }
+            hir::Expression::Field(hir::Field { lhs, field }) => {
+                let lhs_operand = self.lower_expression(ctx, basic_block, *lhs).unwrap();
+                let lhs_place = self.operand_as_place(ctx.function, basic_block, lhs_operand);
+
+                // TODO: Check is place is only used in one place.
+                let mut lhs = self.mir.places[lhs_place].clone();
+                lhs.projection.push(Projection::Field(*field));
+
+                let place = self.mir.places.insert(lhs);
+                Some(self.mir.operands.insert(Operand::Place(place)))
+            }
         }
     }
 
@@ -591,6 +602,11 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 let mut value = self.expression_to_place(*value);
                 // TODO: Not sure if this is append or prepend.
                 value.projection.push(Projection::Deref);
+                value
+            }
+            hir::Expression::Field(hir::Field { lhs, field }) => {
+                let mut value = self.expression_to_place(*lhs);
+                value.projection.push(Projection::Field(*field));
                 value
             }
             expression => panic!("invalid lhs: {expression:?}"),

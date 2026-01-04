@@ -1,0 +1,21 @@
+---
+source: src/passes/cst_gen.rs
+expression: thing.field
+---
+Field(
+    Field {
+        lhs: Variable(
+            Variable {
+                variable: Ident(
+                    "thing",
+                ),
+            },
+        ),
+        tok_dot: Dot,
+        field: Named(
+            Ident(
+                "field",
+            ),
+        ),
+    },
+)

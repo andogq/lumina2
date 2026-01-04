@@ -130,19 +130,7 @@ fn run(source: &str) -> u8 {
 }
 
 fn main() {
-    let result = run(r#"fn main() -> u8 {
-            let count = 0;
-
-            let output = loop {
-                if count >= 3 {
-                    break 10;
-                }
-
-                count = count + 1;
-            };
-
-            output
-        }"#);
+    let result = run(r#"fn main() -> u8 { let a = (1, 2, true); a.0 }"#);
 
     dbg!(result);
 }
@@ -337,7 +325,10 @@ mod test {
 
         #[test]
         fn tuple() {
-            assert_eq!(run("fn main() -> u8 { let a = (1, 2, true); 123 }"), 123)
+            assert_eq!(
+                run("fn main() -> u8 { let a = (23, 95, true); a.0 = 5; a.0 + a.1 }"),
+                100
+            )
         }
     }
 }

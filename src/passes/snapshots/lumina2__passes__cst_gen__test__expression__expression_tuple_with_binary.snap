@@ -1,0 +1,45 @@
+---
+source: src/passes/cst_gen.rs
+expression: thing.a + thing.b
+---
+Binary(
+    Binary {
+        lhs: Field(
+            Field {
+                lhs: Variable(
+                    Variable {
+                        variable: Ident(
+                            "thing",
+                        ),
+                    },
+                ),
+                tok_dot: Dot,
+                field: Named(
+                    Ident(
+                        "a",
+                    ),
+                ),
+            },
+        ),
+        operation: Plus(
+            Plus,
+        ),
+        rhs: Field(
+            Field {
+                lhs: Variable(
+                    Variable {
+                        variable: Ident(
+                            "thing",
+                        ),
+                    },
+                ),
+                tok_dot: Dot,
+                field: Named(
+                    Ident(
+                        "b",
+                    ),
+                ),
+            },
+        ),
+    },
+)

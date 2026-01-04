@@ -343,6 +343,19 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     *inner_ty,
                 ),
                 (Projection::Deref, ty) => panic!("cannot dereference {ty:?}"),
+                (Projection::Field(field), Type::Tuple(fields)) => {
+                    let offset = self.ctx.types.offset_of(ty, *field).unwrap();
+                    let offset = self.ink.i64_type().const_int(offset as u64, false);
+
+                    let byte_ty = self.ink.i8_type();
+
+                    (
+                        unsafe { builder.build_in_bounds_gep(byte_ty, ptr, &[offset], "field") }
+                            .unwrap(),
+                        fields[*field],
+                    )
+                }
+                (Projection::Field(_), ty) => panic!("cannot access field on {ty:?}"),
             }
         }
 

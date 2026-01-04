@@ -211,6 +211,7 @@ mod expression {
         Block(Block),
         Variable(Variable),
         Tuple(Tuple<Expression>),
+        Field(Field),
     }
 
     /// Assignment.
@@ -407,6 +408,23 @@ mod expression {
         pub variable: tok::Ident,
     }
 
+    /// Field access expression, such as `my_struct.field` or `my_tuple.0`.
+    #[derive(Clone, Debug)]
+    pub struct Field {
+        pub lhs: Box<Expression>,
+        #[expect(dead_code, reason = "token field")]
+        pub tok_dot: tok::Dot,
+        pub field: FieldKey,
+    }
+
+    /// Different accessors used within [`Field`].
+    #[derive(Clone, Debug)]
+    pub enum FieldKey {
+        Unnamed(tok::IntegerLiteral),
+        #[expect(dead_code, reason = "named fields will be implemented with struct")]
+        Named(tok::Ident),
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -420,6 +438,7 @@ mod expression {
         Block: Block,
         Variable: Variable,
         Tuple: Tuple<Expression>,
+        Field: Field,
     }
 }
 

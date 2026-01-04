@@ -1,0 +1,19 @@
+---
+source: src/passes/cst_gen.rs
+expression: ".0"
+---
+Field {
+    lhs: Variable(
+        Variable {
+            variable: Ident(
+                "a",
+            ),
+        },
+    ),
+    tok_dot: Dot,
+    field: Unnamed(
+        IntegerLiteral(
+            0,
+        ),
+    ),
+}

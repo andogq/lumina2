@@ -275,6 +275,13 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     .collect::<Result<_, _>>()?,
             }
             .into(),
+            ast::Expression::Field(ast::Field { lhs, field }) => Field {
+                lhs: self.lower_expression(&self.ast[*lhs], scope)?,
+                field: match field {
+                    ast::FieldKey::Unnamed(field) => *field,
+                },
+            }
+            .into(),
         };
 
         Ok(self.hir.expressions.insert(expression))

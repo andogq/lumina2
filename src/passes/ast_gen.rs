@@ -219,6 +219,14 @@ impl<'ctx> AstGen<'ctx> {
                     .collect(),
             }
             .into(),
+            cst::Expression::Field(field) => Field {
+                lhs: self.lower_expression(&field.lhs),
+                field: match &field.field {
+                    cst::FieldKey::Unnamed(field) => FieldKey::Unnamed(field.0),
+                    cst::FieldKey::Named(_) => unimplemented!(),
+                },
+            }
+            .into(),
         };
 
         self.ast.expressions.insert(expression)
@@ -284,6 +292,7 @@ mod test {
     #[case("tuple_single", "(1,)")]
     #[case("tuple_many", "(1, true, 3)")]
     #[case("tuple_nested", "(1, (2, true), 4)")]
+    #[case("field_unnamed", "a.1")]
     fn lower_expression(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
         let mut pass = AstGen::new(&mut ctx);
         let expression_id = pass.lower_expression(&parse::<cst::Expression>(source));

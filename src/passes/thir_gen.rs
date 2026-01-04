@@ -360,6 +360,17 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     Constraint::Aggregate(values.iter().map(|value| (*value).into()).collect()),
                 ));
             }
+            Expression::Field(Field { lhs, field }) => {
+                self.add_expression_constraints(ctx, *lhs);
+
+                self.constraints.push((
+                    expression_id.into(),
+                    Constraint::Field {
+                        aggregate: (*lhs).into(),
+                        field: *field,
+                    },
+                ));
+            }
         }
     }
 }

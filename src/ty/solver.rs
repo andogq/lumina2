@@ -75,6 +75,7 @@ impl<'types> Solver<'types> {
                 return_ty,
             } => self.solve_function(var, parameters, *return_ty),
             Constraint::Aggregate(values) => self.solve_aggregate(var, values),
+            Constraint::Field { aggregate, field } => self.solve_field(var, *aggregate, *field),
         }
     }
 
@@ -181,6 +182,39 @@ impl<'types> Solver<'types> {
 
         self.solutions
             .insert(var, solution.expect("no nodes to merge for aggregate"));
+
+        true
+    }
+
+    fn solve_field(&mut self, var: TypeVarId, aggregate: TypeVarId, field: usize) -> bool {
+        let var = self.root.find_set(var);
+        let aggregate = self.root.find_set(aggregate);
+
+        match self.get_solution(aggregate) {
+            Some(solution) => match solution {
+                Solution::Type(type_id) => match &self.types[type_id] {
+                    Type::Tuple(fields) => {
+                        if field >= fields.len() {
+                            panic!("field not in aggregate");
+                        }
+
+                        let ty = fields[field];
+                        self.merge(var, ty.into());
+                    }
+                    _ => panic!("cannot access field in type"),
+                },
+                Solution::Tuple(type_var_ids) => {
+                    if field >= type_var_ids.len() {
+                        panic!("field not in aggregate");
+                    }
+
+                    let ty_var = type_var_ids[field];
+                    self.merge(var, ty_var);
+                }
+                _ => todo!("deal with other solutions"),
+            },
+            None => todo!("handle aggregate field without existing solution"),
+        }
 
         true
     }

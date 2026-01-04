@@ -297,6 +297,7 @@ mod place {
     #[derive(Clone, Debug)]
     pub enum Projection {
         Deref,
+        Field(usize),
     }
 }
 

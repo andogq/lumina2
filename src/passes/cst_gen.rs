@@ -233,12 +233,14 @@ mod expression {
         #[expect(dead_code, reason = "cast expressions are not currently implemented.")]
         Cast,
         Call,
+        Field,
     }
 
     impl Precedence {
         // TODO: Don't have multiple precedence functions
         fn of(tok: &Tok) -> Self {
             match tok {
+                Tok::Dot => Self::Field,
                 Tok::LParenthesis | Tok::LBracket => Self::Call,
                 Tok::Asterisk | Tok::Slash => Self::Multiply,
                 Tok::Plus | Tok::Minus => Self::Sum,
@@ -287,6 +289,7 @@ mod expression {
                     | Tok::GtEq => expression = cst::Binary::parse(lexer, expression).into(),
                     Tok::Eq => expression = cst::Assign::parse(lexer, expression).into(),
                     Tok::LParenthesis => expression = cst::Call::parse(lexer, expression).into(),
+                    Tok::Dot => expression = cst::Field::parse(lexer, expression).into(),
                     _ => break,
                 }
             }
@@ -523,6 +526,20 @@ mod expression {
             }
         }
     }
+
+    impl cst::Field {
+        pub(super) fn parse(lexer: &mut Lexer<'_>, lhs: cst::Expression) -> Self {
+            Self {
+                lhs: Box::new(lhs),
+                tok_dot: lexer.expect().unwrap(),
+                field: match lexer.peek() {
+                    Tok::IntegerLiteral(_) => cst::FieldKey::Unnamed(lexer.expect().unwrap()),
+                    Tok::Ident(_) => cst::FieldKey::Named(lexer.expect().unwrap()),
+                    tok => panic!("unexpected token for field access: {tok}"),
+                },
+            }
+        }
+    }
 }
 
 mod util {
@@ -636,6 +653,10 @@ mod test {
         #[case("expression_tuple_single_value", "(1,)")]
         #[case("expression_tuple_many_values", "(1,2,3)")]
         #[case("expression_tuple_many_values_trailing", "(1,2,3,)")]
+        #[case("expression_named_field", "thing.field")]
+        #[case("expression_unnamed_field", "thing.2")]
+        #[case("expression_deep_fields", "thing.field.2")]
+        #[case("expression_tuple_with_binary", "thing.a + thing.b")]
         fn expression(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
                 let expression = cst::Expression::parse(lexer);
@@ -754,6 +775,21 @@ mod test {
             test_with_lexer(source, |lexer| {
                 let variable = cst::Variable::parse(lexer);
                 assert_debug_snapshot!(name, variable, source);
+            });
+        }
+
+        #[rstest]
+        #[case("unnamed", ".0")]
+        #[case("named", ".field")]
+        fn field(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let field = cst::Field::parse(
+                    lexer,
+                    cst::Expression::Variable(cst::Variable {
+                        variable: tok::Ident("a".to_string()),
+                    }),
+                );
+                assert_debug_snapshot!(name, field, source);
             });
         }
     }

@@ -180,6 +180,10 @@ pub enum Constraint {
         return_ty: TypeVarId,
     },
     Aggregate(Vec<TypeVarId>),
+    Field {
+        aggregate: TypeVarId,
+        field: usize,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

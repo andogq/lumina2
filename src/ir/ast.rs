@@ -166,6 +166,7 @@ mod expression {
         Block(BlockId),
         Variable(Variable),
         Tuple(Tuple),
+        Field(Field),
     }
 
     #[derive(Clone, Debug)]
@@ -219,9 +220,19 @@ mod expression {
     pub struct Tuple {
         pub values: Vec<ExpressionId>,
     }
-
     impl Tuple {
         pub const UNIT: Self = Self { values: Vec::new() };
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct Field {
+        pub lhs: ExpressionId,
+        pub field: FieldKey,
+    }
+
+    #[derive(Clone, Debug)]
+    pub enum FieldKey {
+        Unnamed(usize),
     }
 
     enum_conversion! {
@@ -236,5 +247,6 @@ mod expression {
         Block: BlockId,
         Variable: Variable,
         Tuple: Tuple,
+        Field: Field,
     }
 }
