@@ -272,7 +272,13 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 binding: self.ctx.scopes.resolve(scope, *variable),
             }
             .into(),
-            ast::Expression::Tuple(_) => todo!(),
+            ast::Expression::Tuple(ast::Tuple { values }) => Aggregate {
+                values: values
+                    .iter()
+                    .map(|value| self.lower_expression(&self.ast[*value], scope))
+                    .collect::<Result<_, _>>()?,
+            }
+            .into(),
         };
 
         Ok(self.hir.expressions.insert(expression))
@@ -440,6 +446,8 @@ mod test {
         }.into()
     )]
     #[case("variable_simple", ast::Variable { variable: StringId::from_id(0) }.into())]
+    #[case("tuple_empty", ast::Tuple { values: vec![] }.into())]
+    #[case("tuple_many", ast::Tuple { values: vec![ast::ExpressionId::from_id(1), ast::ExpressionId::from_id(2)] }.into())]
     fn lower_expression(
         mut ctx: Ctx,
         sample_ast: &ast::Ast,

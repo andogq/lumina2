@@ -552,6 +552,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                     .insert(Operand::Constant(Constant::Function(function_id))),
             },
             hir::Expression::Unreachable => return None,
+            hir::Expression::Aggregate(_) => todo!(),
         })
     }
 

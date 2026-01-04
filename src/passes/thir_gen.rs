@@ -349,6 +349,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                 expression_id.into(),
                 Constraint::Eq(self.ctx.types.never().into()),
             )),
+            Expression::Aggregate(_) => todo!(),
         }
     }
 }

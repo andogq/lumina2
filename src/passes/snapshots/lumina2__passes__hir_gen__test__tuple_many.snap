@@ -1,0 +1,16 @@
+---
+source: src/passes/hir_gen.rs
+expression: "Tuple(Tuple { values: [ExpressionId(1), ExpressionId(2)] })"
+---
+Aggregate(
+    Aggregate {
+        values: [
+            ExpressionId(
+                0,
+            ),
+            ExpressionId(
+                1,
+            ),
+        ],
+    },
+)

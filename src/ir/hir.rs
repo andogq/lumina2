@@ -130,6 +130,7 @@ mod expression {
         Block(BlockId),
         Variable(Variable),
         Unreachable,
+        Aggregate(Aggregate),
     }
 
     #[derive(Clone, Debug)]
@@ -181,6 +182,11 @@ mod expression {
         pub binding: BindingId,
     }
 
+    #[derive(Clone, Debug)]
+    pub struct Aggregate {
+        pub values: Vec<ExpressionId>,
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -192,5 +198,6 @@ mod expression {
         Call: Call,
         Block: BlockId,
         Variable: Variable,
+        Aggregate: Aggregate,
     }
 }
