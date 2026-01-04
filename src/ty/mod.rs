@@ -11,7 +11,6 @@ create_id!(TypeId);
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Never,
-    Unit,
     I8,
     U8,
     Boolean,
@@ -21,6 +20,11 @@ pub enum Type {
         return_ty: TypeId,
     },
     Tuple(Vec<TypeId>),
+}
+
+impl Type {
+    /// Helper to construct `()`, which is a [`Type::Tuple`] with no fields.
+    pub const UNIT: Type = Type::Tuple(Vec::new());
 }
 
 /// Interned collection of types.
@@ -36,7 +40,7 @@ impl Types {
     pub fn new() -> Self {
         let mut types = IndexedVec::new();
 
-        let inserted = [Type::Unit, Type::Never, Type::I8, Type::U8, Type::Boolean]
+        let inserted = [Type::Never, Type::UNIT, Type::I8, Type::U8, Type::Boolean]
             .into_iter()
             .map(|ty| (ty.clone(), types.insert(ty)))
             .collect();
@@ -52,9 +56,9 @@ impl Types {
             .or_insert_with(|| self.types.insert(ty))
     }
 
-    /// Fetch the type for [`Type::Unit`].
+    /// Fetch the type for unit (a [`Type::Tuple`] with no fields).
     pub fn unit(&self) -> TypeId {
-        self.inserted[&Type::Unit]
+        self.inserted[&Type::UNIT]
     }
 
     /// Fetch the type for [`Type::Never`].
@@ -103,7 +107,6 @@ impl Types {
     pub fn size_of(&self, ty: TypeId) -> usize {
         match &self[ty] {
             Type::Never => todo!("work out what to do with this"),
-            Type::Unit => todo!("merge with tuple"),
             Type::I8 => 1,
             Type::U8 => 1,
             Type::Boolean => 1,
@@ -341,8 +344,8 @@ mod test {
     #[case("true && true", Type::Boolean)]
     #[case("1 < 2", Type::Boolean)]
     #[case("{ 1 }", Type::I8)]
-    #[case("{ 1; }", Type::Unit)]
-    #[case("{ let a = 1; }", Type::Unit)]
+    #[case("{ 1; }", Type::UNIT)]
+    #[case("{ let a = 1; }", Type::UNIT)]
     #[case("{ let a = 1; 1 }", Type::I8)]
     #[case("{ let a = 1; a }", Type::I8)]
     fn assert_expression_ty(#[case] expression: &str, #[case] ty: Type) {

@@ -678,7 +678,9 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
             .collect::<Vec<_>>();
 
         match &self.ctx.types[return_ty] {
-            Type::Unit => self.ink.void_type().fn_type(&parameters, false),
+            Type::Tuple(tuple_items) if tuple_items.is_empty() => {
+                self.ink.void_type().fn_type(&parameters, false)
+            }
             _ => self.basic_ty(return_ty).fn_type(&parameters, false),
         }
     }
@@ -686,7 +688,6 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
     /// Fetch [`BasicTypeEnum`] for a given [`Type`].
     fn basic_ty(&self, ty: TypeId) -> BasicTypeEnum<'ink> {
         match &self.ctx.types[ty] {
-            Type::Unit => self.ink.struct_type(&[], true).into(),
             Type::I8 => self.ink.i8_type().into(),
             Type::U8 => self.ink.i8_type().into(),
             Type::Boolean => self.ink.bool_type().into(),
@@ -725,7 +726,6 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     .as_basic_value_enum(),
                 self.ctx.types.boolean(),
             ),
-            Constant::Unit => unreachable!(),
             Constant::Function(id) => {
                 let function_value = self.functions[*id];
                 (

@@ -342,8 +342,6 @@ mod expression {
         Integer(IntegerLiteral),
         /// A boolean.
         Boolean(BooleanLiteral),
-        /// Unit value.
-        Unit(UnitLiteral),
     }
 
     /// An integer literal.
@@ -372,19 +370,10 @@ mod expression {
         }
     }
 
-    #[derive(Clone, Debug)]
-    pub struct UnitLiteral {
-        #[expect(dead_code, reason = "token field")]
-        pub tok_l_parenthesis: tok::LParenthesis,
-        #[expect(dead_code, reason = "token field")]
-        pub tok_r_parenthesis: tok::RParenthesis,
-    }
-
     enum_conversion! {
         [Literal]
         Integer: IntegerLiteral,
         Boolean: BooleanLiteral,
-        Unit: UnitLiteral,
     }
 
     /// An [`Expression`] wrapped in parentheses.

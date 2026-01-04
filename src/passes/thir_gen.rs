@@ -368,7 +368,6 @@ fn constraint_from_literal(types: &Types, literal: &Literal) -> Constraint {
     match literal {
         Literal::Integer(_) => Constraint::Integer(IntegerKind::Any),
         Literal::Boolean(_) => Constraint::Eq(types.boolean().into()),
-        Literal::Unit => Constraint::Eq(types.unit().into()),
     }
 }
 /// Context required when building constraints.
@@ -413,7 +412,7 @@ mod test {
             functions: indexed_vec![],
             blocks: indexed_vec![],
             statements: indexed_vec![],
-            expressions: indexed_vec![Expression::Literal(Literal::Unit),],
+            expressions: indexed_vec![Aggregate::UNIT.into()],
         }
     }
 
@@ -431,7 +430,7 @@ mod test {
     }
 
     #[rstest]
-    #[case("simple", [], Type::Unit)]
+    #[case("simple", [], Type::UNIT)]
     #[case("return integer", [], Type::I8)]
     #[case("parameters", [(BindingId::from_id(1), Type::I8), (BindingId::from_id(2), Type::Boolean)], Type::Boolean)]
     fn function_declaration(

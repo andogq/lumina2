@@ -171,10 +171,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 self.hir.expressions.insert(Expression::Unreachable)
             }
             // Otherwise, assume unit.
-            (None, _) => self
-                .hir
-                .expressions
-                .insert(Expression::Literal(Literal::Unit)),
+            (None, _) => self.hir.expressions.insert(Aggregate::UNIT.into()),
         };
 
         Ok(self.hir.blocks.insert(Block {
@@ -256,7 +253,6 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             ast::Expression::Literal(literal) => match literal {
                 ast::Literal::Integer(value) => Literal::Integer(*value),
                 ast::Literal::Boolean(value) => Literal::Boolean(*value),
-                ast::Literal::Unit => Literal::Unit,
             }
             .into(),
             ast::Expression::Call(ast::Call { callee, arguments }) => Call {
@@ -439,7 +435,6 @@ mod test {
     )]
     #[case("literal_integer", ast::Literal::Integer(123).into())]
     #[case("literal_boolean", ast::Literal::Boolean(true).into())]
-    #[case("literal_unit", ast::Literal::Unit.into())]
     #[case(
         "call_no_parameters",
         ast::Call { callee: ast::ExpressionId::from_id(0), arguments: vec![] }.into()

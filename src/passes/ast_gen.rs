@@ -83,7 +83,7 @@ impl<'ctx> AstGen<'ctx> {
                     let expression = value
                         .as_ref()
                         .map(|expression| self.lower_expression(expression))
-                        .unwrap_or_else(|| self.ast.expressions.insert(Literal::Unit.into()));
+                        .unwrap_or_else(|| self.ast.expressions.insert(Tuple::UNIT.into()));
                     statements.push(
                         self.ast
                             .statements
@@ -94,7 +94,7 @@ impl<'ctx> AstGen<'ctx> {
                     let expression = value
                         .as_ref()
                         .map(|expression| self.lower_expression(expression))
-                        .unwrap_or_else(|| self.ast.expressions.insert(Literal::Unit.into()));
+                        .unwrap_or_else(|| self.ast.expressions.insert(Tuple::UNIT.into()));
                     statements.push(
                         self.ast
                             .statements
@@ -192,7 +192,6 @@ impl<'ctx> AstGen<'ctx> {
                 cst::Literal::Boolean(boolean_literal) => {
                     Literal::Boolean(boolean_literal.as_bool())
                 }
-                cst::Literal::Unit(_) => Literal::Unit,
             }
             .into(),
             cst::Expression::Parenthesis(cst::Parenthesis { expression, .. }) => {

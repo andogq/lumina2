@@ -354,7 +354,6 @@ mod operand {
         U8(u8),
         I8(i8),
         Boolean(bool),
-        Unit,
         Function(FunctionId),
     }
 }

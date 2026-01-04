@@ -202,7 +202,6 @@ mod expression {
     pub enum Literal {
         Integer(usize),
         Boolean(bool),
-        Unit,
     }
 
     #[derive(Clone, Debug)]
@@ -219,6 +218,10 @@ mod expression {
     #[derive(Clone, Debug)]
     pub struct Tuple {
         pub values: Vec<ExpressionId>,
+    }
+
+    impl Tuple {
+        pub const UNIT: Self = Self { values: Vec::new() };
     }
 
     enum_conversion! {
