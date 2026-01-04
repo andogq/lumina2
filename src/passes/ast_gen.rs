@@ -44,13 +44,13 @@ impl<'ctx> AstGen<'ctx> {
                 .iter_items()
                 .map(|parameter| FunctionParameter {
                     name: self.ctx.strings.intern(&parameter.name.0),
-                    ty: self.ctx.strings.intern(&parameter.ty.0),
+                    ty: self.ctx.strings.intern(&parameter.ty.as_named().0),
                 })
                 .collect(),
             return_ty: function
                 .return_ty
                 .as_ref()
-                .map(|ty| self.ctx.strings.intern(&ty.ty.0)),
+                .map(|ty| self.ctx.strings.intern(&ty.ty.as_named().0)),
             body: self.lower_block(&function.body),
         };
         self.ast.function_declarations.insert(function_declaration);

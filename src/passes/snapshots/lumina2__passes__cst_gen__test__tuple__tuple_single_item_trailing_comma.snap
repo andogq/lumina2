@@ -4,14 +4,12 @@ expression: "(1,)"
 ---
 Tuple {
     tok_l_parenthesis: LParenthesis,
-    values: PunctuatedList {
+    items: PunctuatedList {
         items: [
-            Literal(
-                Integer(
+            Integer(
+                IntegerLiteral(
                     IntegerLiteral(
-                        IntegerLiteral(
-                            1,
-                        ),
+                        1,
                     ),
                 ),
             ),

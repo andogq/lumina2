@@ -4,6 +4,7 @@ pub use self::{
     expression::{BinaryOperation, UnaryOperation, *},
     function::*,
     statement::*,
+    ty::*,
     util::*,
 };
 
@@ -70,7 +71,7 @@ mod function {
         #[expect(dead_code, reason = "token field")]
         pub tok_colon: tok::Colon,
         /// Type of the parameter.
-        pub ty: tok::Ident,
+        pub ty: CstType,
     }
 
     /// Return type for a function declaration.
@@ -83,7 +84,7 @@ mod function {
         #[expect(dead_code, reason = "token field")]
         pub tok_thin_arrow: tok::ThinArrow,
         /// Return type.
-        pub ty: tok::Ident,
+        pub ty: CstType,
     }
 }
 
@@ -98,9 +99,45 @@ pub struct Block {
     pub tok_r_brace: tok::RBrace,
 }
 
-mod statement {
-    use crate::enum_conversion;
+/// Tuple of items. Used for both a tuple of [`Expression`], and a tuple of [`CstType`].
+#[derive(Clone, Debug)]
+pub struct Tuple<T> {
+    #[expect(dead_code, reason = "token field")]
+    pub tok_l_parenthesis: tok::LParenthesis,
+    pub items: PunctuatedList<T, tok::Comma>,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_r_parenthesis: tok::RParenthesis,
+}
 
+mod ty {
+    use super::*;
+
+    /// A type, such as for parameters or variable declarations.
+    #[derive(Clone, Debug)]
+    pub enum CstType {
+        /// A named type represented with a single [`tok::Ident`], such as `i8`.
+        Named(tok::Ident),
+        /// A tuple type, composed of many inner [`CstType`]s.
+        Tuple(Tuple<CstType>),
+    }
+
+    impl CstType {
+        pub fn as_named(&self) -> &tok::Ident {
+            match self {
+                Self::Named(ident) => ident,
+                _ => panic!(),
+            }
+        }
+    }
+
+    enum_conversion! {
+        [CstType]
+        Named: tok::Ident,
+        Tuple: Tuple<CstType>,
+    }
+}
+
+mod statement {
     use super::*;
 
     /// A statement present within a [`Block`].
@@ -166,8 +203,6 @@ mod statement {
 }
 
 mod expression {
-    use crate::enum_conversion;
-
     use super::*;
 
     /// All possible expressions.
@@ -184,7 +219,7 @@ mod expression {
         Call(Call),
         Block(Block),
         Variable(Variable),
-        Tuple(Tuple),
+        Tuple(Tuple<Expression>),
     }
 
     /// Assignment.
@@ -392,16 +427,6 @@ mod expression {
         pub variable: tok::Ident,
     }
 
-    /// Tuple expression.
-    #[derive(Clone, Debug)]
-    pub struct Tuple {
-        #[expect(dead_code, reason = "token field")]
-        pub tok_l_parenthesis: tok::LParenthesis,
-        pub values: PunctuatedList<Expression, tok::Comma>,
-        #[expect(dead_code, reason = "token field")]
-        pub tok_r_parenthesis: tok::RParenthesis,
-    }
-
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -414,7 +439,7 @@ mod expression {
         Call: Call,
         Block: Block,
         Variable: Variable,
-        Tuple: Tuple,
+        Tuple: Tuple<Expression>,
     }
 }
 
