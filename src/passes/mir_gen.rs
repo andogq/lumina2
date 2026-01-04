@@ -563,7 +563,12 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 let aggregate = Aggregate {
                     values: values
                         .iter()
-                        .map(|value| self.lower_expression(ctx, basic_block, *value).unwrap())
+                        .map(|value| {
+                            (
+                                self.lower_expression(ctx, basic_block, *value).unwrap(),
+                                self.thir.type_of(*value),
+                            )
+                        })
                         .collect(),
                     ty,
                 };

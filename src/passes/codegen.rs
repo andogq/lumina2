@@ -646,9 +646,11 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
             RValue::Aggregate(Aggregate { values, ty }) => {
                 let byte_ty = self.ink.i8_type();
 
-                for (field, value) in values.iter().enumerate() {
+                for (field, (operand, operand_ty)) in values.iter().enumerate() {
                     // Lower the value.
-                    let (value, value_ty) = self.resolve_operand(builder, function_id, *value);
+                    let (value, value_ty) = self.resolve_operand(builder, function_id, *operand);
+
+                    assert_eq!(value_ty, *operand_ty);
 
                     // Calculate the offset to the field.
                     let offset = self.ctx.types.offset_of(*ty, field).unwrap();
