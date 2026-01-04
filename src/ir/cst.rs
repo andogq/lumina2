@@ -184,6 +184,7 @@ mod expression {
         Call(Call),
         Block(Block),
         Variable(Variable),
+        Tuple(Tuple),
     }
 
     /// Assignment.
@@ -391,6 +392,16 @@ mod expression {
         pub variable: tok::Ident,
     }
 
+    /// Tuple expression.
+    #[derive(Clone, Debug)]
+    pub struct Tuple {
+        #[expect(dead_code, reason = "token field")]
+        pub tok_l_parenthesis: tok::LParenthesis,
+        pub values: PunctuatedList<Expression, tok::Comma>,
+        #[expect(dead_code, reason = "token field")]
+        pub tok_r_parenthesis: tok::RParenthesis,
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -403,6 +414,7 @@ mod expression {
         Call: Call,
         Block: Block,
         Variable: Variable,
+        Tuple: Tuple,
     }
 }
 
@@ -421,6 +433,11 @@ mod util {
                 items: Vec::new(),
                 punctuation: Vec::new(),
             }
+        }
+
+        /// Determine if the list has trailing punctuation.
+        pub fn has_trailing(&self) -> bool {
+            !self.items.is_empty() && self.items.len() == self.punctuation.len()
         }
 
         /// Add an item to the list. Will return an error if not expecting an item.

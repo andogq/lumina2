@@ -1,0 +1,12 @@
+---
+source: src/passes/cst_gen.rs
+expression: ()
+---
+Tuple {
+    tok_l_parenthesis: LParenthesis,
+    values: PunctuatedList {
+        items: [],
+        punctuation: [],
+    },
+    tok_r_parenthesis: RParenthesis,
+}

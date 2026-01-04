@@ -1,0 +1,43 @@
+---
+source: src/passes/cst_gen.rs
+expression: "(1, 2, 3)"
+---
+Tuple {
+    tok_l_parenthesis: LParenthesis,
+    values: PunctuatedList {
+        items: [
+            Literal(
+                Integer(
+                    IntegerLiteral(
+                        IntegerLiteral(
+                            1,
+                        ),
+                    ),
+                ),
+            ),
+            Literal(
+                Integer(
+                    IntegerLiteral(
+                        IntegerLiteral(
+                            2,
+                        ),
+                    ),
+                ),
+            ),
+            Literal(
+                Integer(
+                    IntegerLiteral(
+                        IntegerLiteral(
+                            3,
+                        ),
+                    ),
+                ),
+            ),
+        ],
+        punctuation: [
+            Comma,
+            Comma,
+        ],
+    },
+    tok_r_parenthesis: RParenthesis,
+}

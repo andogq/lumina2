@@ -213,6 +213,7 @@ impl<'ctx> AstGen<'ctx> {
                 variable: self.ctx.strings.intern(&variable.0),
             }
             .into(),
+            cst::Expression::Tuple(_) => todo!(),
         };
 
         self.ast.expressions.insert(expression)
