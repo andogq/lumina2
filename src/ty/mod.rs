@@ -20,6 +20,7 @@ pub enum Type {
         parameters: Vec<TypeId>,
         return_ty: TypeId,
     },
+    Tuple(Vec<TypeId>),
 }
 
 /// Interned collection of types.
@@ -88,6 +89,11 @@ impl Types {
         })
     }
 
+    /// Fetch the type for a [`Type::Tuple`] with the items.
+    pub fn tuple(&mut self, items: impl IntoIterator<Item = TypeId>) -> TypeId {
+        self.get(Type::Tuple(Vec::from_iter(items)))
+    }
+
     /// Fetch the type for a [`Type::Ref`] of a given type.
     pub fn ref_of(&mut self, ty: TypeId) -> TypeId {
         self.get(Type::Ref(ty))
@@ -129,6 +135,7 @@ pub enum Constraint {
         parameters: Vec<TypeVarId>,
         return_ty: TypeVarId,
     },
+    Aggregate(Vec<TypeVarId>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -136,6 +143,7 @@ enum Solution {
     Type(TypeId),
     Reference(TypeVarId),
     Literal(Literal),
+    Tuple(Vec<TypeVarId>),
 }
 
 enum_conversion! {

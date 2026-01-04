@@ -349,7 +349,17 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                 expression_id.into(),
                 Constraint::Eq(self.ctx.types.never().into()),
             )),
-            Expression::Aggregate(_) => todo!(),
+            Expression::Aggregate(Aggregate { values }) => {
+                // Add constraints for each contained expression.
+                for value in values {
+                    self.add_expression_constraints(ctx, *value);
+                }
+
+                self.constraints.push((
+                    expression_id.into(),
+                    Constraint::Aggregate(values.iter().map(|value| (*value).into()).collect()),
+                ));
+            }
         }
     }
 }
@@ -379,7 +389,7 @@ impl ConstraintCtx {
         }
     }
 
-    /// Push a new loop to the context, returning a new instance..
+    /// Push a new loop to the context, returning a new instance.
     pub fn push_loop(&self, loop_expression: ExpressionId) -> Self {
         let mut ctx = self.clone();
         ctx.loops.push(loop_expression);

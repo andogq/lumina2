@@ -298,7 +298,13 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     ty => panic!("unknown type: {ty}"),
                 }
             }
-            ast::AstType::Tuple(_ast_type_ids) => todo!(),
+            ast::AstType::Tuple(ast_type_ids) => {
+                let fields = ast_type_ids
+                    .iter()
+                    .map(|ty| self.lower_ast_type(*ty))
+                    .collect::<Vec<_>>();
+                self.ctx.types.tuple(fields)
+            }
         }
     }
 }

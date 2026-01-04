@@ -653,6 +653,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
             Type::Ref(_) => self.ink.ptr_type(AddressSpace::default()).into(),
             Type::Never => unreachable!(),
             Type::Function { .. } => self.ink.ptr_type(AddressSpace::default()).into(),
+            Type::Tuple(_) => todo!(),
         }
     }
 
