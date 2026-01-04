@@ -1,0 +1,22 @@
+---
+source: src/passes/cst_gen.rs
+expression: "(i8,)"
+---
+Tuple(
+    Tuple {
+        tok_l_parenthesis: LParenthesis,
+        items: PunctuatedList {
+            items: [
+                Named(
+                    Ident(
+                        "i8",
+                    ),
+                ),
+            ],
+            punctuation: [
+                Comma,
+            ],
+        },
+        tok_r_parenthesis: RParenthesis,
+    },
+)

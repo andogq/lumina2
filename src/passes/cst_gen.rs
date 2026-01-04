@@ -55,7 +55,7 @@ mod function {
                     .next_if()
                     .map(|tok_thin_arrow| cst::FunctionReturnType {
                         tok_thin_arrow,
-                        ty: lexer.expect().unwrap(),
+                        ty: cst::CstType::parse(lexer),
                     }),
                 body: cst::Block::parse(lexer),
             }
@@ -67,7 +67,7 @@ mod function {
             Self {
                 name: lexer.expect().unwrap(),
                 tok_colon: lexer.expect().unwrap(),
-                ty: lexer.expect().unwrap(),
+                ty: cst::CstType::parse(lexer),
             }
         }
     }
@@ -91,6 +91,68 @@ impl Parse for cst::Block {
             tok_l_brace,
             statements,
             tok_r_brace,
+        }
+    }
+}
+
+impl<T> cst::Tuple<T>
+where
+    T: Parse,
+{
+    /// Parse a tuple from an existing [`tok::LParenthesis`] and an optional first item with
+    /// it's [`tok::Comma`]. If an item isn't provided, it will still attempt to be parsed.
+    ///
+    /// The [`tok::Comma`] must be provided with an item to ensure that single-item tuples are
+    /// only accepted if they were terminated with a [`tok::Comma`].
+    fn parse_with_parts(
+        tok_l_parenthesis: tok::LParenthesis,
+        first_item: Option<(T, tok::Comma)>,
+        lexer: &mut Lexer,
+    ) -> Self {
+        Self {
+            tok_l_parenthesis,
+            items: {
+                // Parse out remaining values.
+                let mut values = cst::PunctuatedList::parse_while(lexer, |tok| {
+                    !matches!(tok, Tok::RParenthesis)
+                });
+
+                // Prepend the provided first expression.
+                if let Some((item, comma)) = first_item {
+                    values.items.insert(0, item);
+                    values.punctuation.insert(0, comma);
+                }
+
+                assert!(
+                    values.items.len() != 1 || values.has_trailing(),
+                    "if tuple is of length 1, it must end in a trailing comma"
+                );
+
+                values
+            },
+            tok_r_parenthesis: lexer.expect().unwrap(),
+        }
+    }
+}
+impl<T> Parse for cst::Tuple<T>
+where
+    T: Parse,
+{
+    fn parse(lexer: &mut Lexer<'_>) -> Self {
+        Self::parse_with_parts(lexer.expect().unwrap(), None, lexer)
+    }
+}
+
+mod ty {
+    use super::*;
+
+    impl Parse for cst::CstType {
+        fn parse(lexer: &mut Lexer<'_>) -> Self {
+            match lexer.peek() {
+                Tok::Ident(_) => lexer.expect::<tok::Ident>().unwrap().into(),
+                Tok::LParenthesis => cst::Tuple::parse(lexer).into(),
+                tok => panic!("unexpected tok when parsing type: {tok}"),
+            }
         }
     }
 }
@@ -171,12 +233,14 @@ mod expression {
         #[expect(dead_code, reason = "cast expressions are not currently implemented.")]
         Cast,
         Call,
+        Field,
     }
 
     impl Precedence {
         // TODO: Don't have multiple precedence functions
         fn of(tok: &Tok) -> Self {
             match tok {
+                Tok::Dot => Self::Field,
                 Tok::LParenthesis | Tok::LBracket => Self::Call,
                 Tok::Asterisk | Tok::Slash => Self::Multiply,
                 Tok::Plus | Tok::Minus => Self::Sum,
@@ -225,6 +289,7 @@ mod expression {
                     | Tok::GtEq => expression = cst::Binary::parse(lexer, expression).into(),
                     Tok::Eq => expression = cst::Assign::parse(lexer, expression).into(),
                     Tok::LParenthesis => expression = cst::Call::parse(lexer, expression).into(),
+                    Tok::Dot => expression = cst::Field::parse(lexer, expression).into(),
                     _ => break,
                 }
             }
@@ -242,7 +307,36 @@ mod expression {
                     cst::Unary::parse(lexer).into()
                 }
                 Tok::LBrace => cst::Block::parse(lexer).into(),
-                Tok::LParenthesis => cst::Parenthesis::parse(lexer).into(),
+                Tok::LParenthesis => {
+                    // An expression prefixed with a left parenthesis may represent either a
+                    // tuple, or a parenthesised expression.
+                    let tok_l_parenthesis = lexer.expect().unwrap();
+
+                    // If parenthesis are immediately closed, it's a unit tuple.
+                    if matches!(lexer.peek(), Tok::RParenthesis) {
+                        return cst::Tuple::parse_with_parts(tok_l_parenthesis, None, lexer).into();
+                    }
+
+                    // Parse out the first expression.
+                    let expression = cst::Expression::parse(lexer);
+
+                    // The node will depend on what follows the first expression.
+                    match lexer.peek() {
+                        // Parenthesis immediately closed, so is a parenthesised expression.
+                        Tok::RParenthesis => {
+                            cst::Parenthesis::parse_with_parts(tok_l_parenthesis, expression, lexer)
+                                .into()
+                        }
+                        // Expression followed by a comma, indicating a tuple.
+                        Tok::Comma => cst::Tuple::parse_with_parts(
+                            tok_l_parenthesis,
+                            Some((expression, lexer.expect().unwrap())),
+                            lexer,
+                        )
+                        .into(),
+                        tok => panic!("unexpected tok within parenthesis: {tok}"),
+                    }
+                }
                 Tok::If => cst::If::parse(lexer).into(),
                 Tok::Loop => cst::Loop::parse(lexer).into(),
                 tok => panic!("unexpected tok: {tok}"),
@@ -387,13 +481,28 @@ mod expression {
         }
     }
 
-    impl Parse for cst::Parenthesis {
-        fn parse(lexer: &mut Lexer<'_>) -> Self {
+    impl cst::Parenthesis {
+        /// Parse a parenthesised expression from the provided [`tok::LParenthesis`] and
+        /// [`cst::Expression`].
+        fn parse_with_parts(
+            tok_l_parenthesis: tok::LParenthesis,
+            expression: cst::Expression,
+            lexer: &mut Lexer<'_>,
+        ) -> Self {
             Self {
-                tok_l_parenthesis: lexer.expect().unwrap(),
-                expression: Box::new(cst::Expression::parse(lexer)),
+                tok_l_parenthesis,
+                expression: Box::new(expression),
                 tok_r_parenthesis: lexer.expect().unwrap(),
             }
+        }
+    }
+    impl Parse for cst::Parenthesis {
+        fn parse(lexer: &mut Lexer<'_>) -> Self {
+            Self::parse_with_parts(
+                lexer.expect().unwrap(),
+                cst::Expression::parse(lexer),
+                lexer,
+            )
         }
     }
 
@@ -414,6 +523,20 @@ mod expression {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
             Self {
                 variable: lexer.expect().unwrap(),
+            }
+        }
+    }
+
+    impl cst::Field {
+        pub(super) fn parse(lexer: &mut Lexer<'_>, lhs: cst::Expression) -> Self {
+            Self {
+                lhs: Box::new(lhs),
+                tok_dot: lexer.expect().unwrap(),
+                field: match lexer.peek() {
+                    Tok::IntegerLiteral(_) => cst::FieldKey::Unnamed(lexer.expect().unwrap()),
+                    Tok::Ident(_) => cst::FieldKey::Named(lexer.expect().unwrap()),
+                    tok => panic!("unexpected token for field access: {tok}"),
+                },
             }
         }
     }
@@ -463,6 +586,56 @@ mod test {
         assert_eq!(lexer.next(), Tok::Eof)
     }
 
+    mod tuple {
+        use super::*;
+
+        #[rstest]
+        #[case("tuple_empty", "()")]
+        #[case("tuple_single_item_trailing_comma", "(1,)")]
+        #[case("tuple_many_items", "(1, 2, 3)")]
+        #[case("tuple_many_items_trailing_comma", "(1, 2, 3,)")]
+        fn tuple(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let tuple = cst::Tuple::<cst::Literal>::parse(lexer);
+                assert_debug_snapshot!(name, tuple, source);
+            });
+        }
+
+        #[rstest]
+        #[should_panic]
+        #[case::single_item_no_comma("(1)")]
+        fn tuple_failure(#[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                cst::Tuple::<cst::Literal>::parse(lexer);
+            });
+        }
+    }
+
+    mod ty {
+        use super::*;
+
+        #[rstest]
+        #[case("named_ident", "i8")]
+        #[case("tuple_empty", "()")]
+        #[case("tuple_single", "(i8,)")]
+        #[case("tuple_many", "(i8, bool, u8)")]
+        fn ty(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let ty = cst::CstType::parse(lexer);
+                assert_debug_snapshot!(name, ty, source);
+            });
+        }
+
+        #[rstest]
+        #[should_panic]
+        #[case::tuple_no_trailing_comma("(i8)")]
+        fn ty_failure(#[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                cst::CstType::parse(lexer);
+            });
+        }
+    }
+
     mod expression {
         use super::*;
 
@@ -475,6 +648,15 @@ mod test {
         #[case("expression_unary_operation_add_mul", "123 + -321 * 999")]
         #[case("expression_assignment", "some_ident = 123 + other_ident")]
         #[case("expression_logical_and", "true && something")]
+        #[case("expression_parenthesis_value", "(1)")]
+        #[case("expression_tuple_empty", "()")]
+        #[case("expression_tuple_single_value", "(1,)")]
+        #[case("expression_tuple_many_values", "(1,2,3)")]
+        #[case("expression_tuple_many_values_trailing", "(1,2,3,)")]
+        #[case("expression_named_field", "thing.field")]
+        #[case("expression_unnamed_field", "thing.2")]
+        #[case("expression_deep_fields", "thing.field.2")]
+        #[case("expression_tuple_with_binary", "thing.a + thing.b")]
         fn expression(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
                 let expression = cst::Expression::parse(lexer);
@@ -595,6 +777,21 @@ mod test {
                 assert_debug_snapshot!(name, variable, source);
             });
         }
+
+        #[rstest]
+        #[case("unnamed", ".0")]
+        #[case("named", ".field")]
+        fn field(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let field = cst::Field::parse(
+                    lexer,
+                    cst::Expression::Variable(cst::Variable {
+                        variable: tok::Ident("a".to_string()),
+                    }),
+                );
+                assert_debug_snapshot!(name, field, source);
+            });
+        }
     }
 
     #[rstest]
@@ -692,6 +889,19 @@ mod test {
             test_with_lexer(source, |lexer| {
                 let list = PunctuatedList::<cst::Literal, tok::Comma>::parse(lexer);
                 assert_debug_snapshot!(name, list, source);
+            });
+        }
+
+        #[rstest]
+        #[case("", false)]
+        #[case("1", false)]
+        #[case("1,", true)]
+        #[case("1, 2", false)]
+        #[case("1, 2,", true)]
+        fn punctuated_trailing(#[case] source: &str, #[case] is_trailing: bool) {
+            test_with_lexer(source, |lexer| {
+                let list = PunctuatedList::<cst::Literal, tok::Comma>::parse(lexer);
+                assert_eq!(list.has_trailing(), is_trailing);
             });
         }
     }

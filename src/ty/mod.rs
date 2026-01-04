@@ -11,7 +11,6 @@ create_id!(TypeId);
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Never,
-    Unit,
     I8,
     U8,
     Boolean,
@@ -20,6 +19,12 @@ pub enum Type {
         parameters: Vec<TypeId>,
         return_ty: TypeId,
     },
+    Tuple(Vec<TypeId>),
+}
+
+impl Type {
+    /// Helper to construct `()`, which is a [`Type::Tuple`] with no fields.
+    pub const UNIT: Type = Type::Tuple(Vec::new());
 }
 
 /// Interned collection of types.
@@ -35,7 +40,7 @@ impl Types {
     pub fn new() -> Self {
         let mut types = IndexedVec::new();
 
-        let inserted = [Type::Unit, Type::Never, Type::I8, Type::U8, Type::Boolean]
+        let inserted = [Type::Never, Type::UNIT, Type::I8, Type::U8, Type::Boolean]
             .into_iter()
             .map(|ty| (ty.clone(), types.insert(ty)))
             .collect();
@@ -51,9 +56,9 @@ impl Types {
             .or_insert_with(|| self.types.insert(ty))
     }
 
-    /// Fetch the type for [`Type::Unit`].
+    /// Fetch the type for unit (a [`Type::Tuple`] with no fields).
     pub fn unit(&self) -> TypeId {
-        self.inserted[&Type::Unit]
+        self.inserted[&Type::UNIT]
     }
 
     /// Fetch the type for [`Type::Never`].
@@ -88,9 +93,54 @@ impl Types {
         })
     }
 
+    /// Fetch the type for a [`Type::Tuple`] with the items.
+    pub fn tuple(&mut self, items: impl IntoIterator<Item = TypeId>) -> TypeId {
+        self.get(Type::Tuple(Vec::from_iter(items)))
+    }
+
     /// Fetch the type for a [`Type::Ref`] of a given type.
     pub fn ref_of(&mut self, ty: TypeId) -> TypeId {
         self.get(Type::Ref(ty))
+    }
+
+    /// Calculate the size of a type.
+    pub fn size_of(&self, ty: TypeId) -> usize {
+        match &self[ty] {
+            Type::Never => todo!("work out what to do with this"),
+            Type::I8 => 1,
+            Type::U8 => 1,
+            Type::Boolean => 1,
+            Type::Ref(_) => todo!("pointer size"),
+            Type::Function { .. } => todo!("pointer size"),
+            Type::Tuple(type_ids) => type_ids.clone().iter().map(|ty| self.size_of(*ty)).sum(),
+        }
+    }
+
+    /// Calculate the offset of a field in a type.
+    pub fn offset_of(&self, ty: TypeId, field: usize) -> Option<usize> {
+        match &self[ty] {
+            Type::Tuple(type_ids) => {
+                if field >= type_ids.len() {
+                    return None;
+                }
+
+                // Calculate offset by adding size of all previous fields.
+                Some(
+                    type_ids
+                        .iter()
+                        .take(field)
+                        .map(|ty| self.size_of(*ty))
+                        .sum(),
+                )
+            }
+            _ => {
+                if field == 0 {
+                    Some(0)
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
 impl Index<TypeId> for Types {
@@ -129,6 +179,11 @@ pub enum Constraint {
         parameters: Vec<TypeVarId>,
         return_ty: TypeVarId,
     },
+    Aggregate(Vec<TypeVarId>),
+    Field {
+        aggregate: TypeVarId,
+        field: usize,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -136,6 +191,7 @@ enum Solution {
     Type(TypeId),
     Reference(TypeVarId),
     Literal(Literal),
+    Tuple(Vec<TypeVarId>),
 }
 
 enum_conversion! {
@@ -292,8 +348,8 @@ mod test {
     #[case("true && true", Type::Boolean)]
     #[case("1 < 2", Type::Boolean)]
     #[case("{ 1 }", Type::I8)]
-    #[case("{ 1; }", Type::Unit)]
-    #[case("{ let a = 1; }", Type::Unit)]
+    #[case("{ 1; }", Type::UNIT)]
+    #[case("{ let a = 1; }", Type::UNIT)]
     #[case("{ let a = 1; 1 }", Type::I8)]
     #[case("{ let a = 1; a }", Type::I8)]
     fn assert_expression_ty(#[case] expression: &str, #[case] ty: Type) {

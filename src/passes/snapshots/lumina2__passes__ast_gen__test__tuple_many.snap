@@ -1,0 +1,19 @@
+---
+source: src/passes/ast_gen.rs
+expression: "(1, true, 3)"
+---
+Tuple(
+    Tuple {
+        values: [
+            ExpressionId(
+                0,
+            ),
+            ExpressionId(
+                1,
+            ),
+            ExpressionId(
+                2,
+            ),
+        ],
+    },
+)

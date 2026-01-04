@@ -119,6 +119,10 @@ impl<'src> Lexer<'src> {
                 self.next_char();
                 Tok::Comma
             }
+            '.' => {
+                self.next_char();
+                Tok::Dot
+            }
             '(' => {
                 self.next_char();
                 Tok::LParenthesis

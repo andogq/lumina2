@@ -109,6 +109,7 @@ toks! {
     Bar => "|",
     Colon => ":",
     SemiColon => ";",
+    Dot => ".",
     Comma => ",",
     Bang => "!",
 

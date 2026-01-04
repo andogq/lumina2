@@ -168,9 +168,6 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
                     if let Some(value) =
                         self.lower_expression(ctx, &mut current_basic_block, *expression)
-                        // HACK: This check shouldn't be required, as `Constant::Unit` shouldn't exist
-                        // in MIR
-                        && self.thir.type_of(*expression) != self.ctx.types.unit()
                     {
                         self.mir.add_statement(
                             current_basic_block,
@@ -211,7 +208,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
         basic_block: &mut BasicBlockId,
         expression_id: hir::ExpressionId,
     ) -> Option<OperandId> {
-        Some(match &self.thir[expression_id] {
+        match &self.thir[expression_id] {
             hir::Expression::Assign(hir::Assign { variable, value }) => {
                 let value = self.lower_expression(ctx, basic_block, *value)?;
                 let place = self.expression_to_place(*variable);
@@ -225,7 +222,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                     },
                 );
 
-                self.mir.operands.insert(Operand::Constant(Constant::Unit))
+                None
             }
             hir::Expression::Binary(hir::Binary {
                 lhs,
@@ -252,7 +249,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                     },
                 );
 
-                self.mir.operands.insert(Operand::Place(result_place))
+                Some(self.mir.operands.insert(Operand::Place(result_place)))
             }
             hir::Expression::Unary(hir::Unary { operation, value }) => {
                 let value = self.lower_expression(ctx, basic_block, *value)?;
@@ -297,7 +294,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                     mir_gen.mir.operands.insert(Operand::Place(result_place))
                 }
 
-                match operation {
+                Some(match operation {
                     // Standard `!` operation.
                     crate::ir::UnaryOperation::Not => create_unary_operation(
                         self,
@@ -344,7 +341,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
                         self.mir.operands.insert(Operand::Place(result_place))
                     }
-                }
+                })
             }
             hir::Expression::Switch(hir::Switch {
                 discriminator,
@@ -369,7 +366,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
                         // Store the resulting block value.
                         if let Some(result) = lowered_block.operand
-                            && !matches!(&self.ctx.types[switch_ty], Type::Unit | Type::Never)
+                            && !matches!(&self.ctx.types[switch_ty], Type::Never)
                         {
                             self.mir.add_statement(
                                 lowered_block.exit,
@@ -402,7 +399,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
                     // Store the resulting block value.
                     if let Some(result) = lowered_block.operand
-                        && !matches!(&self.ctx.types[switch_ty], Type::Unit | Type::Never)
+                        && !matches!(&self.ctx.types[switch_ty], Type::Never)
                     {
                         self.mir.add_statement(
                             lowered_block.exit,
@@ -439,7 +436,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 // Update the current basic block to be pointing to the new end block.
                 *basic_block = end_block;
 
-                self.mir.operands.insert(Operand::Place(switch_place))
+                Some(self.mir.operands.insert(Operand::Place(switch_place)))
             }
             hir::Expression::Loop(hir::Loop { body }) => {
                 // Create a new local for the loop break value.
@@ -475,17 +472,11 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 *basic_block = exit;
 
                 // Produce the local for the break value.
-                self.mir.operands.insert(Operand::Place(loop_place))
+                Some(self.mir.operands.insert(Operand::Place(loop_place)))
             }
-            hir::Expression::Literal(literal) => {
-                self.mir
-                    .operands
-                    .insert(Operand::Constant(literal_to_constant(
-                        &self.ctx.types,
-                        literal,
-                        self.thir.type_of(expression_id),
-                    )))
-            }
+            hir::Expression::Literal(literal) => Some(self.mir.operands.insert(Operand::Constant(
+                literal_to_constant(&self.ctx.types, literal, self.thir.type_of(expression_id)),
+            ))),
             hir::Expression::Call(hir::Call { callee, arguments }) => {
                 // Create a local to store the resulting value.
                 let result = self.mir.places.insert(
@@ -521,7 +512,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 *basic_block = target;
 
                 // Produce the value of this function.
-                self.mir.operands.insert(Operand::Place(result))
+                Some(self.mir.operands.insert(Operand::Place(result)))
             }
             hir::Expression::Block(block_id) => {
                 // Lower the block
@@ -539,20 +530,64 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 *basic_block = lowered_block.exit;
 
                 // Yield the block's value.
-                lowered_block.operand?
+                lowered_block.operand
             }
-            hir::Expression::Variable(hir::Variable { binding }) => match self.bindings[binding] {
-                Binding::Local(local) => {
-                    let place = self.mir.places.insert(local.into());
-                    self.mir.operands.insert(Operand::Place(place))
-                }
-                Binding::Function(function_id) => self
-                    .mir
-                    .operands
-                    .insert(Operand::Constant(Constant::Function(function_id))),
-            },
-            hir::Expression::Unreachable => return None,
-        })
+            hir::Expression::Variable(hir::Variable { binding }) => {
+                Some(match self.bindings[binding] {
+                    Binding::Local(local) => {
+                        let place = self.mir.places.insert(local.into());
+                        self.mir.operands.insert(Operand::Place(place))
+                    }
+                    Binding::Function(function_id) => self
+                        .mir
+                        .operands
+                        .insert(Operand::Constant(Constant::Function(function_id))),
+                })
+            }
+            hir::Expression::Unreachable => None,
+            hir::Expression::Aggregate(hir::Aggregate { values }) => {
+                let ty = self.thir.type_of(expression_id);
+
+                // Create a local to store the resulting value in.
+                let result = self.locals.create(ctx.function, ty);
+                let result_place = self.mir.places.insert(result.into());
+
+                // Create the RValue.
+                let aggregate = Aggregate {
+                    values: values
+                        .iter()
+                        .map(|value| {
+                            (
+                                self.lower_expression(ctx, basic_block, *value).unwrap(),
+                                self.thir.type_of(*value),
+                            )
+                        })
+                        .collect(),
+                    ty,
+                };
+                self.mir.add_statement(
+                    *basic_block,
+                    Assign {
+                        place: result_place,
+                        rvalue: RValue::Aggregate(aggregate),
+                    },
+                );
+
+                // Produce the resulting place.
+                Some(self.mir.operands.insert(Operand::Place(result_place)))
+            }
+            hir::Expression::Field(hir::Field { lhs, field }) => {
+                let lhs_operand = self.lower_expression(ctx, basic_block, *lhs).unwrap();
+                let lhs_place = self.operand_as_place(ctx.function, basic_block, lhs_operand);
+
+                // TODO: Check is place is only used in one place.
+                let mut lhs = self.mir.places[lhs_place].clone();
+                lhs.projection.push(Projection::Field(*field));
+
+                let place = self.mir.places.insert(lhs);
+                Some(self.mir.operands.insert(Operand::Place(place)))
+            }
+        }
     }
 
     fn expression_to_place(&mut self, expression_id: hir::ExpressionId) -> Place {
@@ -567,6 +602,11 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 let mut value = self.expression_to_place(*value);
                 // TODO: Not sure if this is append or prepend.
                 value.projection.push(Projection::Deref);
+                value
+            }
+            hir::Expression::Field(hir::Field { lhs, field }) => {
+                let mut value = self.expression_to_place(*lhs);
+                value.projection.push(Projection::Field(*field));
                 value
             }
             expression => panic!("invalid lhs: {expression:?}"),
@@ -590,7 +630,6 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                     Constant::U8(_) => self.ctx.types.u8(),
                     Constant::I8(_) => self.ctx.types.i8(),
                     Constant::Boolean(_) => self.ctx.types.boolean(),
-                    Constant::Unit => self.ctx.types.unit(),
                     Constant::Function(function_id) => {
                         let function = &self.mir[*function_id];
                         self.ctx
@@ -723,7 +762,6 @@ fn literal_to_constant(types: &Types, literal: &hir::Literal, ty: TypeId) -> Con
         (hir::Literal::Integer(value), Type::I8) => Constant::I8(*value as i8),
         (hir::Literal::Integer(value), Type::U8) => Constant::U8(*value as u8),
         (hir::Literal::Boolean(value), Type::Boolean) => Constant::Boolean(*value),
-        (hir::Literal::Unit, Type::Unit) => Constant::Unit,
         (literal, ty) => panic!("invalid literal {literal:?} for type {ty:?}"),
     }
 }

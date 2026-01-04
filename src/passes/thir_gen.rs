@@ -349,6 +349,28 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                 expression_id.into(),
                 Constraint::Eq(self.ctx.types.never().into()),
             )),
+            Expression::Aggregate(Aggregate { values }) => {
+                // Add constraints for each contained expression.
+                for value in values {
+                    self.add_expression_constraints(ctx, *value);
+                }
+
+                self.constraints.push((
+                    expression_id.into(),
+                    Constraint::Aggregate(values.iter().map(|value| (*value).into()).collect()),
+                ));
+            }
+            Expression::Field(Field { lhs, field }) => {
+                self.add_expression_constraints(ctx, *lhs);
+
+                self.constraints.push((
+                    expression_id.into(),
+                    Constraint::Field {
+                        aggregate: (*lhs).into(),
+                        field: *field,
+                    },
+                ));
+            }
         }
     }
 }
@@ -357,7 +379,6 @@ fn constraint_from_literal(types: &Types, literal: &Literal) -> Constraint {
     match literal {
         Literal::Integer(_) => Constraint::Integer(IntegerKind::Any),
         Literal::Boolean(_) => Constraint::Eq(types.boolean().into()),
-        Literal::Unit => Constraint::Eq(types.unit().into()),
     }
 }
 /// Context required when building constraints.
@@ -378,7 +399,7 @@ impl ConstraintCtx {
         }
     }
 
-    /// Push a new loop to the context, returning a new instance..
+    /// Push a new loop to the context, returning a new instance.
     pub fn push_loop(&self, loop_expression: ExpressionId) -> Self {
         let mut ctx = self.clone();
         ctx.loops.push(loop_expression);
@@ -402,7 +423,7 @@ mod test {
             functions: indexed_vec![],
             blocks: indexed_vec![],
             statements: indexed_vec![],
-            expressions: indexed_vec![Expression::Literal(Literal::Unit),],
+            expressions: indexed_vec![Aggregate::UNIT.into()],
         }
     }
 
@@ -420,7 +441,7 @@ mod test {
     }
 
     #[rstest]
-    #[case("simple", [], Type::Unit)]
+    #[case("simple", [], Type::UNIT)]
     #[case("return integer", [], Type::I8)]
     #[case("parameters", [(BindingId::from_id(1), Type::I8), (BindingId::from_id(2), Type::Boolean)], Type::Boolean)]
     fn function_declaration(

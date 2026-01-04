@@ -4,6 +4,7 @@ pub use self::{
     expression::{BinaryOperation, UnaryOperation, *},
     function::*,
     statement::*,
+    ty::*,
     util::*,
 };
 
@@ -70,7 +71,7 @@ mod function {
         #[expect(dead_code, reason = "token field")]
         pub tok_colon: tok::Colon,
         /// Type of the parameter.
-        pub ty: tok::Ident,
+        pub ty: CstType,
     }
 
     /// Return type for a function declaration.
@@ -83,7 +84,7 @@ mod function {
         #[expect(dead_code, reason = "token field")]
         pub tok_thin_arrow: tok::ThinArrow,
         /// Return type.
-        pub ty: tok::Ident,
+        pub ty: CstType,
     }
 }
 
@@ -98,9 +99,36 @@ pub struct Block {
     pub tok_r_brace: tok::RBrace,
 }
 
-mod statement {
-    use crate::enum_conversion;
+/// Tuple of items. Used for both a tuple of [`Expression`], and a tuple of [`CstType`].
+#[derive(Clone, Debug)]
+pub struct Tuple<T> {
+    #[expect(dead_code, reason = "token field")]
+    pub tok_l_parenthesis: tok::LParenthesis,
+    pub items: PunctuatedList<T, tok::Comma>,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_r_parenthesis: tok::RParenthesis,
+}
 
+mod ty {
+    use super::*;
+
+    /// A type, such as for parameters or variable declarations.
+    #[derive(Clone, Debug)]
+    pub enum CstType {
+        /// A named type represented with a single [`tok::Ident`], such as `i8`.
+        Named(tok::Ident),
+        /// A tuple type, composed of many inner [`CstType`]s.
+        Tuple(Tuple<CstType>),
+    }
+
+    enum_conversion! {
+        [CstType]
+        Named: tok::Ident,
+        Tuple: Tuple<CstType>,
+    }
+}
+
+mod statement {
     use super::*;
 
     /// A statement present within a [`Block`].
@@ -166,8 +194,6 @@ mod statement {
 }
 
 mod expression {
-    use crate::enum_conversion;
-
     use super::*;
 
     /// All possible expressions.
@@ -184,6 +210,8 @@ mod expression {
         Call(Call),
         Block(Block),
         Variable(Variable),
+        Tuple(Tuple<Expression>),
+        Field(Field),
     }
 
     /// Assignment.
@@ -315,8 +343,6 @@ mod expression {
         Integer(IntegerLiteral),
         /// A boolean.
         Boolean(BooleanLiteral),
-        /// Unit value.
-        Unit(UnitLiteral),
     }
 
     /// An integer literal.
@@ -345,19 +371,10 @@ mod expression {
         }
     }
 
-    #[derive(Clone, Debug)]
-    pub struct UnitLiteral {
-        #[expect(dead_code, reason = "token field")]
-        pub tok_l_parenthesis: tok::LParenthesis,
-        #[expect(dead_code, reason = "token field")]
-        pub tok_r_parenthesis: tok::RParenthesis,
-    }
-
     enum_conversion! {
         [Literal]
         Integer: IntegerLiteral,
         Boolean: BooleanLiteral,
-        Unit: UnitLiteral,
     }
 
     /// An [`Expression`] wrapped in parentheses.
@@ -391,6 +408,23 @@ mod expression {
         pub variable: tok::Ident,
     }
 
+    /// Field access expression, such as `my_struct.field` or `my_tuple.0`.
+    #[derive(Clone, Debug)]
+    pub struct Field {
+        pub lhs: Box<Expression>,
+        #[expect(dead_code, reason = "token field")]
+        pub tok_dot: tok::Dot,
+        pub field: FieldKey,
+    }
+
+    /// Different accessors used within [`Field`].
+    #[derive(Clone, Debug)]
+    pub enum FieldKey {
+        Unnamed(tok::IntegerLiteral),
+        #[expect(dead_code, reason = "named fields will be implemented with struct")]
+        Named(tok::Ident),
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -403,6 +437,8 @@ mod expression {
         Call: Call,
         Block: Block,
         Variable: Variable,
+        Tuple: Tuple<Expression>,
+        Field: Field,
     }
 }
 
@@ -421,6 +457,11 @@ mod util {
                 items: Vec::new(),
                 punctuation: Vec::new(),
             }
+        }
+
+        /// Determine if the list has trailing punctuation.
+        pub fn has_trailing(&self) -> bool {
+            !self.items.is_empty() && self.items.len() == self.punctuation.len()
         }
 
         /// Add an item to the list. Will return an error if not expecting an item.

@@ -1,0 +1,9 @@
+---
+source: src/passes/ast_gen.rs
+expression: ()
+---
+Tuple(
+    Tuple {
+        values: [],
+    },
+)

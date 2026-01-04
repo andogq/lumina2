@@ -297,6 +297,7 @@ mod place {
     #[derive(Clone, Debug)]
     pub enum Projection {
         Deref,
+        Field(usize),
     }
 }
 
@@ -309,6 +310,7 @@ mod rvalue {
         Ref(PlaceId),
         Binary(Binary),
         Unary(Unary),
+        Aggregate(Aggregate),
     }
 
     #[derive(Clone, Debug)]
@@ -331,6 +333,12 @@ mod rvalue {
         Not,
         Negative,
     }
+
+    #[derive(Clone, Debug)]
+    pub struct Aggregate {
+        pub values: Vec<(OperandId, TypeId)>,
+        pub ty: TypeId,
+    }
 }
 
 mod operand {
@@ -347,7 +355,6 @@ mod operand {
         U8(u8),
         I8(i8),
         Boolean(bool),
-        Unit,
         Function(FunctionId),
     }
 }

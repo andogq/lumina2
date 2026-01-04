@@ -6,6 +6,7 @@ create_id!(BlockId);
 create_id!(ExpressionId);
 create_id!(FunctionId);
 create_id!(StatementId);
+create_id!(AstTypeId);
 
 #[derive(Clone, Debug)]
 pub struct Ast {
@@ -14,6 +15,8 @@ pub struct Ast {
     pub blocks: IndexedVec<BlockId, Block>,
     pub statements: IndexedVec<StatementId, Statement>,
     pub expressions: IndexedVec<ExpressionId, Expression>,
+
+    pub types: IndexedVec<AstTypeId, AstType>,
 }
 
 impl Ast {
@@ -23,6 +26,7 @@ impl Ast {
             blocks: IndexedVec::new(),
             statements: IndexedVec::new(),
             expressions: IndexedVec::new(),
+            types: IndexedVec::new(),
         }
     }
 }
@@ -59,6 +63,23 @@ impl Index<StatementId> for Ast {
     }
 }
 
+impl Index<AstTypeId> for Ast {
+    type Output = AstType;
+
+    fn index(&self, index: AstTypeId) -> &Self::Output {
+        &self.types[index]
+    }
+}
+
+/// Type representation used within the [`Ast`].
+#[derive(Clone, Debug)]
+pub enum AstType {
+    /// A type referenced by a single interned name (eg. `i8`, `bool`).
+    Named(StringId),
+    /// A tuple type (`(i8, bool, u8)`).
+    Tuple(Vec<AstTypeId>),
+}
+
 mod function {
     use super::*;
 
@@ -66,14 +87,14 @@ mod function {
     pub struct FunctionDeclaration {
         pub name: StringId,
         pub parameters: Vec<FunctionParameter>,
-        pub return_ty: Option<StringId>,
+        pub return_ty: Option<AstTypeId>,
         pub body: BlockId,
     }
 
     #[derive(Clone, Debug)]
     pub struct FunctionParameter {
         pub name: StringId,
-        pub ty: StringId,
+        pub ty: AstTypeId,
     }
 }
 
@@ -144,6 +165,8 @@ mod expression {
         Call(Call),
         Block(BlockId),
         Variable(Variable),
+        Tuple(Tuple),
+        Field(Field),
     }
 
     #[derive(Clone, Debug)]
@@ -180,7 +203,6 @@ mod expression {
     pub enum Literal {
         Integer(usize),
         Boolean(bool),
-        Unit,
     }
 
     #[derive(Clone, Debug)]
@@ -194,6 +216,25 @@ mod expression {
         pub variable: StringId,
     }
 
+    #[derive(Clone, Debug)]
+    pub struct Tuple {
+        pub values: Vec<ExpressionId>,
+    }
+    impl Tuple {
+        pub const UNIT: Self = Self { values: Vec::new() };
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct Field {
+        pub lhs: ExpressionId,
+        pub field: FieldKey,
+    }
+
+    #[derive(Clone, Debug)]
+    pub enum FieldKey {
+        Unnamed(usize),
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -205,5 +246,7 @@ mod expression {
         Call: Call,
         Block: BlockId,
         Variable: Variable,
+        Tuple: Tuple,
+        Field: Field,
     }
 }

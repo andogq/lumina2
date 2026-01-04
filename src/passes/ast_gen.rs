@@ -44,13 +44,13 @@ impl<'ctx> AstGen<'ctx> {
                 .iter_items()
                 .map(|parameter| FunctionParameter {
                     name: self.ctx.strings.intern(&parameter.name.0),
-                    ty: self.ctx.strings.intern(&parameter.ty.0),
+                    ty: self.lower_type(&parameter.ty),
                 })
                 .collect(),
             return_ty: function
                 .return_ty
                 .as_ref()
-                .map(|ty| self.ctx.strings.intern(&ty.ty.0)),
+                .map(|ty| self.lower_type(&ty.ty)),
             body: self.lower_block(&function.body),
         };
         self.ast.function_declarations.insert(function_declaration);
@@ -83,7 +83,7 @@ impl<'ctx> AstGen<'ctx> {
                     let expression = value
                         .as_ref()
                         .map(|expression| self.lower_expression(expression))
-                        .unwrap_or_else(|| self.ast.expressions.insert(Literal::Unit.into()));
+                        .unwrap_or_else(|| self.ast.expressions.insert(Tuple::UNIT.into()));
                     statements.push(
                         self.ast
                             .statements
@@ -94,7 +94,7 @@ impl<'ctx> AstGen<'ctx> {
                     let expression = value
                         .as_ref()
                         .map(|expression| self.lower_expression(expression))
-                        .unwrap_or_else(|| self.ast.expressions.insert(Literal::Unit.into()));
+                        .unwrap_or_else(|| self.ast.expressions.insert(Tuple::UNIT.into()));
                     statements.push(
                         self.ast
                             .statements
@@ -192,7 +192,6 @@ impl<'ctx> AstGen<'ctx> {
                 cst::Literal::Boolean(boolean_literal) => {
                     Literal::Boolean(boolean_literal.as_bool())
                 }
-                cst::Literal::Unit(_) => Literal::Unit,
             }
             .into(),
             cst::Expression::Parenthesis(cst::Parenthesis { expression, .. }) => {
@@ -213,9 +212,42 @@ impl<'ctx> AstGen<'ctx> {
                 variable: self.ctx.strings.intern(&variable.0),
             }
             .into(),
+            cst::Expression::Tuple(cst::Tuple { items, .. }) => Tuple {
+                values: items
+                    .iter_items()
+                    .map(|item| self.lower_expression(item))
+                    .collect(),
+            }
+            .into(),
+            cst::Expression::Field(field) => Field {
+                lhs: self.lower_expression(&field.lhs),
+                field: match &field.field {
+                    cst::FieldKey::Unnamed(field) => FieldKey::Unnamed(field.0),
+                    cst::FieldKey::Named(_) => unimplemented!(),
+                },
+            }
+            .into(),
         };
 
         self.ast.expressions.insert(expression)
+    }
+
+    /// Lower a [`cst::CstType`] into an [`AstType`], returning the interned ID.
+    ///
+    /// Note: No de-duplication of types is done at this stage, so lowering `CstType::Named("i8")`
+    /// twice will result in two different [`AstTypeId`]s.
+    fn lower_type(&mut self, ty: &cst::CstType) -> AstTypeId {
+        let ty = match ty {
+            cst::CstType::Named(ident) => AstType::Named(self.ctx.strings.intern(&ident.0)),
+            cst::CstType::Tuple(tuple) => AstType::Tuple(
+                tuple
+                    .items
+                    .iter_items()
+                    .map(|ty| self.lower_type(ty))
+                    .collect(),
+            ),
+        };
+        self.ast.types.insert(ty)
     }
 }
 
@@ -256,6 +288,11 @@ mod test {
     #[case("call_simple", "some_ident()")]
     #[case("call_arguments", "some_ident(1, something, true)")]
     #[case("variable_simple", "some_ident")]
+    #[case("tuple_empty", "()")]
+    #[case("tuple_single", "(1,)")]
+    #[case("tuple_many", "(1, true, 3)")]
+    #[case("tuple_nested", "(1, (2, true), 4)")]
+    #[case("field_unnamed", "a.1")]
     fn lower_expression(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
         let mut pass = AstGen::new(&mut ctx);
         let expression_id = pass.lower_expression(&parse::<cst::Expression>(source));

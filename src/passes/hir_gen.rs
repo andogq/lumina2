@@ -63,14 +63,14 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             .map(|parameter| {
                 (
                     self.ctx.scopes.declare(function_scope, parameter.name),
-                    self.ident_to_type(parameter.ty),
+                    self.lower_ast_type(parameter.ty),
                 )
             })
             .collect();
 
         // If no return type is provided, assume `()`.
         let return_ty = match function.return_ty {
-            Some(return_ty) => self.ident_to_type(return_ty),
+            Some(return_ty) => self.lower_ast_type(return_ty),
             None => self.ctx.types.unit(),
         };
 
@@ -171,10 +171,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 self.hir.expressions.insert(Expression::Unreachable)
             }
             // Otherwise, assume unit.
-            (None, _) => self
-                .hir
-                .expressions
-                .insert(Expression::Literal(Literal::Unit)),
+            (None, _) => self.hir.expressions.insert(Aggregate::UNIT.into()),
         };
 
         Ok(self.hir.blocks.insert(Block {
@@ -256,7 +253,6 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             ast::Expression::Literal(literal) => match literal {
                 ast::Literal::Integer(value) => Literal::Integer(*value),
                 ast::Literal::Boolean(value) => Literal::Boolean(*value),
-                ast::Literal::Unit => Literal::Unit,
             }
             .into(),
             ast::Expression::Call(ast::Call { callee, arguments }) => Call {
@@ -272,19 +268,46 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 binding: self.ctx.scopes.resolve(scope, *variable),
             }
             .into(),
+            ast::Expression::Tuple(ast::Tuple { values }) => Aggregate {
+                values: values
+                    .iter()
+                    .map(|value| self.lower_expression(&self.ast[*value], scope))
+                    .collect::<Result<_, _>>()?,
+            }
+            .into(),
+            ast::Expression::Field(ast::Field { lhs, field }) => Field {
+                lhs: self.lower_expression(&self.ast[*lhs], scope)?,
+                field: match field {
+                    ast::FieldKey::Unnamed(field) => *field,
+                },
+            }
+            .into(),
         };
 
         Ok(self.hir.expressions.insert(expression))
     }
 
-    /// Attempt to interpret an ident as a [`TypeId`].
-    fn ident_to_type(&mut self, ident: StringId) -> TypeId {
-        // HACK: This only handles built-in types.
-        match self.ctx.strings.get(ident) {
-            "u8" => self.ctx.types.u8(),
-            "i8" => self.ctx.types.i8(),
-            "bool" => self.ctx.types.boolean(),
-            ty => panic!("unknown type: {ty}"),
+    /// Lower an [`ast::AstType`] into a unique [`TypeId`].
+    ///
+    /// This will handle ensure that types are correctly equated where necessary.
+    fn lower_ast_type(&mut self, ty: ast::AstTypeId) -> TypeId {
+        match &self.ast[ty] {
+            ast::AstType::Named(string_id) => {
+                // HACK: This only handles built-in types.
+                match self.ctx.strings.get(*string_id) {
+                    "u8" => self.ctx.types.u8(),
+                    "i8" => self.ctx.types.i8(),
+                    "bool" => self.ctx.types.boolean(),
+                    ty => panic!("unknown type: {ty}"),
+                }
+            }
+            ast::AstType::Tuple(ast_type_ids) => {
+                let fields = ast_type_ids
+                    .iter()
+                    .map(|ty| self.lower_ast_type(*ty))
+                    .collect::<Vec<_>>();
+                self.ctx.types.tuple(fields)
+            }
         }
     }
 }
@@ -419,7 +442,6 @@ mod test {
     )]
     #[case("literal_integer", ast::Literal::Integer(123).into())]
     #[case("literal_boolean", ast::Literal::Boolean(true).into())]
-    #[case("literal_unit", ast::Literal::Unit.into())]
     #[case(
         "call_no_parameters",
         ast::Call { callee: ast::ExpressionId::from_id(0), arguments: vec![] }.into()
@@ -432,6 +454,8 @@ mod test {
         }.into()
     )]
     #[case("variable_simple", ast::Variable { variable: StringId::from_id(0) }.into())]
+    #[case("tuple_empty", ast::Tuple { values: vec![] }.into())]
+    #[case("tuple_many", ast::Tuple { values: vec![ast::ExpressionId::from_id(1), ast::ExpressionId::from_id(2)] }.into())]
     fn lower_expression(
         mut ctx: Ctx,
         sample_ast: &ast::Ast,

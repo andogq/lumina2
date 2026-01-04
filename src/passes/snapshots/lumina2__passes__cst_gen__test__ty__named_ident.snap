@@ -1,0 +1,9 @@
+---
+source: src/passes/cst_gen.rs
+expression: i8
+---
+Named(
+    Ident(
+        "i8",
+    ),
+)

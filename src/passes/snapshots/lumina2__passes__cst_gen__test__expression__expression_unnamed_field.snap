@@ -1,0 +1,21 @@
+---
+source: src/passes/cst_gen.rs
+expression: thing.2
+---
+Field(
+    Field {
+        lhs: Variable(
+            Variable {
+                variable: Ident(
+                    "thing",
+                ),
+            },
+        ),
+        tok_dot: Dot,
+        field: Unnamed(
+            IntegerLiteral(
+                2,
+            ),
+        ),
+    },
+)

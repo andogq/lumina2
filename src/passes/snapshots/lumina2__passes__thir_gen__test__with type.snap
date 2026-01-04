@@ -23,12 +23,8 @@ expression: Type(TypeId(2))
                 0,
             ),
         ),
-        Eq(
-            Type(
-                TypeId(
-                    0,
-                ),
-            ),
+        Aggregate(
+            [],
         ),
     ),
 ]
