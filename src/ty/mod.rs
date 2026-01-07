@@ -1,3 +1,4 @@
+pub mod constraints;
 mod disjoint_union_set;
 pub mod solver;
 
@@ -234,13 +235,6 @@ impl Literal {
 pub enum IntegerKind {
     Any,
     Signed,
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "future constraints may require an unsigned integer."
-        )
-    )]
     Unsigned,
 }
 
