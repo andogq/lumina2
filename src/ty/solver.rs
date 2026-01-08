@@ -8,6 +8,8 @@ enum MergeResult {
     /// Merge the provided type variables, and substitute with a solution referencing the resulting
     /// root node.
     MergeAndReference(TypeVarId, TypeVarId),
+    /// Merge each pair of nodes returned, and substitute with [`Solution::Tuple`].
+    TupleMergeAndSubstitute(Vec<(TypeVarId, TypeVarId)>),
     /// Merge is not possible due to an incompatibility.
     Incompatible(IncompatibleKind),
 }
@@ -252,11 +254,50 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
             // If no solution is provided, use the merged root.
             let solution = solution.unwrap_or(Solution::Reference(root));
 
+            // Perform simplifications on the solution.
+            let solution = self.simplify_solution(solution);
+
             // Insert the solution.
             self.solutions.insert(root, solution);
         }
 
         Some(root)
+    }
+
+    /// Simplify the provided solution, attempting to convert to [`Solution::Type`] where possible.
+    fn simplify_solution(&mut self, solution: Solution) -> Solution {
+        match solution {
+            Solution::Type(type_id) => Solution::Type(type_id),
+            Solution::Reference(ref_var) => {
+                if let Some(Solution::Type(ref_ty)) = self.get_solution(ref_var) {
+                    // Referenced type is already resolved, so generate a reference type to it.
+                    Solution::Type(self.types.ref_of(ref_ty))
+                } else {
+                    // Re-use existing solution.
+                    Solution::Reference(ref_var)
+                }
+            }
+            Solution::Literal(literal) => Solution::Literal(literal),
+            Solution::Tuple(type_var_ids) => {
+                let items = type_var_ids
+                    .iter()
+                    .filter_map(|var| self.get_non_concrete_type(*var))
+                    .filter_map(|ty| {
+                        if let NonConcreteType::Type(ty) = ty {
+                            Some(ty)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                if items.len() == type_var_ids.len() {
+                    Solution::Type(self.types.tuple(items))
+                } else {
+                    Solution::Tuple(type_var_ids)
+                }
+            }
+        }
     }
 
     fn simple_merge(
@@ -271,6 +312,12 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
                     MergeResult::MergeAndReference(lhs, rhs) => {
                         self.merge(lhs, rhs).map(Solution::Reference)
                     }
+                    MergeResult::TupleMergeAndSubstitute(values) => Some(Solution::Tuple(
+                        values
+                            .into_iter()
+                            .map(|(lhs, rhs)| self.root.union_sets(lhs, rhs))
+                            .collect(),
+                    )),
                     MergeResult::Incompatible(kind) => return Err(kind),
                 },
                 true,
@@ -346,47 +393,22 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
             | (Solution::Type(ty), Solution::Tuple(tuple)) => {
                 // Ensure the type is a tuple.
                 if let Type::Tuple(values) = &self.types[*ty] {
-                    // Ensure tuple values match with type.
-                    for (var, ty) in tuple.iter().zip(values.clone()) {
-                        let ty = self.type_vars.intern(ty);
-                        self.merge(*var, ty).expect("tuple values to be merged");
-                    }
-
-                    // Re-use the type as the solution.
-                    MergeResult::Substitute(Solution::Type(*ty))
+                    MergeResult::TupleMergeAndSubstitute(
+                        tuple
+                            .iter()
+                            .cloned()
+                            .zip(values.iter().map(|value| self.type_vars.intern(*value)))
+                            .collect(),
+                    )
                 } else {
                     MergeResult::Incompatible(IncompatibleKind::NotTuple(*ty))
                 }
             }
 
             // Both sides are tuples.
-            (Solution::Tuple(lhs), Solution::Tuple(rhs)) => {
-                // Merge the values together.
-                let values = lhs
-                    .iter()
-                    .zip(rhs)
-                    .map(|(lhs, rhs)| {
-                        self.merge(*lhs, *rhs)
-                            .expect("merge lhs and rhs tuple values")
-                    })
-                    .collect::<Vec<_>>();
-
-                // NOTE: Unsure if this extra check would be better suited in `get_solution`.
-
-                // Try determine the type for each value.
-                let types = values
-                    .iter()
-                    .filter_map(|value| self.get_type(*value))
-                    .collect::<Vec<_>>();
-
-                if types.len() == values.len() {
-                    // Every value has a type, so the full tuple type is known.
-                    MergeResult::Substitute(Solution::Type(self.types.tuple(types)))
-                } else {
-                    // Some unknown values still exist, so remain as a non-concrete solution.
-                    MergeResult::Substitute(Solution::Tuple(values))
-                }
-            }
+            (Solution::Tuple(lhs), Solution::Tuple(rhs)) => MergeResult::TupleMergeAndSubstitute(
+                lhs.iter().cloned().zip(rhs.iter().cloned()).collect(),
+            ),
 
             // Tuple with some other solution, which is invalid.
             (Solution::Tuple(_), solution) | (solution, Solution::Tuple(_)) => {
@@ -423,7 +445,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         }
     }
 
-    fn get_solution(&mut self, var: TypeVarId) -> Option<Solution> {
+    fn get_solution(&self, var: TypeVarId) -> Option<Solution> {
         // Types always have a solution.
         if let TypeVar::Type(ty) = &self.type_vars[var] {
             return Some(Solution::Type(*ty));
@@ -902,6 +924,9 @@ mod test {
             let u8 = types.u8();
             let tuple = types.tuple([i8, u8]);
 
+            let i8_ty = type_vars.intern(i8);
+            let u8_ty = type_vars.intern(u8);
+
             let [field_0, field_1] = expression.map(|expression| type_vars.intern(expression));
 
             let mut solver = Solver::new(&mut types, &mut type_vars);
@@ -910,10 +935,8 @@ mod test {
                     &Solution::Tuple(vec![field_0, field_1]),
                     &Solution::Type(tuple),
                 ),
-                MergeResult::Substitute(Solution::Type(tuple)),
+                MergeResult::TupleMergeAndSubstitute(vec![(field_0, i8_ty), (field_1, u8_ty)]),
             );
-            assert_eq!(solver.get_type(field_0).unwrap(), i8);
-            assert_eq!(solver.get_type(field_1).unwrap(), u8);
         }
 
         #[rstest]
@@ -924,7 +947,6 @@ mod test {
         ) {
             let i8 = types.i8();
             let u8 = types.u8();
-            let tuple = types.tuple([i8, u8]);
 
             let i8_ty = type_vars.intern(i8);
             let u8_ty = type_vars.intern(u8);
@@ -937,10 +959,8 @@ mod test {
                     &Solution::Tuple(vec![field_0, u8_ty]),
                     &Solution::Tuple(vec![i8_ty, field_1]),
                 ),
-                MergeResult::Substitute(Solution::Type(tuple)),
+                MergeResult::TupleMergeAndSubstitute(vec![(field_0, i8_ty), (u8_ty, field_1,)]),
             );
-            assert_eq!(solver.get_type(field_0).unwrap(), i8);
-            assert_eq!(solver.get_type(field_1).unwrap(), u8);
         }
 
         #[rstest]
@@ -953,15 +973,57 @@ mod test {
                 expression.map(|expression| type_vars.intern(expression));
 
             let mut solver = Solver::new(&mut types, &mut type_vars);
-            assert!(matches!(
+            assert_eq!(
                 solver.merge_solutions(
                     &Solution::Tuple(vec![field_0, field_1]),
                     &Solution::Tuple(vec![field_2, field_3]),
                 ),
-                MergeResult::Substitute(Solution::Tuple(_)),
+                MergeResult::TupleMergeAndSubstitute(vec![(field_0, field_2), (field_1, field_3)]),
+            );
+        }
+    }
+
+    mod simplify_solution {
+        use super::*;
+
+        #[rstest]
+        fn tuple_resolved_tys(mut types: Types, mut type_vars: TypeVars) {
+            let u8 = types.u8();
+            let i8 = types.i8();
+
+            let u8_ty = type_vars.intern(u8);
+            let i8_ty = type_vars.intern(i8);
+
+            let tuple_ty = types.tuple([u8, i8]);
+
+            let mut solver = Solver::new(&mut types, &mut type_vars);
+            assert!(matches!(
+                solver.simplify_solution(Solution::Tuple(vec![u8_ty, i8_ty])),
+                Solution::Type(ty) if ty == tuple_ty,
             ));
-            assert_eq!(solver.root.find_set(field_0), solver.root.find_set(field_2));
-            assert_eq!(solver.root.find_set(field_1), solver.root.find_set(field_3));
+        }
+
+        #[rstest]
+        fn tuple_partially_resolved_tys(
+            mut types: Types,
+            mut type_vars: TypeVars,
+            expression: [TypeVar; 1],
+        ) {
+            let u8 = types.u8();
+            let u8_ty = type_vars.intern(u8);
+
+            let [expression] = expression.map(|expression| type_vars.intern(expression));
+
+            let mut solver = Solver::new(&mut types, &mut type_vars);
+            let solution = Solution::Tuple(vec![u8_ty, expression]);
+            assert_eq!(solver.simplify_solution(solution.clone()), solution,);
+        }
+
+        #[rstest]
+        fn tuple_literal(mut types: Types, mut type_vars: TypeVars) {
+            let mut solver = Solver::new(&mut types, &mut type_vars);
+            let solution = Solution::Literal(Literal::Integer(IntegerKind::Any));
+            assert_eq!(solver.simplify_solution(solution.clone()), solution)
         }
     }
 }
