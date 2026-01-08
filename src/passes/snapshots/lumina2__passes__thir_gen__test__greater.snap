@@ -4,70 +4,54 @@ expression: "Binary { lhs: ExpressionId(0), operation: Greater, rhs: ExpressionI
 ---
 [
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Aggregate(
             [],
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Aggregate(
             [],
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Eq(
-            Expression(
-                ExpressionId(
-                    0,
-                ),
+            TypeVarId(
+                4,
             ),
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Integer(
             Any,
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Integer(
             Any,
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                1,
-            ),
+        TypeVarId(
+            0,
         ),
         Eq(
-            Type(
-                TypeId(
-                    4,
-                ),
+            TypeVarId(
+                2,
             ),
         ),
     ),

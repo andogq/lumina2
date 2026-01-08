@@ -1,4 +1,7 @@
-use crate::{prelude::*, ty::Constraint};
+use crate::{
+    prelude::*,
+    ty::{Constraint, TypeVarId},
+};
 
 use super::IntegerKind;
 

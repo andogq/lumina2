@@ -1,19 +1,15 @@
 ---
 source: src/passes/thir_gen.rs
-expression: "[] => TypeId(0)"
+expression: "[] => TypeId(1)"
 ---
 [
     (
-        Binding(
-            BindingId(
-                0,
-            ),
+        TypeVarId(
+            0,
         ),
         Eq(
-            Type(
-                TypeId(
-                    5,
-                ),
+            TypeVarId(
+                1,
             ),
         ),
     ),

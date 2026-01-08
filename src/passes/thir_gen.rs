@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+use crate::ty::TypeVars;
 use crate::ty::{constraints::Constraints, solver::Solver};
 
 use hir::*;
@@ -11,6 +12,8 @@ pub struct ThirGen<'ctx, 'hir> {
     ctx: &'ctx mut Ctx,
     /// HIR that will be processed.
     hir: &'hir Hir,
+    /// Interned type variables.
+    type_vars: TypeVars,
     /// Constraints collected while walking the HIR.
     constraints: Constraints,
     /// Errors generated throughout this pass.
@@ -36,9 +39,16 @@ impl<'ctx, 'hir> Pass<'ctx, 'hir> for ThirGen<'ctx, 'hir> {
         }
 
         // Run the solver.
-        let types = Solver::run(&mut thir_gen.ctx.types, &thir_gen.constraints);
+        let types = Solver::run(
+            &mut thir_gen.ctx.types,
+            &mut thir_gen.type_vars,
+            &thir_gen.constraints,
+        );
 
-        Ok(PassSuccess::new(Thir::new(hir, types), thir_gen.errors))
+        Ok(PassSuccess::new(
+            Thir::new(hir, types, thir_gen.type_vars),
+            thir_gen.errors,
+        ))
     }
 }
 
@@ -47,6 +57,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
         Self {
             ctx,
             hir,
+            type_vars: TypeVars::new(),
             constraints: Constraints::new(),
             errors: Vec::new(),
         }
@@ -56,11 +67,11 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
         let function = &self.hir[function_id];
 
         self.constraints.equal(
-            function.binding,
-            self.ctx.types.function(
+            self.type_vars.intern(function.binding),
+            self.type_vars.intern(self.ctx.types.function(
                 function.parameters.iter().map(|(_, ty)| *ty),
                 function.return_ty,
-            ),
+            )),
         );
     }
 
@@ -69,13 +80,18 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
 
         // Add constraints for the function parameters.
         for (parameter_binding, parameter_ty) in &function.parameters {
-            self.constraints.equal(*parameter_binding, *parameter_ty);
+            self.constraints.equal(
+                self.type_vars.intern(*parameter_binding),
+                self.type_vars.intern(*parameter_ty),
+            );
         }
 
         // Add constraint for the function return type (the body of the function must result in the
         // return type).
-        self.constraints
-            .equal(self.hir[function.entry].expression, function.return_ty);
+        self.constraints.equal(
+            self.type_vars.intern(self.hir[function.entry].expression),
+            self.type_vars.intern(function.return_ty),
+        );
 
         let ctx = ConstraintCtx::new(function_id);
         self.add_block_constraints(&ctx, function.entry);
@@ -88,11 +104,14 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
             match &self.hir[*statement] {
                 Statement::Declare(DeclareStatement { binding, ty }) => match ty {
                     // Directly set variable type.
-                    DeclarationTy::Type(ty) => self.constraints.equal(*binding, *ty),
+                    DeclarationTy::Type(ty) => self
+                        .constraints
+                        .equal(self.type_vars.intern(*binding), self.type_vars.intern(*ty)),
                     // Infer variable's type from the provided expression.
-                    DeclarationTy::Inferred(expression) => {
-                        self.constraints.equal(*binding, *expression)
-                    }
+                    DeclarationTy::Inferred(expression) => self.constraints.equal(
+                        self.type_vars.intern(*binding),
+                        self.type_vars.intern(*expression),
+                    ),
                 },
                 // Expression must equal the return type of the current function.
                 Statement::Return(ReturnStatement { expression }) => {
@@ -100,8 +119,10 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     self.add_expression_constraints(ctx, *expression);
 
                     // Ensure the return expression matches the function return type.
-                    self.constraints
-                        .equal(*expression, self.hir[ctx.function].return_ty);
+                    self.constraints.equal(
+                        self.type_vars.intern(*expression),
+                        self.type_vars.intern(self.hir[ctx.function].return_ty),
+                    );
                 }
                 Statement::Break(BreakStatement { expression }) => {
                     // Generate constraints for the break expression.
@@ -109,7 +130,10 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
 
                     match ctx.loops.last() {
                         // Break expression must match the expression of the inner most loop.
-                        Some(current_loop) => self.constraints.equal(*expression, *current_loop),
+                        Some(current_loop) => self.constraints.equal(
+                            self.type_vars.intern(*expression),
+                            self.type_vars.intern(*current_loop),
+                        ),
                         // Not currently in a loop, so report that it's invalid, and continue
                         // generating constraints.
                         None => self
@@ -127,14 +151,22 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
     }
 
     fn add_expression_constraints(&mut self, ctx: &ConstraintCtx, expression_id: ExpressionId) {
-        let expression = &self.hir[expression_id];
+        let expression = self.type_vars.intern(expression_id);
 
-        match expression {
+        // Pre-intern common types
+        let ty_unit = self.type_vars.intern(self.ctx.types.unit());
+        let ty_boolean = self.type_vars.intern(self.ctx.types.boolean());
+        let ty_never = self.type_vars.intern(self.ctx.types.never());
+
+        match &self.hir[expression_id] {
             Expression::Assign(Assign { variable, value }) => {
                 // Value of the assignment must match the variable it's being assigned to.
-                self.constraints.equal(*value, *variable);
+                self.constraints.equal(
+                    self.type_vars.intern(*value),
+                    self.type_vars.intern(*variable),
+                );
                 // The actual assignment expression results in unit.
-                self.constraints.equal(expression_id, self.ctx.types.unit());
+                self.constraints.equal(expression, ty_unit);
 
                 self.add_expression_constraints(ctx, *variable);
                 self.add_expression_constraints(ctx, *value);
@@ -147,6 +179,9 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                 self.add_expression_constraints(ctx, *lhs);
                 self.add_expression_constraints(ctx, *rhs);
 
+                let lhs = self.type_vars.intern(*lhs);
+                let rhs = self.type_vars.intern(*rhs);
+
                 match operation {
                     BinaryOperation::Plus
                     | BinaryOperation::Minus
@@ -155,65 +190,64 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     | BinaryOperation::BinaryAnd
                     | BinaryOperation::BinaryOr => {
                         // Operands must equal each other.
-                        self.constraints.equal(*lhs, *rhs);
+                        self.constraints.equal(lhs, rhs);
                         // Operands should be integers.
-                        self.constraints.integer(*lhs);
-                        self.constraints.integer(*rhs);
+                        self.constraints.integer(lhs);
+                        self.constraints.integer(rhs);
                         // Result is the same as the input.
-                        self.constraints.equal(expression_id, *lhs);
+                        self.constraints.equal(expression, lhs);
                     }
                     BinaryOperation::Equal | BinaryOperation::NotEqual => {
                         // Operands must be identical
-                        self.constraints.equal(*lhs, *rhs);
+                        self.constraints.equal(lhs, rhs);
                         // Results in a boolean.
-                        self.constraints
-                            .equal(expression_id, self.ctx.types.boolean());
+                        self.constraints.equal(expression, ty_boolean);
                     }
                     BinaryOperation::Greater
                     | BinaryOperation::GreaterEqual
                     | BinaryOperation::Less
                     | BinaryOperation::LessEqual => {
                         // Operands must be identical
-                        self.constraints.equal(*lhs, *rhs);
+                        self.constraints.equal(lhs, rhs);
                         // Operands should be integers.
                         // TODO: Probably should check they are ordinals.
-                        self.constraints.integer(*lhs);
-                        self.constraints.integer(*rhs);
+                        self.constraints.integer(lhs);
+                        self.constraints.integer(rhs);
                         // Results in a boolean.
-                        self.constraints
-                            .equal(expression_id, self.ctx.types.boolean());
+                        self.constraints.equal(expression, ty_boolean);
                     }
                     BinaryOperation::LogicalAnd | BinaryOperation::LogicalOr => {
                         // Operands must be booleans.
-                        self.constraints.equal(*lhs, self.ctx.types.boolean());
-                        self.constraints.equal(*rhs, self.ctx.types.boolean());
+                        self.constraints.equal(lhs, ty_boolean);
+                        self.constraints.equal(rhs, ty_boolean);
                         // Results in a boolean.
-                        self.constraints
-                            .equal(expression_id, self.ctx.types.boolean());
+                        self.constraints.equal(expression, ty_boolean);
                     }
                 }
             }
             Expression::Unary(Unary { operation, value }) => {
                 self.add_expression_constraints(ctx, *value);
 
+                let value = self.type_vars.intern(*value);
+
                 match operation {
                     UnaryOperation::Not => {
                         // Output is same as input.
-                        self.constraints.equal(expression_id, *value);
+                        self.constraints.equal(expression, value);
                         // Operand can be any integer.
-                        self.constraints.integer(*value);
+                        self.constraints.integer(value);
                     }
                     UnaryOperation::Negative => {
                         // Output is same as input.
-                        self.constraints.equal(expression_id, *value);
+                        self.constraints.equal(expression, value);
                         // Operand can be any integer.
-                        self.constraints.integer_signed(*value);
+                        self.constraints.integer_signed(value);
                     }
                     UnaryOperation::Deref => {
                         // Make sure that operand is a pointer, and output is inner type of pointer.
-                        self.constraints.reference(*value, expression_id);
+                        self.constraints.reference(value, expression);
                     }
-                    UnaryOperation::Ref => self.constraints.reference(expression_id, *value),
+                    UnaryOperation::Ref => self.constraints.reference(expression, value),
                 }
             }
             Expression::Switch(Switch {
@@ -233,23 +267,26 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     // Branch literal must match discriminator.
                     self.add_literal_constraint(*discriminator, literal);
                     // Block which is resolved must match this expression.
-                    self.constraints
-                        .equal(self.hir[*block].expression, expression_id);
+                    self.constraints.equal(
+                        self.type_vars.intern(self.hir[*block].expression),
+                        expression,
+                    );
                 });
 
                 // Ensure the default branch matches the expression, or unit if there is no default branch.
                 // TODO: This does not handle branches which are exhaustive.
                 match default {
-                    Some(default) => self
-                        .constraints
-                        .equal(expression_id, self.hir[*default].expression),
-                    None => self.constraints.equal(expression_id, self.ctx.types.unit()),
+                    Some(default) => self.constraints.equal(
+                        expression,
+                        self.type_vars.intern(self.hir[*default].expression),
+                    ),
+                    None => self.constraints.equal(expression, ty_unit),
                 }
             }
             Expression::Loop(Loop { body }) => {
                 // Ensure the body of the loop doesn't yield any non-unit expressions.
                 self.constraints
-                    .equal(self.hir[*body].expression, self.ctx.types.unit());
+                    .equal(self.type_vars.intern(self.hir[*body].expression), ty_unit);
 
                 // Create a new ctx for generating constraints for the body.
                 let ctx = ctx.push_loop(expression_id);
@@ -262,43 +299,54 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     self.add_expression_constraints(ctx, *argument);
                 }
 
-                self.constraints
-                    .function(*callee, arguments.iter().cloned(), expression_id);
+                self.constraints.function(
+                    self.type_vars.intern(*callee),
+                    arguments
+                        .iter()
+                        .map(|argument| self.type_vars.intern(*argument)),
+                    expression,
+                );
             }
             Expression::Block(block_id) => {
                 self.add_block_constraints(ctx, *block_id);
 
                 // Type of this expression will be the type of the block.
-                self.constraints
-                    .equal(expression_id, self.hir[*block_id].expression);
+                self.constraints.equal(
+                    expression,
+                    self.type_vars.intern(self.hir[*block_id].expression),
+                );
             }
-            Expression::Variable(Variable { binding }) => {
-                self.constraints.equal(expression_id, *binding)
-            }
-            Expression::Unreachable => self
+            Expression::Variable(Variable { binding }) => self
                 .constraints
-                .equal(expression_id, self.ctx.types.never()),
+                .equal(expression, self.type_vars.intern(*binding)),
+            Expression::Unreachable => self.constraints.equal(expression, ty_never),
             Expression::Aggregate(Aggregate { values }) => {
                 // Add constraints for each contained expression.
                 for value in values {
                     self.add_expression_constraints(ctx, *value);
                 }
 
-                self.constraints
-                    .aggregate(expression_id, values.iter().cloned());
+                self.constraints.aggregate(
+                    expression,
+                    values.iter().map(|value| self.type_vars.intern(*value)),
+                );
             }
             Expression::Field(Field { lhs, field }) => {
                 self.add_expression_constraints(ctx, *lhs);
 
-                self.constraints.field(expression_id, *lhs, *field);
+                self.constraints
+                    .field(expression, self.type_vars.intern(*lhs), *field);
             }
         }
     }
 
-    fn add_literal_constraint(&mut self, var: impl Into<TypeVarId>, literal: &Literal) {
+    fn add_literal_constraint(&mut self, var: impl Into<TypeVar>, literal: &Literal) {
+        let var = self.type_vars.intern(var);
         match literal {
             Literal::Integer(_) => self.constraints.integer(var),
-            Literal::Boolean(_) => self.constraints.equal(var, self.ctx.types.boolean()),
+            Literal::Boolean(_) => self
+                .constraints
+                .equal(var, self.type_vars.intern(self.ctx.types.boolean())),
         }
     }
 }

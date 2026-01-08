@@ -4,16 +4,12 @@ expression: "[(BindingId(1), TypeId(2)), (BindingId(2), TypeId(4))] => TypeId(4)
 ---
 [
     (
-        Binding(
-            BindingId(
-                0,
-            ),
+        TypeVarId(
+            0,
         ),
         Eq(
-            Type(
-                TypeId(
-                    5,
-                ),
+            TypeVarId(
+                1,
             ),
         ),
     ),

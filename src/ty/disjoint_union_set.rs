@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{prelude::*, ty::TypeVarId};
 
 #[derive(Clone, Debug)]
 pub struct DisjointUnionSet(HashMap<TypeVarId, (TypeVarId, usize)>);
@@ -47,14 +47,12 @@ impl DisjointUnionSet {
 
 #[cfg(test)]
 mod test {
-    use crate::ir::hir::ExpressionId;
-
     use super::*;
 
     #[fixture]
-    fn expression<const N: usize>() -> [TypeVarId; N] {
+    fn type_var<const N: usize>() -> [TypeVarId; N] {
         (0..N)
-            .map(|i| TypeVarId::from(ExpressionId::from_id(i)))
+            .map(TypeVarId::from_id)
             .collect::<Vec<_>>()
             .try_into()
             .unwrap()
@@ -66,72 +64,72 @@ mod test {
     }
 
     #[rstest]
-    fn no_parent(expression: [TypeVarId; 1], map: DisjointUnionSet) {
+    fn no_parent(type_var: [TypeVarId; 1], map: DisjointUnionSet) {
         assert_eq!(
-            map.find_set(expression[0]),
-            expression[0],
+            map.find_set(type_var[0]),
+            type_var[0],
             "should be in set by itself"
         );
     }
 
     #[rstest]
-    fn single_parent(expression: [TypeVarId; 2], mut map: DisjointUnionSet) {
-        map.union_sets(expression[0], expression[1]);
+    fn single_parent(type_var: [TypeVarId; 2], mut map: DisjointUnionSet) {
+        map.union_sets(type_var[0], type_var[1]);
         assert_eq!(
-            map.find_set(expression[0]),
-            map.find_set(expression[1]),
+            map.find_set(type_var[0]),
+            map.find_set(type_var[1]),
             "should be in same set"
         );
     }
 
     #[rstest]
-    fn already_in_same_set(expression: [TypeVarId; 2], mut map: DisjointUnionSet) {
-        map.union_sets(expression[0], expression[1]);
-        map.union_sets(expression[1], expression[0]);
+    fn already_in_same_set(type_var: [TypeVarId; 2], mut map: DisjointUnionSet) {
+        map.union_sets(type_var[0], type_var[1]);
+        map.union_sets(type_var[1], type_var[0]);
         assert_eq!(
-            map.find_set(expression[0]),
-            map.find_set(expression[1]),
+            map.find_set(type_var[0]),
+            map.find_set(type_var[1]),
             "should remain in same set, even if already union"
         );
     }
 
     #[rstest]
-    fn self_union(expression: [TypeVarId; 1], mut map: DisjointUnionSet) {
-        map.union_sets(expression[0], expression[0]);
-        assert_eq!(map.find_set(expression[0]), map.find_set(expression[0]));
+    fn self_union(type_var: [TypeVarId; 1], mut map: DisjointUnionSet) {
+        map.union_sets(type_var[0], type_var[0]);
+        assert_eq!(map.find_set(type_var[0]), map.find_set(type_var[0]));
     }
 
     #[rstest]
-    fn deep_parent(expression: [TypeVarId; 4], mut map: DisjointUnionSet) {
-        map.union_sets(expression[0], expression[1]);
-        map.union_sets(expression[1], expression[2]);
-        map.union_sets(expression[2], expression[3]);
+    fn deep_parent(type_var: [TypeVarId; 4], mut map: DisjointUnionSet) {
+        map.union_sets(type_var[0], type_var[1]);
+        map.union_sets(type_var[1], type_var[2]);
+        map.union_sets(type_var[2], type_var[3]);
 
         assert_eq!(
-            map.find_set(expression[0]),
-            map.find_set(expression[1]),
+            map.find_set(type_var[0]),
+            map.find_set(type_var[1]),
             "nodes should be in same set"
         );
         assert_eq!(
-            map.find_set(expression[0]),
-            map.find_set(expression[2]),
+            map.find_set(type_var[0]),
+            map.find_set(type_var[2]),
             "nodes should be in same set"
         );
         assert_eq!(
-            map.find_set(expression[0]),
-            map.find_set(expression[3]),
+            map.find_set(type_var[0]),
+            map.find_set(type_var[3]),
             "nodes should be in same set"
         );
     }
 
     #[rstest]
-    fn disjoint_sets(expression: [TypeVarId; 4], mut map: DisjointUnionSet) {
-        map.union_sets(expression[0], expression[1]);
-        map.union_sets(expression[2], expression[3]);
+    fn disjoint_sets(type_var: [TypeVarId; 4], mut map: DisjointUnionSet) {
+        map.union_sets(type_var[0], type_var[1]);
+        map.union_sets(type_var[2], type_var[3]);
 
         assert_ne!(
-            map.find_set(expression[0]),
-            map.find_set(expression[2]),
+            map.find_set(type_var[0]),
+            map.find_set(type_var[2]),
             "nodes should not be in same set"
         );
     }

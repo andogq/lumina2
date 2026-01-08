@@ -1,37 +1,29 @@
 ---
 source: src/passes/thir_gen.rs
-expression: pass.constraints
+expression: "*pass.constraints"
 ---
 [
     (
-        Expression(
-            ExpressionId(
-                4,
-            ),
+        TypeVarId(
+            0,
         ),
         Integer(
             Any,
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                4,
-            ),
+        TypeVarId(
+            0,
         ),
         Eq(
-            Expression(
-                ExpressionId(
-                    3,
-                ),
+            TypeVarId(
+                4,
             ),
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            5,
         ),
         Aggregate(
             [],

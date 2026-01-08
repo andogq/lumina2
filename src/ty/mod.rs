@@ -157,15 +157,60 @@ impl Default for Types {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum TypeVarId {
+#[derive(Clone, Debug, Default)]
+pub struct TypeVars {
+    vars: IndexedVec<TypeVarId, TypeVar>,
+}
+
+impl TypeVars {
+    /// Create a new instance.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Fetch the ID of the provided type variable.
+    pub fn intern(&mut self, var: impl Into<TypeVar>) -> TypeVarId {
+        let var = var.into();
+        if let Some((id, _)) = self
+            .vars
+            .iter_pairs()
+            .find(|(_, test_var)| **test_var == var)
+        {
+            return id;
+        }
+
+        self.vars.insert(var)
+    }
+
+    pub fn get(&self, var: impl Into<TypeVar>) -> TypeVarId {
+        let var = var.into();
+        self.vars
+            .iter_pairs()
+            .find(|(_, test_var)| **test_var == var)
+            .unwrap()
+            .0
+    }
+}
+
+impl Index<TypeVarId> for TypeVars {
+    type Output = TypeVar;
+
+    fn index(&self, index: TypeVarId) -> &Self::Output {
+        &self.vars[index]
+    }
+}
+
+create_id!(TypeVarId);
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TypeVar {
     Expression(ExpressionId),
     Binding(BindingId),
     Type(TypeId),
 }
 
 enum_conversion! {
-    [TypeVarId]
+    [TypeVar]
     Expression: ExpressionId,
     Binding: BindingId,
     Type: TypeId,
@@ -330,7 +375,7 @@ mod test {
         };
 
         // The type of the binding will correspond with the type of the expression.
-        let ty = *thir.types.get(&binding.into()).unwrap();
+        let ty = thir.type_of(binding);
         ctx.types[ty].clone()
     }
 

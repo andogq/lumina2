@@ -37,16 +37,18 @@ enum NonConcreteType {
 }
 
 #[derive(Debug)]
-pub struct Solver<'types> {
+pub struct Solver<'types, 'type_vars> {
     types: &'types mut Types,
+    type_vars: &'type_vars mut TypeVars,
     root: DisjointUnionSet,
     solutions: HashMap<TypeVarId, Solution>,
 }
 
-impl<'types> Solver<'types> {
-    pub fn new(types: &'types mut Types) -> Self {
+impl<'types, 'type_vars> Solver<'types, 'type_vars> {
+    pub fn new(types: &'types mut Types, type_vars: &'type_vars mut TypeVars) -> Self {
         Self {
             types,
+            type_vars,
             root: DisjointUnionSet::new(),
             solutions: HashMap::new(),
         }
@@ -54,9 +56,10 @@ impl<'types> Solver<'types> {
 
     pub fn run(
         types: &'types mut Types,
+        type_vars: &'type_vars mut TypeVars,
         constraints: &[(TypeVarId, Constraint)],
     ) -> HashMap<TypeVarId, TypeId> {
-        let mut solver = Self::new(types);
+        let mut solver = Self::new(types, type_vars);
 
         for (var, constraint) in constraints {
             assert!(solver.process_constraint(*var, constraint));
@@ -151,13 +154,15 @@ impl<'types> Solver<'types> {
             .iter()
             .zip(parameters)
             .filter_map(|(parameter_var, parameter)| {
-                let var = self.merge(*parameter_var, parameter.into()).unwrap();
+                let parameter = self.type_vars.intern(parameter);
+                let var = self.merge(*parameter_var, parameter).unwrap();
                 self.get_type(var)
             })
             .collect::<Vec<_>>();
 
         let solved_return_ty = {
-            let var = self.merge(return_ty_var, return_ty.into()).unwrap();
+            let return_ty = self.type_vars.intern(return_ty);
+            let var = self.merge(return_ty_var, return_ty).unwrap();
             self.get_type(var)
         };
 
@@ -198,8 +203,8 @@ impl<'types> Solver<'types> {
                             panic!("field not in aggregate");
                         }
 
-                        let ty = fields[field];
-                        self.merge(var, ty.into());
+                        let ty = self.type_vars.intern(fields[field]);
+                        self.merge(var, ty);
                     }
                     _ => panic!("cannot access field in type"),
                 },
@@ -343,8 +348,8 @@ impl<'types> Solver<'types> {
                 if let Type::Tuple(values) = &self.types[*ty] {
                     // Ensure tuple values match with type.
                     for (var, ty) in tuple.iter().zip(values.clone()) {
-                        self.merge(*var, ty.into())
-                            .expect("tuple values to be merged");
+                        let ty = self.type_vars.intern(ty);
+                        self.merge(*var, ty).expect("tuple values to be merged");
                     }
 
                     // Re-use the type as the solution.
@@ -420,8 +425,8 @@ impl<'types> Solver<'types> {
 
     fn get_solution(&mut self, var: TypeVarId) -> Option<Solution> {
         // Types always have a solution.
-        if let TypeVarId::Type(ty) = var {
-            return Some(Solution::Type(ty));
+        if let TypeVar::Type(ty) = &self.type_vars[var] {
+            return Some(Solution::Type(*ty));
         }
 
         let var = self.root.find_set(var);
@@ -476,18 +481,18 @@ mod test {
     use super::*;
 
     #[fixture]
-    fn expression<const N: usize>() -> [TypeVarId; N] {
+    fn expression<const N: usize>() -> [TypeVar; N] {
         (0..N)
-            .map(|i| TypeVarId::from(ExpressionId::from_id(i)))
+            .map(|i| TypeVar::from(ExpressionId::from_id(i)))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap()
     }
 
     #[fixture]
-    fn binding<const N: usize>() -> [TypeVarId; N] {
+    fn binding<const N: usize>() -> [TypeVar; N] {
         (0..N)
-            .map(|i| TypeVarId::from(BindingId::from_id(i)))
+            .map(|i| TypeVar::from(BindingId::from_id(i)))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap()
@@ -498,10 +503,16 @@ mod test {
         Types::new()
     }
 
+    #[fixture]
+    fn type_vars() -> TypeVars {
+        TypeVars::new()
+    }
+
     #[rstest]
-    fn prefilled(mut types: Types, expression: [TypeVarId; 1]) {
+    fn prefilled(mut types: Types, mut type_vars: TypeVars, expression: [TypeVar; 1]) {
+        let expression = expression.map(|expression| type_vars.intern(expression));
         let i8 = types.i8();
-        let mut solver = Solver::new(&mut types);
+        let mut solver = Solver::new(&mut types, &mut type_vars);
         solver
             .solutions
             .extend([(expression[0], Solution::Type(i8))]);
@@ -509,9 +520,10 @@ mod test {
     }
 
     #[rstest]
-    fn simple_constraint(mut types: Types, expression: [TypeVarId; 2]) {
+    fn simple_constraint(mut types: Types, mut type_vars: TypeVars, expression: [TypeVar; 2]) {
+        let expression = expression.map(|expression| type_vars.intern(expression));
         let i8 = types.i8();
-        let mut solver = Solver::new(&mut types);
+        let mut solver = Solver::new(&mut types, &mut type_vars);
         solver
             .solutions
             .extend([(expression[0], Solution::Type(i8))]);
@@ -521,9 +533,10 @@ mod test {
     }
 
     #[rstest]
-    fn deep_constraint(mut types: Types, expression: [TypeVarId; 3]) {
+    fn deep_constraint(mut types: Types, mut type_vars: TypeVars, expression: [TypeVar; 3]) {
+        let expression = expression.map(|expression| type_vars.intern(expression));
         let i8 = types.i8();
-        let mut solver = Solver::new(&mut types);
+        let mut solver = Solver::new(&mut types, &mut type_vars);
         solver
             .solutions
             .extend([(expression[0], Solution::Type(i8))]);
@@ -535,9 +548,14 @@ mod test {
     }
 
     #[rstest]
-    fn deep_constraint_reversed(mut types: Types, expression: [TypeVarId; 3]) {
+    fn deep_constraint_reversed(
+        mut types: Types,
+        mut type_vars: TypeVars,
+        expression: [TypeVar; 3],
+    ) {
+        let expression = expression.map(|expression| type_vars.intern(expression));
         let i8 = types.i8();
-        let mut solver = Solver::new(&mut types);
+        let mut solver = Solver::new(&mut types, &mut type_vars);
         solver
             .solutions
             .extend([(expression[0], Solution::Type(i8))]);
@@ -550,9 +568,10 @@ mod test {
     }
 
     #[rstest]
-    fn literal(mut types: Types, expression: [TypeVarId; 1]) {
+    fn literal(mut types: Types, mut type_vars: TypeVars, expression: [TypeVar; 1]) {
+        let expression = expression.map(|expression| type_vars.intern(expression));
         let u8 = types.u8();
-        let mut solver = Solver::new(&mut types);
+        let mut solver = Solver::new(&mut types, &mut type_vars);
         solver.solutions.extend([
             // Manually solve expression as literal.
             (
@@ -566,49 +585,59 @@ mod test {
     }
 
     #[rstest]
-    fn literal_constraint(mut types: Types, expression: [TypeVarId; 1]) {
+    fn literal_constraint(mut types: Types, mut type_vars: TypeVars, expression: [TypeVar; 1]) {
+        let expression = expression.map(|expression| type_vars.intern(expression));
         let i8 = types.i8();
-        let mut solver = Solver::new(&mut types);
+        let mut solver = Solver::new(&mut types, &mut type_vars);
 
         assert!(solver.process_constraint(expression[0], &Constraint::Integer(IntegerKind::Any)));
         assert_eq!(solver.get_type(expression[0]).unwrap(), i8);
     }
 
     #[rstest]
-    fn simple_infer(mut types: Types, expression: [TypeVarId; 2]) {
+    fn simple_infer(mut types: Types, mut type_vars: TypeVars, expression: [TypeVar; 2]) {
         // {
         //   1 <-- Integer
         // }   <-- U8
-        let [block, one] = expression;
+        let [block, one] = expression.map(|expression| type_vars.intern(expression));
 
         let u8 = types.u8();
+        let u8_ty = type_vars.intern(u8);
 
         let solutions = Solver::run(
             &mut types,
+            &mut type_vars,
             &[
                 (one, Constraint::Integer(IntegerKind::Any)),
                 (block, Constraint::Eq(one)),
-                (block, Constraint::Eq(u8.into())),
+                (block, Constraint::Eq(u8_ty)),
             ],
         );
         assert_eq!(solutions[&one], u8);
     }
 
     #[rstest]
-    fn unsigned_infer(mut types: Types, expression: [TypeVarId; 4], binding: [TypeVarId; 2]) {
+    fn unsigned_infer(
+        mut types: Types,
+        mut type_vars: TypeVars,
+        expression: [TypeVar; 4],
+        binding: [TypeVar; 2],
+    ) {
         // {
         //   let a = 1; <-- Integer
         //   let b = 2; <-- Integer
         //   a + b
         // }            <-- U8
 
-        let [a, b] = binding;
-        let [one, two, a_plus_b, block] = expression;
+        let [a, b] = binding.map(|expression| type_vars.intern(expression));
+        let [one, two, a_plus_b, block] = expression.map(|expression| type_vars.intern(expression));
 
         let u8 = types.u8();
+        let u8_ty = type_vars.intern(u8);
 
         let solutions = Solver::run(
             &mut types,
+            &mut type_vars,
             &[
                 // Literals
                 (one, Constraint::Integer(IntegerKind::Any)),
@@ -622,7 +651,7 @@ mod test {
                 // Implicit return
                 (a_plus_b, Constraint::Eq(block)),
                 // Block constraint (eg function signature)
-                (block, Constraint::Eq(u8.into())),
+                (block, Constraint::Eq(u8_ty)),
             ],
         );
 
@@ -631,20 +660,29 @@ mod test {
     }
 
     #[rstest]
-    fn reference_infer(mut types: Types, expression: [TypeVarId; 4], binding: [TypeVarId; 2]) {
+    fn reference_infer(
+        mut types: Types,
+        mut type_vars: TypeVars,
+        expression: [TypeVar; 4],
+        binding: [TypeVar; 2],
+    ) {
         // {
         //   let a = 1;  <- Integer
         //   let b = &a; <- Reference(a)
         //   *b
         // }             <- U8
-        let [a, b] = binding;
-        let [one, ref_a, deref_b, block] = expression;
+        let [a, b] = binding.map(|binding| type_vars.intern(binding));
+        let [one, ref_a, deref_b, block] =
+            expression.map(|expression| type_vars.intern(expression));
 
         let u8 = types.u8();
         let ref_u8 = types.ref_of(u8);
 
+        let u8_ty = type_vars.intern(u8);
+
         let solutions = Solver::run(
             &mut types,
+            &mut type_vars,
             &[
                 // Literal
                 (one, Constraint::Integer(IntegerKind::Any)),
@@ -657,7 +695,7 @@ mod test {
                 // Implicit return
                 (block, Constraint::Eq(deref_b)),
                 // Block constraint
-                (block, Constraint::Eq(u8.into())),
+                (block, Constraint::Eq(u8_ty)),
             ],
         );
 
@@ -666,20 +704,29 @@ mod test {
     }
 
     #[rstest]
-    fn more_references(mut types: Types, expression: [TypeVarId; 4], binding: [TypeVarId; 2]) {
+    fn more_references(
+        mut types: Types,
+        mut type_vars: TypeVars,
+        expression: [TypeVar; 4],
+        binding: [TypeVar; 2],
+    ) {
         // {
         //   let a = 123; <- Integer
         //   let b = &a;  <- Reference(a)
         //   *b
         // }              <- U8
-        let [num, ref_a, deref_b, block] = expression;
-        let [a, b] = binding;
+        let [num, ref_a, deref_b, block] =
+            expression.map(|expression| type_vars.intern(expression));
+        let [a, b] = binding.map(|expression| type_vars.intern(expression));
 
         let u8 = types.u8();
         let ref_u8 = types.ref_of(u8);
 
+        let u8_ty = type_vars.intern(u8);
+
         let solutions = Solver::run(
             &mut types,
+            &mut type_vars,
             &[
                 // Literal
                 (num, Constraint::Integer(IntegerKind::Any)),
@@ -691,7 +738,7 @@ mod test {
                 (b, Constraint::Eq(ref_a)),
                 // Block
                 (block, Constraint::Eq(deref_b)),
-                (block, Constraint::Eq(u8.into())),
+                (block, Constraint::Eq(u8_ty)),
             ],
         );
 
@@ -701,27 +748,36 @@ mod test {
     }
 
     #[rstest]
-    fn tuple(mut types: Types, expression: [TypeVarId; 5], binding: [TypeVarId; 3]) {
+    fn tuple(
+        mut types: Types,
+        mut type_vars: TypeVars,
+        expression: [TypeVar; 5],
+        binding: [TypeVar; 3],
+    ) {
         // {
         //   let a = 123;  <- Integer
         //   let b = true; <- Boolean
         //   let c = &a;   <- Reference(a)
         //   (a, b c)      <- Tuple([a, b, c])
         // } <- ??? (should be (i8, bool, &i8))
-        let [num, e_true, ref_a, e_tuple, block] = expression;
-        let [a, b, c] = binding;
+        let [num, e_true, ref_a, e_tuple, block] =
+            expression.map(|expression| type_vars.intern(expression));
+        let [a, b, c] = binding.map(|expression| type_vars.intern(expression));
 
         let i8 = types.i8();
         let bool = types.boolean();
         let ref_i8 = types.ref_of(i8);
         let tuple = types.tuple([i8, bool, ref_i8]);
 
+        let bool_ty = type_vars.intern(bool);
+
         let solutions = Solver::run(
             &mut types,
+            &mut type_vars,
             &[
                 // Literal
                 (num, Constraint::Integer(IntegerKind::Any)),
-                (e_true, Constraint::Eq(bool.into())),
+                (e_true, Constraint::Eq(bool_ty)),
                 // Expressions
                 (ref_a, Constraint::Reference(a)),
                 (e_tuple, Constraint::Aggregate(vec![a, b, c])),
@@ -738,17 +794,21 @@ mod test {
     }
 
     #[rstest]
-    fn overriding(mut types: Types, expression: [TypeVarId; 4]) {
+    fn overriding(mut types: Types, mut type_vars: TypeVars, expression: [TypeVar; 4]) {
         let u8 = types.u8();
+        let u8_ty = type_vars.intern(u8);
+
+        let expression = expression.map(|expression| type_vars.intern(expression));
 
         let solutions = Solver::run(
             &mut types,
+            &mut type_vars,
             &[
                 (expression[0], Constraint::Integer(IntegerKind::Any)),
                 (expression[1], Constraint::Reference(expression[0])),
                 (expression[2], Constraint::Reference(expression[3])),
                 (expression[2], Constraint::Eq(expression[1])),
-                (expression[3], Constraint::Eq(u8.into())),
+                (expression[3], Constraint::Eq(u8_ty)),
             ],
         );
 
@@ -760,9 +820,9 @@ mod test {
         use super::*;
 
         #[rstest]
-        fn identical_types(mut types: Types) {
+        fn identical_types(mut types: Types, mut type_vars: TypeVars) {
             let u8 = types.u8();
-            let mut solver = Solver::new(&mut types);
+            let mut solver = Solver::new(&mut types, &mut type_vars);
             assert_eq!(
                 solver.merge_solutions(&Solution::Type(u8), &Solution::Type(u8)),
                 MergeResult::Substitute(Solution::Type(u8))
@@ -770,9 +830,9 @@ mod test {
         }
 
         #[rstest]
-        fn type_and_any_integer_literal(mut types: Types) {
+        fn type_and_any_integer_literal(mut types: Types, mut type_vars: TypeVars) {
             let u8 = types.u8();
-            let mut solver = Solver::new(&mut types);
+            let mut solver = Solver::new(&mut types, &mut type_vars);
             assert_eq!(
                 solver.merge_solutions(
                     &Solution::Type(u8),
@@ -783,9 +843,9 @@ mod test {
         }
 
         #[rstest]
-        fn type_and_signed_integer_literal(mut types: Types) {
+        fn type_and_signed_integer_literal(mut types: Types, mut type_vars: TypeVars) {
             let i8 = types.i8();
-            let mut solver = Solver::new(&mut types);
+            let mut solver = Solver::new(&mut types, &mut type_vars);
             assert_eq!(
                 solver.merge_solutions(
                     &Solution::Type(i8),
@@ -796,9 +856,9 @@ mod test {
         }
 
         #[rstest]
-        fn type_and_unsigned_integer_literal_u8(mut types: Types) {
+        fn type_and_unsigned_integer_literal_u8(mut types: Types, mut type_vars: TypeVars) {
             let u8 = types.u8();
-            let mut solver = Solver::new(&mut types);
+            let mut solver = Solver::new(&mut types, &mut type_vars);
             assert_eq!(
                 solver.merge_solutions(
                     &Solution::Type(u8),
@@ -809,8 +869,8 @@ mod test {
         }
 
         #[rstest]
-        fn literal_identical(mut types: Types) {
-            let mut solver = Solver::new(&mut types);
+        fn literal_identical(mut types: Types, mut type_vars: TypeVars) {
+            let mut solver = Solver::new(&mut types, &mut type_vars);
             assert_eq!(
                 solver.merge_solutions(
                     &Solution::Literal(Literal::Integer(IntegerKind::Unsigned)),
@@ -821,8 +881,8 @@ mod test {
         }
 
         #[rstest]
-        fn literal_any_integer(mut types: Types) {
-            let mut solver = Solver::new(&mut types);
+        fn literal_any_integer(mut types: Types, mut type_vars: TypeVars) {
+            let mut solver = Solver::new(&mut types, &mut type_vars);
             assert_eq!(
                 solver.merge_solutions(
                     &Solution::Literal(Literal::Integer(IntegerKind::Unsigned)),
@@ -833,70 +893,75 @@ mod test {
         }
 
         #[rstest]
-        fn tuple_and_tuple_type(mut types: Types) {
+        fn tuple_and_tuple_type(
+            mut types: Types,
+            mut type_vars: TypeVars,
+            expression: [TypeVar; 2],
+        ) {
             let i8 = types.i8();
             let u8 = types.u8();
             let tuple = types.tuple([i8, u8]);
 
-            let field_0 = ExpressionId::from_id(0);
-            let field_1 = ExpressionId::from_id(1);
+            let [field_0, field_1] = expression.map(|expression| type_vars.intern(expression));
 
-            let mut solver = Solver::new(&mut types);
+            let mut solver = Solver::new(&mut types, &mut type_vars);
             assert_eq!(
                 solver.merge_solutions(
-                    &Solution::Tuple(vec![field_0.into(), field_1.into()]),
+                    &Solution::Tuple(vec![field_0, field_1]),
                     &Solution::Type(tuple),
                 ),
                 MergeResult::Substitute(Solution::Type(tuple)),
             );
-            assert_eq!(solver.get_type(field_0.into()).unwrap(), i8);
-            assert_eq!(solver.get_type(field_1.into()).unwrap(), u8);
+            assert_eq!(solver.get_type(field_0).unwrap(), i8);
+            assert_eq!(solver.get_type(field_1).unwrap(), u8);
         }
 
         #[rstest]
-        fn tuple_and_tuple_known(mut types: Types) {
+        fn tuple_and_tuple_known(
+            mut types: Types,
+            mut type_vars: TypeVars,
+            expression: [TypeVar; 2],
+        ) {
             let i8 = types.i8();
             let u8 = types.u8();
             let tuple = types.tuple([i8, u8]);
 
-            let field_0 = ExpressionId::from_id(0);
-            let field_1 = ExpressionId::from_id(1);
+            let i8_ty = type_vars.intern(i8);
+            let u8_ty = type_vars.intern(u8);
 
-            let mut solver = Solver::new(&mut types);
+            let [field_0, field_1] = expression.map(|expression| type_vars.intern(expression));
+
+            let mut solver = Solver::new(&mut types, &mut type_vars);
             assert_eq!(
                 solver.merge_solutions(
-                    &Solution::Tuple(vec![field_0.into(), u8.into()]),
-                    &Solution::Tuple(vec![i8.into(), field_1.into()]),
+                    &Solution::Tuple(vec![field_0, u8_ty]),
+                    &Solution::Tuple(vec![i8_ty, field_1]),
                 ),
                 MergeResult::Substitute(Solution::Type(tuple)),
             );
-            assert_eq!(solver.get_type(field_0.into()).unwrap(), i8);
-            assert_eq!(solver.get_type(field_1.into()).unwrap(), u8);
+            assert_eq!(solver.get_type(field_0).unwrap(), i8);
+            assert_eq!(solver.get_type(field_1).unwrap(), u8);
         }
 
         #[rstest]
-        fn tuple_and_tuple_unknown(mut types: Types) {
-            let field_0 = ExpressionId::from_id(0);
-            let field_1 = ExpressionId::from_id(1);
-            let field_2 = ExpressionId::from_id(2);
-            let field_3 = ExpressionId::from_id(3);
+        fn tuple_and_tuple_unknown(
+            mut types: Types,
+            mut type_vars: TypeVars,
+            expression: [TypeVar; 4],
+        ) {
+            let [field_0, field_1, field_2, field_3] =
+                expression.map(|expression| type_vars.intern(expression));
 
-            let mut solver = Solver::new(&mut types);
+            let mut solver = Solver::new(&mut types, &mut type_vars);
             assert!(matches!(
                 solver.merge_solutions(
-                    &Solution::Tuple(vec![field_0.into(), field_1.into()]),
-                    &Solution::Tuple(vec![field_2.into(), field_3.into()]),
+                    &Solution::Tuple(vec![field_0, field_1]),
+                    &Solution::Tuple(vec![field_2, field_3]),
                 ),
                 MergeResult::Substitute(Solution::Tuple(_)),
             ));
-            assert_eq!(
-                solver.root.find_set(field_0.into()),
-                solver.root.find_set(field_2.into())
-            );
-            assert_eq!(
-                solver.root.find_set(field_1.into()),
-                solver.root.find_set(field_3.into())
-            );
+            assert_eq!(solver.root.find_set(field_0), solver.root.find_set(field_2));
+            assert_eq!(solver.root.find_set(field_1), solver.root.find_set(field_3));
         }
     }
 }
