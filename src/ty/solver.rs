@@ -88,27 +88,13 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         self.merge(var, eq_var).unwrap();
     }
 
-    /// Insert the provided solution, ensuring that it's first simplified. Any existing solution
-    /// will be overwritten.
-    fn insert_solution(&mut self, var: TypeVarId, solution: Solution) {
-        let solution = self.simplify_solution(solution);
-
-        // TODO: Assert that no solution existed?
-        self.solutions.insert(var, solution);
-    }
-
     fn solve_integer(&mut self, var: TypeVarId, integer_kind: &IntegerKind) {
         let var = self.root.find_set(var);
         let var_solution = self.get_solution(var);
         let integer_solution = Solution::Literal(Literal::Integer(integer_kind.clone()));
 
-        let (solution, should_insert) = self
-            .simple_merge(var_solution.as_ref(), Some(&integer_solution))
+        self.simple_merge_and_insert(var, var_solution.as_ref(), Some(&integer_solution))
             .unwrap();
-
-        assert!(should_insert);
-
-        self.insert_solution(var, solution.expect("no nodes to merge for reference"));
     }
 
     fn solve_reference(&mut self, var: TypeVarId, ref_var: TypeVarId) {
@@ -118,13 +104,8 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         let var_solution = self.get_solution(var);
         let ref_solution = Solution::Reference(ref_var);
 
-        let (solution, should_insert) = self
-            .simple_merge(var_solution.as_ref(), Some(&ref_solution))
+        self.simple_merge_and_insert(var, var_solution.as_ref(), Some(&ref_solution))
             .unwrap();
-
-        assert!(should_insert);
-
-        self.insert_solution(var, solution.expect("no nodes to merge for reference"));
     }
 
     fn solve_function(
@@ -179,13 +160,8 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
             values.iter().map(|value| self.root.find_set(*value)),
         ));
 
-        let (solution, should_insert) = self
-            .simple_merge(solution.as_ref(), Some(&tuple_solution))
+        self.simple_merge_and_insert(var, solution.as_ref(), Some(&tuple_solution))
             .unwrap();
-
-        assert!(should_insert);
-
-        self.insert_solution(var, solution.expect("no nodes to merge for aggregate"));
     }
 
     fn solve_field(&mut self, var: TypeVarId, aggregate: TypeVarId, field: usize) {
@@ -231,28 +207,16 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         let lhs_solution = self.get_solution(lhs);
         let rhs_solution = self.get_solution(rhs);
 
-        // Ensure that if the variables have a solution, they're compatible and can be merged.
-        let (solution, should_insert) = self
-            .simple_merge(lhs_solution.as_ref(), rhs_solution.as_ref())
-            .ok()?;
+        // Merge the nodes.
+        let root = self.root.union_sets(lhs, rhs);
 
         // Remove any existing solutions so they don't get re-used.
         self.solutions.remove(&lhs);
         self.solutions.remove(&rhs);
 
-        // Merge the nodes.
-        let root = self.root.union_sets(lhs, rhs);
-
-        if should_insert {
-            // If no solution is provided, use the merged root.
-            let solution = solution.unwrap_or(Solution::Reference(root));
-
-            // Perform simplifications on the solution.
-            let solution = self.simplify_solution(solution);
-
-            // Insert the solution.
-            self.solutions.insert(root, solution);
-        }
+        // Ensure that if the variables have a solution, they're compatible and can be merged.
+        self.simple_merge_and_insert(root, lhs_solution.as_ref(), rhs_solution.as_ref())
+            .unwrap();
 
         Some(root)
     }
@@ -293,13 +257,16 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         }
     }
 
-    fn simple_merge(
+    /// Merge the `lhs` and `rhs` solutions, and store them in the solutions map under `var`.
+    fn simple_merge_and_insert(
         &mut self,
+        var: TypeVarId,
         lhs: Option<&Solution>,
         rhs: Option<&Solution>,
-    ) -> Result<(Option<Solution>, bool), IncompatibleKind> {
-        Ok(match (lhs, rhs) {
-            (Some(lhs_solution), Some(rhs_solution)) => (
+    ) -> Result<(), IncompatibleKind> {
+        let solution = match (lhs, rhs) {
+            // Both solutions exist, so they must be merged.
+            (Some(lhs_solution), Some(rhs_solution)) => {
                 match self.merge_solutions(lhs_solution, rhs_solution) {
                     MergeResult::Substitute(solution) => Some(solution),
                     MergeResult::MergeAndReference(lhs, rhs) => {
@@ -312,14 +279,27 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
                             .collect(),
                     )),
                     MergeResult::Incompatible(kind) => return Err(kind),
-                },
-                true,
-            ),
-            (Some(solution), None) | (None, Some(solution)) => (Some(solution.clone()), true),
-            (None, None) => (None, false),
-        })
+                }
+            }
+            // Only one solution exists, so it can be propagated.
+            (Some(solution), None) | (None, Some(solution)) => Some(solution.clone()),
+            // Neither of the solutions exist, so ignore.
+            (None, None) => None,
+        };
+
+        if let Some(solution) = solution {
+            let solution = self.simplify_solution(solution);
+
+            // TODO: Assert that no solution existed?
+            self.solutions.insert(var, solution);
+        }
+
+        Ok(())
     }
 
+    /// Attempt to merge the provided solutions into a single solution.
+    ///
+    /// This is where most of the type system rules are enforced.
     fn merge_solutions(&mut self, lhs: &Solution, rhs: &Solution) -> MergeResult {
         match (lhs, rhs) {
             // Already identical solutions.
