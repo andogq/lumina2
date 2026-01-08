@@ -64,13 +64,13 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         let mut solver = Self::new(types, type_vars);
 
         for (var, constraint) in constraints {
-            assert!(solver.process_constraint(*var, constraint));
+            solver.process_constraint(*var, constraint);
         }
 
         solver.get_types()
     }
 
-    pub fn process_constraint(&mut self, var: TypeVarId, constraint: &Constraint) -> bool {
+    pub fn process_constraint(&mut self, var: TypeVarId, constraint: &Constraint) {
         match constraint {
             Constraint::Eq(eq_var) => self.solve_eq(var, *eq_var),
             Constraint::Integer(integer_kind) => self.solve_integer(var, integer_kind),
@@ -84,8 +84,8 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         }
     }
 
-    fn solve_eq(&mut self, var: TypeVarId, eq_var: TypeVarId) -> bool {
-        self.merge(var, eq_var).is_some()
+    fn solve_eq(&mut self, var: TypeVarId, eq_var: TypeVarId) {
+        self.merge(var, eq_var).unwrap();
     }
 
     /// Insert the provided solution, ensuring that it's first simplified. Any existing solution
@@ -97,42 +97,34 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         self.solutions.insert(var, solution);
     }
 
-    fn solve_integer(&mut self, var: TypeVarId, integer_kind: &IntegerKind) -> bool {
+    fn solve_integer(&mut self, var: TypeVarId, integer_kind: &IntegerKind) {
         let var = self.root.find_set(var);
         let var_solution = self.get_solution(var);
         let integer_solution = Solution::Literal(Literal::Integer(integer_kind.clone()));
 
-        let Ok((solution, should_insert)) =
-            self.simple_merge(var_solution.as_ref(), Some(&integer_solution))
-        else {
-            return false;
-        };
+        let (solution, should_insert) = self
+            .simple_merge(var_solution.as_ref(), Some(&integer_solution))
+            .unwrap();
 
         assert!(should_insert);
 
         self.insert_solution(var, solution.expect("no nodes to merge for reference"));
-
-        true
     }
 
-    fn solve_reference(&mut self, var: TypeVarId, ref_var: TypeVarId) -> bool {
+    fn solve_reference(&mut self, var: TypeVarId, ref_var: TypeVarId) {
         let var = self.root.find_set(var);
         let ref_var = self.root.find_set(ref_var);
 
         let var_solution = self.get_solution(var);
         let ref_solution = Solution::Reference(ref_var);
 
-        let Ok((solution, should_insert)) =
-            self.simple_merge(var_solution.as_ref(), Some(&ref_solution))
-        else {
-            return false;
-        };
+        let (solution, should_insert) = self
+            .simple_merge(var_solution.as_ref(), Some(&ref_solution))
+            .unwrap();
 
         assert!(should_insert);
 
         self.insert_solution(var, solution.expect("no nodes to merge for reference"));
-
-        true
     }
 
     fn solve_function(
@@ -140,7 +132,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         var: TypeVarId,
         parameter_vars: &[TypeVarId],
         return_ty_var: TypeVarId,
-    ) -> bool {
+    ) {
         let Some((parameters, return_ty)) = self.get_solution(var).and_then(|solution| {
             let Solution::Type(ty) = solution else {
                 return None;
@@ -175,10 +167,11 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
             self.get_type(var)
         };
 
-        solved_return_ty.is_some() && solved_parameters.len() == parameter_vars.len()
+        assert!(solved_return_ty.is_some());
+        assert!(solved_parameters.len() == parameter_vars.len());
     }
 
-    fn solve_aggregate(&mut self, var: TypeVarId, values: &[TypeVarId]) -> bool {
+    fn solve_aggregate(&mut self, var: TypeVarId, values: &[TypeVarId]) {
         let var = self.root.find_set(var);
 
         let solution = self.get_solution(var);
@@ -186,20 +179,16 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
             values.iter().map(|value| self.root.find_set(*value)),
         ));
 
-        let Ok((solution, should_insert)) =
-            self.simple_merge(solution.as_ref(), Some(&tuple_solution))
-        else {
-            return false;
-        };
+        let (solution, should_insert) = self
+            .simple_merge(solution.as_ref(), Some(&tuple_solution))
+            .unwrap();
 
         assert!(should_insert);
 
         self.insert_solution(var, solution.expect("no nodes to merge for aggregate"));
-
-        true
     }
 
-    fn solve_field(&mut self, var: TypeVarId, aggregate: TypeVarId, field: usize) -> bool {
+    fn solve_field(&mut self, var: TypeVarId, aggregate: TypeVarId, field: usize) {
         let var = self.root.find_set(var);
         let aggregate = self.root.find_set(aggregate);
 
@@ -228,8 +217,6 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
             },
             None => todo!("handle aggregate field without existing solution"),
         }
-
-        true
     }
 
     fn merge(&mut self, lhs: TypeVarId, rhs: TypeVarId) -> Option<TypeVarId> {
@@ -556,7 +543,7 @@ mod test {
             .solutions
             .extend([(expression[0], Solution::Type(i8))]);
 
-        assert!(solver.process_constraint(expression[0], &Constraint::Eq(expression[1])));
+        solver.process_constraint(expression[0], &Constraint::Eq(expression[1]));
         assert_eq!(solver.get_type(expression[1]).unwrap(), i8);
     }
 
@@ -569,8 +556,8 @@ mod test {
             .solutions
             .extend([(expression[0], Solution::Type(i8))]);
 
-        assert!(solver.process_constraint(expression[0], &Constraint::Eq(expression[1])));
-        assert!(solver.process_constraint(expression[1], &Constraint::Eq(expression[2])));
+        solver.process_constraint(expression[0], &Constraint::Eq(expression[1]));
+        solver.process_constraint(expression[1], &Constraint::Eq(expression[2]));
         assert_eq!(solver.get_type(expression[1]).unwrap(), i8);
         assert_eq!(solver.get_type(expression[2]).unwrap(), i8);
     }
@@ -589,8 +576,8 @@ mod test {
             .extend([(expression[0], Solution::Type(i8))]);
 
         // Solve equality constraint before constraint with solution.
-        assert!(solver.process_constraint(expression[1], &Constraint::Eq(expression[2])));
-        assert!(solver.process_constraint(expression[0], &Constraint::Eq(expression[1])));
+        solver.process_constraint(expression[1], &Constraint::Eq(expression[2]));
+        solver.process_constraint(expression[0], &Constraint::Eq(expression[1]));
         assert_eq!(solver.get_type(expression[1]).unwrap(), i8);
         assert_eq!(solver.get_type(expression[2]).unwrap(), i8);
     }
@@ -618,7 +605,7 @@ mod test {
         let i8 = types.i8();
         let mut solver = Solver::new(&mut types, &mut type_vars);
 
-        assert!(solver.process_constraint(expression[0], &Constraint::Integer(IntegerKind::Any)));
+        solver.process_constraint(expression[0], &Constraint::Integer(IntegerKind::Any));
         assert_eq!(solver.get_type(expression[0]).unwrap(), i8);
     }
 
