@@ -40,7 +40,7 @@ enum NonConcreteType {
 pub struct Solver<'types, 'type_vars> {
     types: &'types mut Types,
     type_vars: &'type_vars mut TypeVars,
-    root: DisjointUnionSet,
+    root: DisjointUnionSet<TypeVarId>,
     solutions: HashMap<TypeVarId, Solution>,
 }
 
