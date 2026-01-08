@@ -88,6 +88,15 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         self.merge(var, eq_var).is_some()
     }
 
+    /// Insert the provided solution, ensuring that it's first simplified. Any existing solution
+    /// will be overwritten.
+    fn insert_solution(&mut self, var: TypeVarId, solution: Solution) {
+        let solution = self.simplify_solution(solution);
+
+        // TODO: Assert that no solution existed?
+        self.solutions.insert(var, solution);
+    }
+
     fn solve_integer(&mut self, var: TypeVarId, integer_kind: &IntegerKind) -> bool {
         let var = self.root.find_set(var);
         let var_solution = self.get_solution(var);
@@ -101,8 +110,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
 
         assert!(should_insert);
 
-        self.solutions
-            .insert(var, solution.expect("no nodes to merge for reference"));
+        self.insert_solution(var, solution.expect("no nodes to merge for reference"));
 
         true
     }
@@ -122,8 +130,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
 
         assert!(should_insert);
 
-        self.solutions
-            .insert(var, solution.expect("no nodes to merge for reference"));
+        self.insert_solution(var, solution.expect("no nodes to merge for reference"));
 
         true
     }
@@ -157,14 +164,14 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
             .zip(parameters)
             .filter_map(|(parameter_var, parameter)| {
                 let parameter = self.type_vars.intern(parameter);
-                let var = self.merge(*parameter_var, parameter).unwrap();
+                let var = self.root.union_sets(*parameter_var, parameter);
                 self.get_type(var)
             })
             .collect::<Vec<_>>();
 
         let solved_return_ty = {
             let return_ty = self.type_vars.intern(return_ty);
-            let var = self.merge(return_ty_var, return_ty).unwrap();
+            let var = self.root.union_sets(return_ty_var, return_ty);
             self.get_type(var)
         };
 
@@ -187,8 +194,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
 
         assert!(should_insert);
 
-        self.solutions
-            .insert(var, solution.expect("no nodes to merge for aggregate"));
+        self.insert_solution(var, solution.expect("no nodes to merge for aggregate"));
 
         true
     }
@@ -206,7 +212,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
                         }
 
                         let ty = self.type_vars.intern(fields[field]);
-                        self.merge(var, ty);
+                        self.root.union_sets(var, ty);
                     }
                     _ => panic!("cannot access field in type"),
                 },
@@ -216,7 +222,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
                     }
 
                     let ty_var = type_var_ids[field];
-                    self.merge(var, ty_var);
+                    self.root.union_sets(var, ty_var);
                 }
                 _ => todo!("deal with other solutions"),
             },
@@ -315,7 +321,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
                     MergeResult::TupleMergeAndSubstitute(values) => Some(Solution::Tuple(
                         values
                             .into_iter()
-                            .map(|(lhs, rhs)| self.root.union_sets(lhs, rhs))
+                            .map(|(lhs, rhs)| self.merge(lhs, rhs).unwrap())
                             .collect(),
                     )),
                     MergeResult::Incompatible(kind) => return Err(kind),
