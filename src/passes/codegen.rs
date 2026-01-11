@@ -119,12 +119,13 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
 
         // Declare all locals.
         for (i, (binding, ty)) in function.locals.iter().enumerate() {
+            let ink_ty = self.basic_ty(*ty);
             let alloca = match binding {
                 Some(binding) => builder.build_alloca(
-                    self.basic_ty(*ty),
+                    ink_ty,
                     self.ctx.strings.get(self.ctx.scopes.to_string(*binding)),
                 ),
-                None => builder.build_alloca(self.basic_ty(*ty), format!("local_{i}").as_str()),
+                None => builder.build_alloca(ink_ty, format!("local_{i}").as_str()),
             }
             .unwrap();
 
