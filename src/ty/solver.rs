@@ -36,6 +36,7 @@ enum IncompatibleKind {
 enum NonConcreteType {
     Type(TypeId),
     Literal(Literal),
+    Tuple(Vec<TypeVarId>),
 }
 
 #[derive(Debug)]
@@ -321,6 +322,21 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
                         {
                             MergeResult::Substitute(Solution::Type(*ty))
                         }
+                        Some(NonConcreteType::Tuple(values)) => {
+                            if let Type::Tuple(value_tys) = &self.types[ref_ty] {
+                                // Referenced type is a tuple, so values can be zipped.
+                                MergeResult::TupleMergeAndSubstitute(
+                                    value_tys
+                                        .iter()
+                                        .map(|ty| self.type_vars.intern(*ty))
+                                        .zip(values.iter().cloned())
+                                        .collect(),
+                                )
+                            } else {
+                                // Referenced type must be a tuple.
+                                MergeResult::Incompatible(IncompatibleKind::NotTuple(ref_ty))
+                            }
+                        }
                         // Solution doesn't exist, so existing solution is fine.
                         None => MergeResult::Substitute(Solution::Type(*ty)),
                         // Existing solution isn't compatible.
@@ -339,7 +355,9 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
                         Some(NonConcreteType::Literal(literal)) => {
                             IncompatibleKind::ReferenceSolution(literal.into())
                         }
-                        None => IncompatibleKind::NotReference(*ty),
+                        Some(NonConcreteType::Tuple(_)) | None => {
+                            IncompatibleKind::NotReference(*ty)
+                        }
                     })
                 }
             }
@@ -436,15 +454,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
                 Some(NonConcreteType::Type(self.types.ref_of(inner_ty)))
             }
             Solution::Literal(literal) => Some(NonConcreteType::Literal(literal.clone())),
-            Solution::Tuple(values) => Some(NonConcreteType::Type({
-                // HACK: This will likely need a `NonConcreteType::Tuple` to handle values which
-                // aren't fully resolved.
-                let values = values
-                    .iter()
-                    .map(|value| self.get_type(*value).unwrap())
-                    .collect::<Vec<_>>();
-                self.types.tuple(values)
-            })),
+            Solution::Tuple(values) => Some(NonConcreteType::Tuple(values.clone())),
         }
     }
 
@@ -452,6 +462,20 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         Some(match self.get_non_concrete_type(var)? {
             NonConcreteType::Type(ty) => ty,
             NonConcreteType::Literal(literal) => literal.to_type(self.types),
+            NonConcreteType::Tuple(values) => {
+                // Attempt to cast each value to a concrete type.
+                let tys = values
+                    .iter()
+                    .flat_map(|value| self.get_type(*value))
+                    .collect::<Vec<_>>();
+
+                // Every type must be successfully converted.
+                if tys.len() != values.len() {
+                    return None;
+                }
+
+                self.types.tuple(tys)
+            }
         })
     }
 
@@ -952,6 +976,46 @@ mod test {
                     &Solution::Tuple(vec![field_2, field_3]),
                 ),
                 MergeResult::TupleMergeAndSubstitute(vec![(field_0, field_2), (field_1, field_3)]),
+            );
+        }
+
+        /// Test combining a reference tuple expression with an explicit tuple reference type.
+        ///
+        /// ```text
+        /// &(i8, u8) == &(field_0, field_1)
+        ///     = Tuple([
+        ///         (i8 == field_0),
+        ///         (u8 == field_1),
+        ///     ])
+        /// ```
+        #[rstest]
+        fn tuple_and_tuple_ref_ty(
+            mut types: Types,
+            mut type_vars: TypeVars,
+            expression: [TypeVar; 4],
+        ) {
+            let field_0_ty = types.i8();
+            let field_1_ty = types.u8();
+            let tuple_ty = types.tuple([field_0_ty, field_1_ty]);
+            let tuple_ref_ty = types.ref_of(tuple_ty);
+
+            let [field_0, field_1, tuple, _] =
+                expression.map(|expression| type_vars.intern(expression));
+
+            let field_0_ty_var = type_vars.intern(field_0_ty);
+            let field_1_ty_var = type_vars.intern(field_1_ty);
+
+            let mut solver = Solver::new(&mut types, &mut type_vars);
+            // Pretend that `tuple` has already been solved to `(field_0, field_1)`.
+            solver
+                .solutions
+                .insert(tuple, Solution::Tuple(vec![field_0, field_1]));
+            assert_eq!(
+                solver.merge_solutions(&Solution::Type(tuple_ref_ty), &Solution::Reference(tuple)),
+                MergeResult::TupleMergeAndSubstitute(vec![
+                    (field_0_ty_var, field_0),
+                    (field_1_ty_var, field_1)
+                ]),
             );
         }
     }
