@@ -116,8 +116,10 @@ impl Types {
             Type::I8 => 1,
             Type::U8 => 1,
             Type::Boolean => 1,
-            Type::Ref(_) => todo!("pointer size"),
-            Type::Function { .. } => todo!("pointer size"),
+            // WARN: Should be linked to target.
+            Type::Ref(_) => std::mem::size_of::<usize>(),
+            // WARN: Should be linked to target.
+            Type::Function { .. } => std::mem::size_of::<usize>(),
             Type::Tuple(type_ids) => type_ids.clone().iter().map(|ty| self.size_of(*ty)).sum(),
         }
     }
