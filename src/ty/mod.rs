@@ -1,11 +1,16 @@
-pub mod constraints;
+mod constraints;
 mod disjoint_union_set;
-pub mod solver;
+mod solver;
 
 use crate::prelude::*;
 
-use self::disjoint_union_set::DisjointUnionSet;
-use crate::{enum_conversion, ir::hir::*};
+pub use self::{
+    constraints::{Constraint, Constraints},
+    disjoint_union_set::DisjointUnionSet,
+    solver::Solver,
+};
+
+use hir::*;
 
 create_id!(TypeId);
 
@@ -219,25 +224,6 @@ enum_conversion! {
     Expression: ExpressionId,
     Binding: BindingId,
     Type: TypeId,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Constraint {
-    /// Variable is exactly equal to [`TypeVarId`].
-    Eq(TypeVarId),
-    /// Variable is some kind of integer, matching [`IntegerKind`].
-    Integer(IntegerKind),
-    /// Variable is a reference to [`TypeVarId`].
-    Reference(TypeVarId),
-    /// Variable is a function.
-    Function {
-        /// Parameter variables of function.
-        parameters: Vec<TypeVarId>,
-        /// Return variable of function.
-        return_ty: TypeVarId,
-    },
-    /// Variable is an aggregate with some number of fields..
-    Aggregate(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

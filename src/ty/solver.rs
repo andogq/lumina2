@@ -1,5 +1,8 @@
-use super::*;
-use crate::ty::Literal;
+use crate::prelude::*;
+
+use crate::ty::{
+    Constraint, DisjointUnionSet, IntegerKind, Literal, Solution, TypeVarId, TypeVars,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum MergeResult {
@@ -490,6 +493,8 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use hir::ExpressionId;
 
     #[fixture]
     fn expression<const N: usize>() -> [TypeVar; N] {

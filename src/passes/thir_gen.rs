@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
-use crate::ty::TypeVars;
-use crate::ty::{constraints::Constraints, solver::Solver};
+use crate::ty::{Constraints, Solver, TypeVars};
 
 use hir::*;
 use thir::Thir;
