@@ -4,16 +4,12 @@ expression: "[] => TypeId(2)"
 ---
 [
     (
-        Binding(
-            BindingId(
-                0,
-            ),
+        TypeVarId(
+            0,
         ),
         Eq(
-            Type(
-                TypeId(
-                    5,
-                ),
+            TypeVarId(
+                1,
             ),
         ),
     ),

@@ -4,34 +4,26 @@ expression: "Unary { operation: Negative, value: ExpressionId(0) }"
 ---
 [
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                1,
-            ),
+        TypeVarId(
+            0,
         ),
         Eq(
-            Expression(
-                ExpressionId(
-                    0,
-                ),
+            TypeVarId(
+                4,
             ),
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Integer(
             Signed,

@@ -1,4 +1,7 @@
-use crate::prelude::*;
+use crate::{
+    prelude::*,
+    ty::{TypeVarId, TypeVars},
+};
 
 use hir::*;
 
@@ -6,6 +9,7 @@ use hir::*;
 pub struct Thir<'hir> {
     pub hir: &'hir Hir,
     pub types: HashMap<TypeVarId, TypeId>,
+    pub type_vars: TypeVars,
 }
 
 impl Deref for Thir<'_> {
@@ -17,11 +21,16 @@ impl Deref for Thir<'_> {
 }
 
 impl<'hir> Thir<'hir> {
-    pub fn new(hir: &'hir Hir, types: HashMap<TypeVarId, TypeId>) -> Self {
-        Self { hir, types }
+    pub fn new(hir: &'hir Hir, types: HashMap<TypeVarId, TypeId>, type_vars: TypeVars) -> Self {
+        Self {
+            hir,
+            types,
+            type_vars,
+        }
     }
 
-    pub fn type_of(&self, id: impl Into<TypeVarId>) -> TypeId {
-        self.types[&id.into()]
+    pub fn type_of(&self, id: impl Into<TypeVar>) -> TypeId {
+        let var = self.type_vars.get(id.into());
+        self.types[&var]
     }
 }

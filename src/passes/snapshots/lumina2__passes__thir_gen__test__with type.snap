@@ -4,27 +4,21 @@ expression: Type(TypeId(2))
 ---
 [
     (
-        Binding(
-            BindingId(
-                0,
-            ),
+        TypeVarId(
+            0,
         ),
         Eq(
-            Type(
-                TypeId(
-                    2,
-                ),
+            TypeVarId(
+                1,
             ),
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            2,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
 ]

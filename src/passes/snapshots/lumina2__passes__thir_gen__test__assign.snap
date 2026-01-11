@@ -4,51 +4,39 @@ expression: "Assign { variable: ExpressionId(0), value: ExpressionId(0) }"
 ---
 [
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Eq(
-            Expression(
-                ExpressionId(
-                    0,
-                ),
+            TypeVarId(
+                4,
             ),
         ),
     ),
     (
-        Expression(
-            ExpressionId(
+        TypeVarId(
+            0,
+        ),
+        Eq(
+            TypeVarId(
                 1,
             ),
         ),
-        Eq(
-            Type(
-                TypeId(
-                    1,
-                ),
-            ),
+    ),
+    (
+        TypeVarId(
+            4,
+        ),
+        Aggregate(
+            0,
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Aggregate(
-            [],
-        ),
-    ),
-    (
-        Expression(
-            ExpressionId(
-                0,
-            ),
-        ),
-        Aggregate(
-            [],
+            0,
         ),
     ),
 ]

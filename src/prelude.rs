@@ -17,7 +17,7 @@ pub use crate::{create_id, enum_conversion, run_and_report};
 // IDs and associated traits.
 pub use crate::{
     // TODO: This needs to be  moved
-    ty::{TypeId, TypeVarId},
+    ty::{TypeId, TypeVar},
     util::{
         indexed_vec::Id,
         scopes::{BindingId, ScopeId},

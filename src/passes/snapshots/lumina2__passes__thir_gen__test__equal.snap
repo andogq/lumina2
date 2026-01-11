@@ -4,50 +4,38 @@ expression: "Binary { lhs: ExpressionId(0), operation: Equal, rhs: ExpressionId(
 ---
 [
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            4,
         ),
         Eq(
-            Expression(
-                ExpressionId(
-                    0,
-                ),
+            TypeVarId(
+                4,
             ),
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                1,
-            ),
+        TypeVarId(
+            0,
         ),
         Eq(
-            Type(
-                TypeId(
-                    4,
-                ),
+            TypeVarId(
+                2,
             ),
         ),
     ),

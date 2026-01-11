@@ -92,9 +92,13 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
         // If the block resolves to a value of the same type as the return value, then it's an
         // implicit return.
         let body = &self.thir[function.entry];
-        if let Some(result) = block.operand
-            && self.thir.type_of(body.expression) == function.return_ty
-        {
+        if let Some(result) = block.operand {
+            assert_eq!(
+                self.thir.type_of(body.expression),
+                function.return_ty,
+                "ty check bug: body expression must match function return"
+            );
+
             let place = self.mir.places.insert(return_local.into());
             self.mir.add_statement(
                 block.exit,

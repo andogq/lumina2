@@ -1,10 +1,16 @@
+mod constraints;
 mod disjoint_union_set;
-pub mod solver;
+mod solver;
 
 use crate::prelude::*;
 
-use self::disjoint_union_set::DisjointUnionSet;
-use crate::{enum_conversion, ir::hir::*};
+pub use self::{
+    constraints::{Constraint, Constraints},
+    disjoint_union_set::DisjointUnionSet,
+    solver::Solver,
+};
+
+use hir::*;
 
 create_id!(TypeId);
 
@@ -156,34 +162,68 @@ impl Default for Types {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum TypeVarId {
+#[derive(Clone, Debug, Default)]
+pub struct TypeVars {
+    vars: IndexedVec<TypeVarId, TypeVar>,
+}
+
+impl TypeVars {
+    /// Create a new instance.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Fetch the ID of the provided type variable.
+    pub fn intern(&mut self, var: impl Into<TypeVar>) -> TypeVarId {
+        let var = var.into();
+        if let Some((id, _)) = self
+            .vars
+            .iter_pairs()
+            .find(|(_, test_var)| **test_var == var)
+        {
+            return id;
+        }
+
+        self.vars.insert(var)
+    }
+
+    pub fn get(&self, var: impl Into<TypeVar>) -> TypeVarId {
+        let var = var.into();
+        self.vars
+            .iter_pairs()
+            .find(|(_, test_var)| **test_var == var)
+            .unwrap()
+            .0
+    }
+}
+
+impl Index<TypeVarId> for TypeVars {
+    type Output = TypeVar;
+
+    fn index(&self, index: TypeVarId) -> &Self::Output {
+        &self.vars[index]
+    }
+}
+
+create_id!(TypeVarId);
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TypeVar {
+    /// Variable is an expression.
     Expression(ExpressionId),
+    /// Variable is a binding.
     Binding(BindingId),
+    /// Variable is a type.
     Type(TypeId),
+    /// Variable is a field on another variable.
+    Field(TypeVarId, usize),
 }
 
 enum_conversion! {
-    [TypeVarId]
+    [TypeVar]
     Expression: ExpressionId,
     Binding: BindingId,
     Type: TypeId,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Constraint {
-    Eq(TypeVarId),
-    Integer(IntegerKind),
-    Reference(TypeVarId),
-    Function {
-        parameters: Vec<TypeVarId>,
-        return_ty: TypeVarId,
-    },
-    Aggregate(Vec<TypeVarId>),
-    Field {
-        aggregate: TypeVarId,
-        field: usize,
-    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -234,13 +274,6 @@ impl Literal {
 pub enum IntegerKind {
     Any,
     Signed,
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "future constraints may require an unsigned integer."
-        )
-    )]
     Unsigned,
 }
 
@@ -336,7 +369,7 @@ mod test {
         };
 
         // The type of the binding will correspond with the type of the expression.
-        let ty = *thir.types.get(&binding.into()).unwrap();
+        let ty = thir.type_of(binding);
         ctx.types[ty].clone()
     }
 

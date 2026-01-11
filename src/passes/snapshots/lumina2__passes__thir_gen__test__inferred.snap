@@ -4,27 +4,21 @@ expression: Inferred(ExpressionId(0))
 ---
 [
     (
-        Binding(
-            BindingId(
-                0,
-            ),
+        TypeVarId(
+            0,
         ),
         Eq(
-            Expression(
-                ExpressionId(
-                    0,
-                ),
+            TypeVarId(
+                1,
             ),
         ),
     ),
     (
-        Expression(
-            ExpressionId(
-                0,
-            ),
+        TypeVarId(
+            1,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
 ]
