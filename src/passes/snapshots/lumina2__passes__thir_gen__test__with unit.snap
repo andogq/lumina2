@@ -18,7 +18,7 @@ expression: Type(TypeId(1))
             2,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
 ]

@@ -322,20 +322,25 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
             Expression::Unreachable => self.constraints.equal(expression, ty_never),
             Expression::Aggregate(Aggregate { values }) => {
                 // Add constraints for each contained expression.
-                for value in values {
+                for (i, value) in values.iter().enumerate() {
                     self.add_expression_constraints(ctx, *value);
+
+                    self.constraints.equal(
+                        self.type_vars.intern(*value),
+                        self.type_vars.intern(TypeVar::Field(expression, i)),
+                    );
                 }
 
-                self.constraints.aggregate(
-                    expression,
-                    values.iter().map(|value| self.type_vars.intern(*value)),
-                );
+                self.constraints.aggregate(expression, values.len());
             }
             Expression::Field(Field { lhs, field }) => {
                 self.add_expression_constraints(ctx, *lhs);
 
-                self.constraints
-                    .field(expression, self.type_vars.intern(*lhs), *field);
+                let lhs = self.type_vars.intern(*lhs);
+                self.constraints.equal(
+                    expression,
+                    self.type_vars.intern(TypeVar::Field(lhs, *field)),
+                );
             }
         }
     }

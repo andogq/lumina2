@@ -18,7 +18,7 @@ expression: Inferred(ExpressionId(0))
             1,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
 ]

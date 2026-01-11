@@ -28,7 +28,7 @@ expression: "Assign { variable: ExpressionId(0), value: ExpressionId(0) }"
             4,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
     (
@@ -36,7 +36,7 @@ expression: "Assign { variable: ExpressionId(0), value: ExpressionId(0) }"
             4,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
 ]

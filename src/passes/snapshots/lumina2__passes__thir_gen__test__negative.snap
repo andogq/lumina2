@@ -8,7 +8,7 @@ expression: "Unary { operation: Negative, value: ExpressionId(0) }"
             4,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
     (

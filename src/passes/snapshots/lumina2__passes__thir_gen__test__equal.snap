@@ -8,7 +8,7 @@ expression: "Binary { lhs: ExpressionId(0), operation: Equal, rhs: ExpressionId(
             4,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
     (
@@ -16,7 +16,7 @@ expression: "Binary { lhs: ExpressionId(0), operation: Equal, rhs: ExpressionId(
             4,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
     (

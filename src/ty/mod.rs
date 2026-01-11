@@ -204,9 +204,14 @@ create_id!(TypeVarId);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeVar {
+    /// Variable is an expression.
     Expression(ExpressionId),
+    /// Variable is a binding.
     Binding(BindingId),
+    /// Variable is a type.
     Type(TypeId),
+    /// Variable is a field on another variable.
+    Field(TypeVarId, usize),
 }
 
 enum_conversion! {
@@ -231,15 +236,8 @@ pub enum Constraint {
         /// Return variable of function.
         return_ty: TypeVarId,
     },
-    /// Variable is an aggregate with the provided fields.
-    Aggregate(Vec<TypeVarId>),
-    /// Variable is a field of another variable.
-    Field {
-        /// Variable which this variable appears on.
-        aggregate: TypeVarId,
-        /// Field number of this variable on its parent.
-        field: usize,
-    },
+    /// Variable is an aggregate with some number of fields..
+    Aggregate(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

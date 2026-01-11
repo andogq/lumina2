@@ -80,8 +80,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
                 parameters,
                 return_ty,
             } => self.solve_function(var, parameters, *return_ty),
-            Constraint::Aggregate(values) => self.solve_aggregate(var, values),
-            Constraint::Field { aggregate, field } => self.solve_field(var, *aggregate, *field),
+            Constraint::Aggregate(size) => self.solve_aggregate(var, *size),
         }
     }
 
@@ -153,47 +152,20 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         assert!(solved_parameters.len() == parameter_vars.len());
     }
 
-    fn solve_aggregate(&mut self, var: TypeVarId, values: &[TypeVarId]) {
-        let var = self.root.find_set(var);
+    fn solve_aggregate(&mut self, var: TypeVarId, size: usize) {
+        let tuple_solution = Solution::Tuple(
+            (0..size)
+                .map(|i| TypeVar::Field(var, i))
+                .map(|var| self.type_vars.intern(var))
+                .map(|value| self.root.find_set(value))
+                .collect::<Vec<_>>(),
+        );
 
+        let var = self.root.find_set(var);
         let solution = self.get_solution(var);
-        let tuple_solution = Solution::Tuple(Vec::from_iter(
-            values.iter().map(|value| self.root.find_set(*value)),
-        ));
 
         self.simple_merge_and_insert(var, solution.as_ref(), Some(&tuple_solution))
             .unwrap();
-    }
-
-    fn solve_field(&mut self, var: TypeVarId, aggregate: TypeVarId, field: usize) {
-        let var = self.root.find_set(var);
-        let aggregate = self.root.find_set(aggregate);
-
-        match self.get_solution(aggregate) {
-            Some(solution) => match solution {
-                Solution::Type(type_id) => match &self.types[type_id] {
-                    Type::Tuple(fields) => {
-                        if field >= fields.len() {
-                            panic!("field not in aggregate");
-                        }
-
-                        let ty = self.type_vars.intern(fields[field]);
-                        self.root.union_sets(var, ty);
-                    }
-                    _ => panic!("cannot access field in type"),
-                },
-                Solution::Tuple(type_var_ids) => {
-                    if field >= type_var_ids.len() {
-                        panic!("field not in aggregate");
-                    }
-
-                    let ty_var = type_var_ids[field];
-                    self.root.union_sets(var, ty_var);
-                }
-                _ => todo!("deal with other solutions"),
-            },
-            None => todo!("handle aggregate field without existing solution"),
-        }
     }
 
     fn merge(&mut self, lhs: TypeVarId, rhs: TypeVarId) -> Option<TypeVarId> {
@@ -290,6 +262,26 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
 
         if let Some(solution) = solution {
             let solution = self.simplify_solution(solution);
+
+            // Collection solutions that involve aggregate variables.
+            let vars = match &solution {
+                Solution::Tuple(vars) => Some(vars.clone()),
+                Solution::Type(ty) => match &self.types[*ty] {
+                    Type::Tuple(vars) => {
+                        Some(vars.iter().map(|var| self.type_vars.intern(*var)).collect())
+                    }
+                    _ => None,
+                },
+                _ => None,
+            };
+
+            if let Some(vars) = vars {
+                // Ensure all the variables are merged with their `TypeVar::Field` equivalent.
+                for (i, field_var) in vars.into_iter().enumerate() {
+                    let field = self.type_vars.intern(TypeVar::Field(var, i));
+                    self.merge(field_var, field);
+                }
+            }
 
             // TODO: Assert that no solution existed?
             self.solutions.insert(var, solution);
@@ -436,7 +428,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         }
     }
 
-    fn get_solution(&self, var: TypeVarId) -> Option<Solution> {
+    fn get_solution(&mut self, var: TypeVarId) -> Option<Solution> {
         // Types always have a solution.
         if let TypeVar::Type(ty) = &self.type_vars[var] {
             return Some(Solution::Type(*ty));
@@ -777,7 +769,7 @@ mod test {
         //   let a = 123;  <- Integer
         //   let b = true; <- Boolean
         //   let c = &a;   <- Reference(a)
-        //   (a, b c)      <- Tuple([a, b, c])
+        //   (a, b, c)     <- Tuple([a, b, c])
         // } <- ??? (should be (i8, bool, &i8))
         let [num, e_true, ref_a, e_tuple, block] =
             expression.map(|expression| type_vars.intern(expression));
@@ -790,6 +782,10 @@ mod test {
 
         let bool_ty = type_vars.intern(bool);
 
+        let tuple_field_vars = [0, 1, 2]
+            .map(|i| TypeVar::Field(e_tuple, i))
+            .map(|var| type_vars.intern(var));
+
         let solutions = Solver::run(
             &mut types,
             &mut type_vars,
@@ -799,7 +795,11 @@ mod test {
                 (e_true, Constraint::Eq(bool_ty)),
                 // Expressions
                 (ref_a, Constraint::Reference(a)),
-                (e_tuple, Constraint::Aggregate(vec![a, b, c])),
+                (e_tuple, Constraint::Aggregate(3)),
+                // Tuple aggregate
+                (a, Constraint::Eq(tuple_field_vars[0])),
+                (b, Constraint::Eq(tuple_field_vars[1])),
+                (c, Constraint::Eq(tuple_field_vars[2])),
                 // Bindings
                 (a, Constraint::Eq(num)),
                 (b, Constraint::Eq(e_true)),
@@ -810,6 +810,58 @@ mod test {
         );
 
         assert_eq!(solutions[&block], tuple);
+    }
+
+    #[rstest]
+    fn tuple_integer(
+        mut types: Types,
+        mut type_vars: TypeVars,
+        expression: [TypeVar; 5],
+        binding: [TypeVar; 1],
+    ) {
+        // {
+        //   let tuple = (123, 456) <- Tuple([Integer, Integer])
+        //   tuple.0 + tuple.1
+        // }                        <- U8
+        let [l_123, l_456, e_tuple, block, e_add] =
+            expression.map(|expression| type_vars.intern(expression));
+        let [tuple] = binding.map(|expression| type_vars.intern(expression));
+
+        let u8 = types.u8();
+        let tuple_ty = types.tuple([u8, u8]);
+
+        let u8_var = type_vars.intern(u8);
+
+        let tuple_field_vars = [0, 1]
+            .map(|i| TypeVar::Field(tuple, i))
+            .map(|var| type_vars.intern(var));
+
+        let solutions = Solver::run(
+            &mut types,
+            &mut type_vars,
+            &[
+                // Literal
+                (l_123, Constraint::Integer(IntegerKind::Any)),
+                (l_456, Constraint::Integer(IntegerKind::Any)),
+                // Expressions
+                (e_tuple, Constraint::Aggregate(2)),
+                // NOTE: `thir_gen` uses LHS to assert equality for add.
+                (e_add, Constraint::Eq(tuple_field_vars[0])),
+                (tuple_field_vars[0], Constraint::Eq(tuple_field_vars[1])),
+                // Tuple aggregate
+                (l_123, Constraint::Eq(tuple_field_vars[0])),
+                (l_456, Constraint::Eq(tuple_field_vars[1])),
+                // Bindings
+                (tuple, Constraint::Eq(e_tuple)),
+                // Block
+                (block, Constraint::Eq(u8_var)),
+                (block, Constraint::Eq(e_add)),
+            ],
+        );
+
+        assert_eq!(solutions[&l_123], u8);
+        assert_eq!(solutions[&l_456], u8);
+        assert_eq!(solutions[&tuple], tuple_ty);
     }
 
     #[rstest]

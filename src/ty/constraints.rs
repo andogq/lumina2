@@ -68,32 +68,10 @@ impl Constraints {
         ));
     }
 
-    /// Add a [`Constraint::Aggregate`] where `var` is `values`.
-    pub fn aggregate(
-        &mut self,
-        var: impl Into<TypeVarId>,
-        values: impl IntoIterator<Item = impl Into<TypeVarId>>,
-    ) {
-        self.constraints.push((
-            var.into(),
-            Constraint::Aggregate(values.into_iter().map(|value| value.into()).collect()),
-        ));
-    }
-
-    /// Add a [`Constraint::Field`] where `var` is `field` on `aggregate`.
-    pub fn field(
-        &mut self,
-        var: impl Into<TypeVarId>,
-        aggregate: impl Into<TypeVarId>,
-        field: usize,
-    ) {
-        self.constraints.push((
-            var.into(),
-            Constraint::Field {
-                aggregate: aggregate.into(),
-                field,
-            },
-        ));
+    /// Add a [`Constraint::Aggregate`] with `size` fields.
+    pub fn aggregate(&mut self, var: impl Into<TypeVarId>, size: usize) {
+        self.constraints
+            .push((var.into(), Constraint::Aggregate(size)));
     }
 }
 

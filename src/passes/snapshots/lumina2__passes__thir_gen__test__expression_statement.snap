@@ -16,7 +16,7 @@ expression: "*pass.constraints"
             4,
         ),
         Aggregate(
-            [],
+            0,
         ),
     ),
 ]
