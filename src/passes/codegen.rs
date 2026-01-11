@@ -221,7 +221,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .try_as_basic_value()
-                            .left()
+                            .basic()
                             .unwrap()
                     }
                     // Otherwise fall back to an indirect call.
@@ -246,7 +246,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             )
                             .unwrap()
                             .try_as_basic_value()
-                            .left()
+                            .basic()
                             .unwrap()
                     }
                 };
