@@ -218,16 +218,26 @@ enum_conversion! {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Constraint {
+    /// Variable is exactly equal to [`TypeVarId`].
     Eq(TypeVarId),
+    /// Variable is some kind of integer, matching [`IntegerKind`].
     Integer(IntegerKind),
+    /// Variable is a reference to [`TypeVarId`].
     Reference(TypeVarId),
+    /// Variable is a function.
     Function {
+        /// Parameter variables of function.
         parameters: Vec<TypeVarId>,
+        /// Return variable of function.
         return_ty: TypeVarId,
     },
+    /// Variable is an aggregate with the provided fields.
     Aggregate(Vec<TypeVarId>),
+    /// Variable is a field of another variable.
     Field {
+        /// Variable which this variable appears on.
         aggregate: TypeVarId,
+        /// Field number of this variable on its parent.
         field: usize,
     },
 }
