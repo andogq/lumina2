@@ -22,6 +22,7 @@ impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
                     ast_gen.lower_function(function_declaration)
                 }
                 cst::Item::TraitDeclaration(_) => todo!(),
+                cst::Item::TraitImplementation(_) => todo!(),
             }
         }
 

@@ -1,0 +1,19 @@
+---
+source: src/passes/cst_gen.rs
+expression: "impl MyTrait for SomeType {}"
+---
+TraitImplementation {
+    tok_impl: Impl,
+    name: Ident(
+        "MyTrait",
+    ),
+    tok_for: For,
+    ty: Named(
+        Ident(
+            "SomeType",
+        ),
+    ),
+    tok_l_brace: LBrace,
+    methods: [],
+    tok_r_brace: RBrace,
+}

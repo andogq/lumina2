@@ -33,6 +33,10 @@ impl Parse for cst::Program {
                     let trait_declaration = cst::TraitDeclaration::parse(lexer);
                     program.add_trait_declaration(trait_declaration);
                 }
+                Tok::Impl => {
+                    let trait_implementation = cst::TraitImplementation::parse(lexer);
+                    program.add_trait_implementation(trait_implementation);
+                }
                 tok => {
                     eprintln!("Unknown tok: {tok}");
                     lexer.next();
@@ -58,6 +62,28 @@ impl Parse for cst::TraitDeclaration {
                         cst::FunctionSignature::parse(lexer),
                         lexer.expect().unwrap(),
                     ));
+                }
+
+                methods
+            },
+            tok_r_brace: lexer.expect().unwrap(),
+        }
+    }
+}
+
+impl Parse for cst::TraitImplementation {
+    fn parse(lexer: &mut Lexer<'_>) -> Self {
+        cst::TraitImplementation {
+            tok_impl: lexer.expect().unwrap(),
+            name: lexer.expect().unwrap(),
+            tok_for: lexer.expect().unwrap(),
+            ty: cst::CstType::parse(lexer),
+            tok_l_brace: lexer.expect().unwrap(),
+            methods: {
+                let mut methods = Vec::new();
+
+                while !matches!(lexer.peek(), Tok::RBrace) {
+                    methods.push(cst::FunctionDeclaration::parse(lexer));
                 }
 
                 methods
@@ -927,6 +953,20 @@ mod test {
         test_with_lexer(source, |lexer| {
             let trait_block = cst::TraitDeclaration::parse(lexer);
             assert_debug_snapshot!(name, trait_block, source);
+        });
+    }
+
+    #[rstest]
+    #[case("impl_trait_empty", "impl MyTrait for SomeType {}")]
+    #[case("impl_trait_single", "impl MyTrait for SomeType { fn my_fn() {} }")]
+    #[case(
+        "impl_trait_multiple",
+        "impl MyTrait for SomeType { fn my_fn(n: usize) -> bool { true } fn another_fn() { } }"
+    )]
+    fn trait_implementation(#[case] name: &str, #[case] source: &str) {
+        test_with_lexer(source, |lexer| {
+            let trait_implementation = cst::TraitImplementation::parse(lexer);
+            assert_debug_snapshot!(name, trait_implementation, source);
         });
     }
 

@@ -134,6 +134,8 @@ toks! {
     Loop => "loop",
     While => "while",
     Trait => "trait",
+    Impl => "impl",
+    For => "for",
 
     Eof => "<Eof>",
 

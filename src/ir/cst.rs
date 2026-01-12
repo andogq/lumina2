@@ -28,12 +28,18 @@ impl Program {
     pub fn add_trait_declaration(&mut self, trait_declaration: TraitDeclaration) {
         self.items.push(Item::TraitDeclaration(trait_declaration));
     }
+
+    pub fn add_trait_implementation(&mut self, trait_implementation: TraitImplementation) {
+        self.items
+            .push(Item::TraitImplementation(trait_implementation));
+    }
 }
 
 /// A node which may appear at the top-level of a program.
 #[derive(Clone, Debug)]
 pub enum Item {
     TraitDeclaration(TraitDeclaration),
+    TraitImplementation(TraitImplementation),
     FunctionDeclaration(FunctionDeclaration),
 }
 
@@ -53,6 +59,31 @@ pub struct TraitDeclaration {
     #[expect(dead_code, reason = "token field")]
     pub tok_l_brace: tok::LBrace,
     pub methods: Vec<(FunctionSignature, tok::SemiColon)>,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_r_brace: tok::RBrace,
+}
+
+/// Trait implementation.
+///
+/// ```
+/// impl MyTrait for SomeType {
+///     fn a() -> bool {
+///         true
+///     }
+///
+///     fn b(n: 123) { }
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct TraitImplementation {
+    #[expect(dead_code, reason = "token field")]
+    pub tok_impl: tok::Impl,
+    pub name: tok::Ident,
+    pub tok_for: tok::For,
+    pub ty: CstType,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_l_brace: tok::LBrace,
+    pub methods: Vec<FunctionDeclaration>,
     #[expect(dead_code, reason = "token field")]
     pub tok_r_brace: tok::RBrace,
 }

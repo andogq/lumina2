@@ -281,6 +281,8 @@ impl<'src> Lexer<'src> {
                     "break" => Tok::Break,
                     "while" => Tok::While,
                     "trait" => Tok::Trait,
+                    "impl" => Tok::Impl,
+                    "for" => Tok::For,
                     _ => Tok::Ident(ident),
                 }
             }
@@ -346,6 +348,9 @@ mod test {
     #[case("if", &[Tok::If, Tok::Eof])]
     #[case("loop", &[Tok::Loop, Tok::Eof])]
     #[case("while", &[Tok::While, Tok::Eof])]
+    #[case("trait", &[Tok::Trait, Tok::Eof])]
+    #[case("impl", &[Tok::Impl, Tok::Eof])]
+    #[case("for", &[Tok::For, Tok::Eof])]
     #[case("some_ident", &[Tok::Ident("some_ident".to_string()), Tok::Eof])]
     #[case("u32", &[Tok::Ident("u32".to_string()), Tok::Eof])]
     #[case("123", &[Tok::IntegerLiteral(123), Tok::Eof])]
