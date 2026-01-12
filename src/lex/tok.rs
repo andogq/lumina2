@@ -133,6 +133,7 @@ toks! {
     Else => "else",
     Loop => "loop",
     While => "while",
+    Trait => "trait",
 
     Eof => "<Eof>",
 

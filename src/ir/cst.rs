@@ -22,28 +22,51 @@ impl Program {
 
     pub fn add_function_declaration(&mut self, function_declaration: FunctionDeclaration) {
         self.items
-            .push(Item::FunctionDeclaration(function_declaration))
+            .push(Item::FunctionDeclaration(function_declaration));
+    }
+
+    pub fn add_trait_declaration(&mut self, trait_declaration: TraitDeclaration) {
+        self.items.push(Item::TraitDeclaration(trait_declaration));
     }
 }
 
 /// A node which may appear at the top-level of a program.
 #[derive(Clone, Debug)]
 pub enum Item {
+    TraitDeclaration(TraitDeclaration),
     FunctionDeclaration(FunctionDeclaration),
+}
+
+/// Trait declaration.
+///
+/// ```
+/// trait MyTrait {
+///     fn a() -> bool;
+///     fn b(n: i32);
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct TraitDeclaration {
+    #[expect(dead_code, reason = "token field")]
+    pub tok_trait: tok::Trait,
+    pub name: tok::Ident,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_l_brace: tok::LBrace,
+    pub methods: Vec<(FunctionSignature, tok::SemiColon)>,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_r_brace: tok::RBrace,
 }
 
 mod function {
     use super::*;
 
-    /// Function declaration.
+    /// Function signature.
     ///
     /// ```
-    /// fn some_function(parameter_a: usize, parameter_b: bool) -> f64 {
-    ///     // Statements...
-    /// }
+    /// fn some_function(parameter_a: usize, parameter_b: bool) -> f64
     /// ```
     #[derive(Clone, Debug)]
-    pub struct FunctionDeclaration {
+    pub struct FunctionSignature {
         #[expect(dead_code, reason = "token field")]
         pub tok_fn: tok::Fn,
         /// Name of the function.
@@ -56,6 +79,20 @@ mod function {
         pub tok_r_parenthesis: tok::RParenthesis,
         /// Optional return type for the function.
         pub return_ty: Option<FunctionReturnType>,
+    }
+
+    /// Function declaration.
+    ///
+    /// ```
+    /// fn some_function(parameter_a: usize, parameter_b: bool) -> f64 {
+    ///     // Statements...
+    /// }
+    /// ```
+    #[derive(Clone, Debug)]
+    pub struct FunctionDeclaration {
+        /// Signature of the function.
+        pub signature: FunctionSignature,
+        /// Implementation of the function.
         pub body: Block,
     }
 

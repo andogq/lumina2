@@ -29,6 +29,10 @@ impl Parse for cst::Program {
                     let function_declaration = cst::FunctionDeclaration::parse(lexer);
                     program.add_function_declaration(function_declaration);
                 }
+                Tok::Trait => {
+                    let trait_declaration = cst::TraitDeclaration::parse(lexer);
+                    program.add_trait_declaration(trait_declaration);
+                }
                 tok => {
                     eprintln!("Unknown tok: {tok}");
                     lexer.next();
@@ -40,11 +44,35 @@ impl Parse for cst::Program {
     }
 }
 
+impl Parse for cst::TraitDeclaration {
+    fn parse(lexer: &mut Lexer<'_>) -> Self {
+        cst::TraitDeclaration {
+            tok_trait: lexer.expect().unwrap(),
+            name: lexer.expect().unwrap(),
+            tok_l_brace: lexer.expect().unwrap(),
+            methods: {
+                let mut methods = Vec::new();
+
+                while !matches!(lexer.peek(), Tok::RBrace) {
+                    methods.push((
+                        cst::FunctionSignature::parse(lexer),
+                        lexer.expect().unwrap(),
+                    ));
+                }
+
+                methods
+            },
+            tok_r_brace: lexer.expect().unwrap(),
+        }
+    }
+}
+
 mod function {
     use super::*;
-    impl Parse for cst::FunctionDeclaration {
+
+    impl Parse for cst::FunctionSignature {
         fn parse(lexer: &mut Lexer<'_>) -> Self {
-            cst::FunctionDeclaration {
+            cst::FunctionSignature {
                 tok_fn: lexer.expect().unwrap(),
                 name: lexer.expect().unwrap(),
                 tok_l_parenthesis: lexer.expect().unwrap(),
@@ -58,6 +86,14 @@ mod function {
                         tok_thin_arrow,
                         ty: cst::CstType::parse(lexer),
                     }),
+            }
+        }
+    }
+
+    impl Parse for cst::FunctionDeclaration {
+        fn parse(lexer: &mut Lexer<'_>) -> Self {
+            cst::FunctionDeclaration {
+                signature: cst::FunctionSignature::parse(lexer),
                 body: cst::Block::parse(lexer),
             }
         }
@@ -877,6 +913,20 @@ mod test {
         test_with_lexer(source, |lexer| {
             let statement = cst::FunctionDeclaration::parse(lexer);
             assert_debug_snapshot!(name, statement, source);
+        });
+    }
+
+    #[rstest]
+    #[case("trait_empty", "trait MyTrait {}")]
+    #[case("trait_single_function", "trait MyTrait { fn my_fn(); }")]
+    #[case(
+        "trait_multiple_function",
+        "trait MyTrait { fn my_fn(n: usize) -> bool; fn another_fn(); }"
+    )]
+    fn r#trait(#[case] name: &str, #[case] source: &str) {
+        test_with_lexer(source, |lexer| {
+            let trait_block = cst::TraitDeclaration::parse(lexer);
+            assert_debug_snapshot!(name, trait_block, source);
         });
     }
 

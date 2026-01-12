@@ -280,6 +280,7 @@ impl<'src> Lexer<'src> {
                     "loop" => Tok::Loop,
                     "break" => Tok::Break,
                     "while" => Tok::While,
+                    "trait" => Tok::Trait,
                     _ => Tok::Ident(ident),
                 }
             }

@@ -1,0 +1,67 @@
+---
+source: src/passes/cst_gen.rs
+expression: "trait MyTrait { fn my_fn(n: usize) -> bool; fn another_fn(); }"
+---
+TraitDeclaration {
+    tok_trait: Trait,
+    name: Ident(
+        "MyTrait",
+    ),
+    tok_l_brace: LBrace,
+    methods: [
+        (
+            FunctionSignature {
+                tok_fn: Fn,
+                name: Ident(
+                    "my_fn",
+                ),
+                tok_l_parenthesis: LParenthesis,
+                parameters: PunctuatedList {
+                    items: [
+                        FunctionParameter {
+                            name: Ident(
+                                "n",
+                            ),
+                            tok_colon: Colon,
+                            ty: Named(
+                                Ident(
+                                    "usize",
+                                ),
+                            ),
+                        },
+                    ],
+                    punctuation: [],
+                },
+                tok_r_parenthesis: RParenthesis,
+                return_ty: Some(
+                    FunctionReturnType {
+                        tok_thin_arrow: ThinArrow,
+                        ty: Named(
+                            Ident(
+                                "bool",
+                            ),
+                        ),
+                    },
+                ),
+            },
+            SemiColon,
+        ),
+        (
+            FunctionSignature {
+                tok_fn: Fn,
+                name: Ident(
+                    "another_fn",
+                ),
+                tok_l_parenthesis: LParenthesis,
+                parameters: PunctuatedList {
+                    items: [],
+                    punctuation: [],
+                },
+                tok_r_parenthesis: RParenthesis,
+                return_ty: None,
+            },
+            SemiColon,
+        ),
+    ],
+    tok_r_brace: RBrace,
+}

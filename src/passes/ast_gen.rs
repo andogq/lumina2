@@ -21,6 +21,7 @@ impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
                 cst::Item::FunctionDeclaration(function_declaration) => {
                     ast_gen.lower_function(function_declaration)
                 }
+                cst::Item::TraitDeclaration(_) => todo!(),
             }
         }
 
@@ -38,8 +39,9 @@ impl<'ctx> AstGen<'ctx> {
 
     fn lower_function(&mut self, function: &cst::FunctionDeclaration) {
         let function_declaration = FunctionDeclaration {
-            name: self.ctx.strings.intern(&function.name.0),
+            name: self.ctx.strings.intern(&function.signature.name.0),
             parameters: function
+                .signature
                 .parameters
                 .iter_items()
                 .map(|parameter| FunctionParameter {
@@ -48,6 +50,7 @@ impl<'ctx> AstGen<'ctx> {
                 })
                 .collect(),
             return_ty: function
+                .signature
                 .return_ty
                 .as_ref()
                 .map(|ty| self.lower_type(&ty.ty)),
