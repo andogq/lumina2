@@ -231,6 +231,7 @@ impl<'ctx> AstGen<'ctx> {
                 },
             }
             .into(),
+            cst::Expression::QualifiedPath(_) => todo!(),
         };
 
         self.ast.expressions.insert(expression)

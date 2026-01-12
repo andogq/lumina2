@@ -401,6 +401,7 @@ mod expression {
                 }
                 Tok::If => cst::If::parse(lexer).into(),
                 Tok::Loop => cst::Loop::parse(lexer).into(),
+                Tok::LAngle => cst::QualifiedPath::parse(lexer).into(),
                 tok => panic!("unexpected tok: {tok}"),
             }
         }
@@ -602,6 +603,20 @@ mod expression {
             }
         }
     }
+
+    impl Parse for cst::QualifiedPath {
+        fn parse(lexer: &mut Lexer<'_>) -> Self {
+            Self {
+                tok_l_angle: lexer.expect().unwrap(),
+                ty: cst::CstType::parse(lexer),
+                tok_as: lexer.expect().unwrap(),
+                name: lexer.expect().unwrap(),
+                tok_r_angle: lexer.expect().unwrap(),
+                tok_colon_colon: lexer.expect().unwrap(),
+                item: lexer.expect().unwrap(),
+            }
+        }
+    }
 }
 
 mod util {
@@ -720,6 +735,7 @@ mod test {
         #[case("expression_unnamed_field", "thing.2")]
         #[case("expression_deep_fields", "thing.field.2")]
         #[case("expression_tuple_with_binary", "thing.a + thing.b")]
+        #[case("expression_qualified_path", "<Type as Trait>::item")]
         fn expression(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
                 let expression = cst::Expression::parse(lexer);
@@ -856,6 +872,15 @@ mod test {
                     }),
                 );
                 assert_debug_snapshot!(name, field, source);
+            });
+        }
+
+        #[rstest]
+        #[case("item", "<Type as Trait>::item")]
+        fn qualified_path(#[case] name: &str, #[case] source: &str) {
+            test_with_lexer(source, |lexer| {
+                let qualified_path = cst::QualifiedPath::parse(lexer);
+                assert_debug_snapshot!(name, qualified_path, source);
             });
         }
     }
