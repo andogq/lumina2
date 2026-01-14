@@ -293,6 +293,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
     /// This will handle ensure that types are correctly equated where necessary.
     fn lower_ast_type(&mut self, ty: ast::AstTypeId) -> TypeId {
         match &self.ast[ty] {
+            ast::AstType::SelfType => todo!(),
             ast::AstType::Named(string_id) => {
                 // HACK: This only handles built-in types.
                 match self.ctx.strings.get(*string_id) {

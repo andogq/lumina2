@@ -250,7 +250,13 @@ impl<'ctx> AstGen<'ctx> {
     /// twice will result in two different [`AstTypeId`]s.
     fn lower_type(&mut self, ty: &cst::CstType) -> AstTypeId {
         let ty = match ty {
-            cst::CstType::Named(ident) => AstType::Named(self.ctx.strings.intern(&ident.0)),
+            cst::CstType::Named(ident) => {
+                if ident.0 == "Self" {
+                    AstType::SelfType
+                } else {
+                    AstType::Named(self.ctx.strings.intern(&ident.0))
+                }
+            }
             cst::CstType::Tuple(tuple) => AstType::Tuple(
                 tuple
                     .items

@@ -74,6 +74,8 @@ impl Index<AstTypeId> for Ast {
 /// Type representation used within the [`Ast`].
 #[derive(Clone, Debug)]
 pub enum AstType {
+    /// Built-in alias for the type where this type representation is used.
+    SelfType,
     /// A type referenced by a single interned name (eg. `i8`, `bool`).
     Named(StringId),
     /// A tuple type (`(i8, bool, u8)`).
