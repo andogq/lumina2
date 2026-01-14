@@ -98,6 +98,8 @@ macro_rules! create_id {
             ::core::fmt::Debug,
             ::core::cmp::Eq,
             ::core::cmp::PartialEq,
+            ::core::cmp::Ord,
+            ::core::cmp::PartialOrd,
             ::core::hash::Hash,
         )]
         pub struct $id(usize);
@@ -114,7 +116,7 @@ macro_rules! create_id {
     };
 }
 
-pub trait Id: Clone + Copy + Debug + Eq + PartialEq + Hash {
+pub trait Id: Clone + Copy + Debug + Eq + PartialEq + Hash + Ord + PartialOrd {
     fn from_id(id: usize) -> Self;
     fn into_id(self) -> usize;
 }

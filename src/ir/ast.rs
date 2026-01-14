@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::prelude::*;
 
 pub use self::{block::*, expression::*, function::*, statement::*};
@@ -7,6 +9,7 @@ create_id!(ExpressionId);
 create_id!(FunctionId);
 create_id!(StatementId);
 create_id!(AstTypeId);
+create_id!(TraitId);
 
 #[derive(Clone, Debug)]
 pub struct Ast {
@@ -17,6 +20,9 @@ pub struct Ast {
     pub expressions: IndexedVec<ExpressionId, Expression>,
 
     pub types: IndexedVec<AstTypeId, AstType>,
+
+    pub traits: IndexedVec<TraitId, Trait>,
+    pub trait_implementations: Vec<TraitImplementation>,
 }
 
 impl Ast {
@@ -27,6 +33,8 @@ impl Ast {
             statements: IndexedVec::new(),
             expressions: IndexedVec::new(),
             types: IndexedVec::new(),
+            traits: IndexedVec::new(),
+            trait_implementations: Vec::new(),
         }
     }
 }
@@ -68,6 +76,14 @@ impl Index<AstTypeId> for Ast {
 
     fn index(&self, index: AstTypeId) -> &Self::Output {
         &self.types[index]
+    }
+}
+
+impl Index<TraitId> for Ast {
+    type Output = Trait;
+
+    fn index(&self, index: TraitId) -> &Self::Output {
+        &self.traits[index]
     }
 }
 
@@ -256,4 +272,19 @@ mod expression {
         Tuple: Tuple,
         Field: Field,
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Trait {
+    /// Original name of the trait.
+    pub name: StringId,
+    /// Methods defined within the trait.
+    pub methods: BTreeMap<StringId, FunctionSignature>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TraitImplementation {
+    pub trait_name: StringId,
+    pub target_ty: AstTypeId,
+    pub methods: BTreeMap<StringId, FunctionId>,
 }

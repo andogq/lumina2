@@ -1,0 +1,19 @@
+---
+source: src/passes/ast_gen.rs
+expression: "impl MyTrait for MyType { fn something() {} }"
+---
+TraitImplementation {
+    trait_name: StringId(
+        2,
+    ),
+    target_ty: AstTypeId(
+        0,
+    ),
+    methods: {
+        StringId(
+            0,
+        ): FunctionId(
+            0,
+        ),
+    },
+}

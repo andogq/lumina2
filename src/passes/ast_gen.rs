@@ -19,10 +19,14 @@ impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
         for item in &cst.items {
             match item {
                 cst::Item::FunctionDeclaration(function_declaration) => {
-                    ast_gen.lower_function(function_declaration)
+                    ast_gen.lower_function(function_declaration);
                 }
-                cst::Item::TraitDeclaration(_) => todo!(),
-                cst::Item::TraitImplementation(_) => todo!(),
+                cst::Item::TraitDeclaration(trait_declaration) => {
+                    ast_gen.lower_trait_declaration(trait_declaration);
+                }
+                cst::Item::TraitImplementation(trait_implementation) => {
+                    ast_gen.lower_trait_implementation(trait_implementation);
+                }
             }
         }
 
@@ -38,12 +42,12 @@ impl<'ctx> AstGen<'ctx> {
         }
     }
 
-    fn lower_function(&mut self, function: &cst::FunctionDeclaration) {
+    fn lower_function(&mut self, function: &cst::FunctionDeclaration) -> FunctionId {
         let function_declaration = FunctionDeclaration {
             signature: self.lower_function_signature(&function.signature),
             body: self.lower_block(&function.body),
         };
-        self.ast.function_declarations.insert(function_declaration);
+        self.ast.function_declarations.insert(function_declaration)
     }
 
     fn lower_function_signature(
@@ -267,6 +271,42 @@ impl<'ctx> AstGen<'ctx> {
         };
         self.ast.types.insert(ty)
     }
+
+    /// Lower a [`cst::TraitDeclaration`] into a [`Trait`], producing a unique [`TraitId`].
+    fn lower_trait_declaration(&mut self, trait_declaration: &cst::TraitDeclaration) -> TraitId {
+        let methods = trait_declaration
+            .methods
+            .iter()
+            .map(|(method, _)| {
+                (
+                    self.ctx.strings.intern(&method.name.0),
+                    self.lower_function_signature(method),
+                )
+            })
+            .collect();
+        self.ast.traits.insert(Trait {
+            name: self.ctx.strings.intern(&trait_declaration.name.0),
+            methods,
+        })
+    }
+
+    fn lower_trait_implementation(&mut self, trait_implementation: &cst::TraitImplementation) {
+        let methods = trait_implementation
+            .methods
+            .iter()
+            .map(|method| {
+                let method = self.lower_function(method);
+
+                (self.ast[method].signature.name, method)
+            })
+            .collect();
+        let target_ty = self.lower_type(&trait_implementation.ty);
+        self.ast.trait_implementations.push(TraitImplementation {
+            trait_name: self.ctx.strings.intern(&trait_implementation.name.0),
+            target_ty,
+            methods,
+        });
+    }
 }
 
 #[cfg(test)]
@@ -325,5 +365,34 @@ mod test {
         let block = parse::<cst::Block>(source);
         let block_id = pass.lower_block(&block);
         assert_debug_snapshot!(name, pass.ast[block_id], source);
+    }
+
+    #[rstest]
+    #[case("trait_declaration_empty", "trait MyTrait {}")]
+    #[case("trait_declaration_single", "trait MyTrait { fn something(); }")]
+    #[case(
+        "trait_declaration_multiple",
+        "trait MyTrait { fn something(n: u8); fn another() -> bool; }"
+    )]
+    fn trait_declaration(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
+        let mut pass = AstGen::new(&mut ctx);
+        let trait_id = pass.lower_trait_declaration(&parse(source));
+        assert_debug_snapshot!(name, pass.ast[trait_id], source);
+    }
+
+    #[rstest]
+    #[case("trait_implementation_empty", "impl MyTrait for MyType {}")]
+    #[case(
+        "trait_implementation_single",
+        "impl MyTrait for MyType { fn something() {} }"
+    )]
+    #[case(
+        "trait_implementation_multiple",
+        "impl MyTrait for MyType { fn something(n: u8) {} fn another() -> bool { true } }"
+    )]
+    fn trait_implementation(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
+        let mut pass = AstGen::new(&mut ctx);
+        pass.lower_trait_implementation(&parse(source));
+        assert_debug_snapshot!(name, pass.ast.trait_implementations[0], source);
     }
 }
