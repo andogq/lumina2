@@ -84,10 +84,15 @@ mod function {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub struct FunctionDeclaration {
+    pub struct FunctionSignature {
         pub name: StringId,
         pub parameters: Vec<FunctionParameter>,
         pub return_ty: Option<AstTypeId>,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct FunctionDeclaration {
+        pub signature: FunctionSignature,
         pub body: BlockId,
     }
 

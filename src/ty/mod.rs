@@ -346,9 +346,11 @@ mod test {
                 expression: None,
             });
             ast.function_declarations.insert(ast::FunctionDeclaration {
-                name: ctx.strings.intern("main"),
-                parameters: Vec::new(),
-                return_ty: None,
+                signature: ast::FunctionSignature {
+                    name: ctx.strings.intern("main"),
+                    parameters: Vec::new(),
+                    return_ty: None,
+                },
                 body: block_id,
             })
         };

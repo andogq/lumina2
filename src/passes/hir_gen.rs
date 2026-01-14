@@ -51,13 +51,14 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
     /// Lower the provided function.
     pub fn lower_function(&mut self, function: &ast::FunctionDeclaration) -> CResult<FunctionId> {
         // Add the function identifier to the global scope.
-        let binding = self.ctx.scopes.declare_global(function.name);
+        let binding = self.ctx.scopes.declare_global(function.signature.name);
 
         // Create a new scope for the function.
         let function_scope = self.ctx.scopes.nest_scope_global();
 
         // Process all of the parameters.
         let parameters = function
+            .signature
             .parameters
             .iter()
             .map(|parameter| {
@@ -69,7 +70,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             .collect();
 
         // If no return type is provided, assume `()`.
-        let return_ty = match function.return_ty {
+        let return_ty = match function.signature.return_ty {
             Some(return_ty) => self.lower_ast_type(return_ty),
             None => self.ctx.types.unit(),
         };

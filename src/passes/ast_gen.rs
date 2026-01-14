@@ -40,9 +40,19 @@ impl<'ctx> AstGen<'ctx> {
 
     fn lower_function(&mut self, function: &cst::FunctionDeclaration) {
         let function_declaration = FunctionDeclaration {
-            name: self.ctx.strings.intern(&function.signature.name.0),
-            parameters: function
-                .signature
+            signature: self.lower_function_signature(&function.signature),
+            body: self.lower_block(&function.body),
+        };
+        self.ast.function_declarations.insert(function_declaration);
+    }
+
+    fn lower_function_signature(
+        &mut self,
+        signature: &cst::FunctionSignature,
+    ) -> FunctionSignature {
+        FunctionSignature {
+            name: self.ctx.strings.intern(&signature.name.0),
+            parameters: signature
                 .parameters
                 .iter_items()
                 .map(|parameter| FunctionParameter {
@@ -50,14 +60,11 @@ impl<'ctx> AstGen<'ctx> {
                     ty: self.lower_type(&parameter.ty),
                 })
                 .collect(),
-            return_ty: function
-                .signature
+            return_ty: signature
                 .return_ty
                 .as_ref()
                 .map(|ty| self.lower_type(&ty.ty)),
-            body: self.lower_block(&function.body),
-        };
-        self.ast.function_declarations.insert(function_declaration);
+        }
     }
 
     fn lower_block(&mut self, block: &cst::Block) -> BlockId {
