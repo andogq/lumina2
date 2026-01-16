@@ -6,6 +6,8 @@ create_id!(BlockId);
 create_id!(ExpressionId);
 create_id!(FunctionId);
 create_id!(StatementId);
+create_id!(TraitId);
+create_id!(TraitMethodId);
 
 #[derive(Clone, Debug, Default)]
 pub struct Hir {
@@ -13,6 +15,8 @@ pub struct Hir {
     pub blocks: IndexedVec<BlockId, Block>,
     pub statements: IndexedVec<StatementId, Statement>,
     pub expressions: IndexedVec<ExpressionId, Expression>,
+    pub traits: IndexedVec<TraitId, Trait>,
+    pub trait_implementations: HashMap<TraitImplementationKey, TraitImplementation>,
 }
 
 impl Index<FunctionId> for Hir {
@@ -47,14 +51,35 @@ impl Index<ExpressionId> for Hir {
     }
 }
 
+impl Index<TraitId> for Hir {
+    type Output = Trait;
+
+    fn index(&self, index: TraitId) -> &Self::Output {
+        &self.traits[index]
+    }
+}
+
+impl Index<&TraitImplementationKey> for Hir {
+    type Output = TraitImplementation;
+
+    fn index(&self, index: &TraitImplementationKey) -> &Self::Output {
+        &self.trait_implementations[index]
+    }
+}
+
 mod functions {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub struct Function {
-        pub binding: IdentifierBindingId,
+    pub struct FunctionSignature {
         pub parameters: Vec<(IdentifierBindingId, TypeId)>,
         pub return_ty: TypeId,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct Function {
+        pub binding: IdentifierBindingId,
+        pub signature: FunctionSignature,
         pub entry: BlockId,
     }
 }
@@ -210,4 +235,27 @@ mod expression {
         Aggregate: Aggregate,
         Field: Field,
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Trait {
+    pub name: TraitBindingId,
+    pub method_scope: ScopeId,
+    pub method_bindings: HashMap<IdentifierBindingId, TraitMethodId>,
+    pub methods: IndexedVec<TraitMethodId, FunctionSignature>,
+}
+
+// Key to identifier a specific implementation of a trait for a given type.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TraitImplementationKey {
+    /// Trait that is being implemented.
+    pub trait_id: TraitId,
+    /// Type the trait is implemented on.
+    pub ty: TypeId,
+}
+
+#[derive(Clone, Debug)]
+pub struct TraitImplementation {
+    /// [`FunctionId`] containing the implementation for each [`TraitMethodId`].
+    pub methods: IndexedVec<TraitMethodId, FunctionId>,
 }

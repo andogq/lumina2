@@ -77,10 +77,12 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
         // Create local for return value, as it must be the first.
         // TODO: Store this local in some context somewhere, to use it as the return local.
-        let return_local = self.locals.create(function_id, function.return_ty);
+        let return_local = self
+            .locals
+            .create(function_id, function.signature.return_ty);
 
         // Following locals are all for the parameters.
-        for (binding, ty) in &function.parameters {
+        for (binding, ty) in &function.signature.parameters {
             let local = self.locals.create_with_binding(function_id, *ty, *binding);
             self.bindings.insert(*binding, Binding::Local(local));
         }
@@ -95,7 +97,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
         if let Some(result) = block.operand {
             assert_eq!(
                 self.thir.type_of(body.expression),
-                function.return_ty,
+                function.signature.return_ty,
                 "ty check bug: body expression must match function return"
             );
 
@@ -114,8 +116,13 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
             .terminate_if_unterminated(block.exit, Terminator::Return);
 
         self.mir.functions.insert(Function {
-            return_ty: function.return_ty,
-            parameters: function.parameters.iter().map(|(_, ty)| *ty).collect(),
+            return_ty: function.signature.return_ty,
+            parameters: function
+                .signature
+                .parameters
+                .iter()
+                .map(|(_, ty)| *ty)
+                .collect(),
             binding: function.binding,
             locals: self.locals.generate_locals(function_id),
             entry: block.entry,

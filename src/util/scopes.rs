@@ -245,6 +245,12 @@ impl Scopes {
         BindingId::<B>::new(binding_id)
     }
 
+    /// Resolve a [`StringId`] in the global [`Scope`] into a [`BindingId`] matching the
+    /// [`BindingKind`].
+    pub fn resolve_global<B: BindingKind>(&self, string: StringId) -> BindingId<B> {
+        self.resolve(self.global, string)
+    }
+
     /// Search through all scopes for the provided string.
     #[cfg(test)]
     pub fn find_scope<B: BindingKind>(&self, string: StringId) -> Vec<(ScopeId, BindingId<B>)> {

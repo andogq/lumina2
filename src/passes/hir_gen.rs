@@ -16,6 +16,8 @@ pub struct HirGen<'ctx, 'ast> {
     ast: &'ast ast::Ast,
     /// HIR that is being generated.
     hir: Hir,
+    /// Mapping of function IDs between stages,
+    function_mapping: IndexedVec<ast::FunctionId, FunctionId>,
 }
 
 impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
@@ -29,9 +31,28 @@ impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
         // Errors generated throughout this pass.
         let mut errors = Vec::new();
 
-        // Lower each function.
-        for function in ast.function_declarations.iter() {
-            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen.lower_function(function));
+        // Register each trait declaration.
+        for trait_declaration in ast.traits.iter() {
+            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
+                .lower_trait_declaration(trait_declaration));
+        }
+
+        // Lower each function, saving a map from the old to new ID.
+        for (function_id, function) in ast.function_declarations.iter_pairs() {
+            let lowered_id =
+                run_and_report!(hir_gen.ctx, errors, || hir_gen.lower_function(function));
+
+            if let Ok(lowered_id) = lowered_id {
+                // Save the new ID in the mapping, assuming that functions will be added in the
+                // same order.
+                assert_eq!(hir_gen.function_mapping.insert(lowered_id), function_id);
+            }
+        }
+
+        // Lower each trait implementation.
+        for trait_implementation in ast.trait_implementations.iter() {
+            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
+                .lower_trait_implementation(trait_implementation));
         }
 
         Ok(PassSuccess::new(hir_gen.hir, errors))
@@ -45,7 +66,96 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             ctx,
             ast,
             hir: Hir::default(),
+            function_mapping: IndexedVec::new(),
         }
+    }
+
+    /// Lower the provided trait declaration.
+    pub fn lower_trait_declaration(&mut self, trait_declaration: &ast::Trait) -> CResult<TraitId> {
+        let name = self.ctx.scopes.declare_global(trait_declaration.name);
+
+        let method_scope = self.ctx.scopes.nest_scope_global();
+
+        let mut methods = IndexedVec::new();
+        let mut method_bindings = HashMap::new();
+
+        for (method, signature) in &trait_declaration.methods {
+            let binding = self.ctx.scopes.declare(method_scope, *method);
+
+            // Create a dummy scope just to declare the parameters in.
+            let parameter_scope = self.ctx.scopes.nest_scope(method_scope);
+            let signature = self.lower_function_signature(signature, parameter_scope);
+
+            let method_id = methods.insert(signature);
+
+            // Record the method ID which corresponds with the binding.
+            method_bindings.insert(binding, method_id);
+        }
+
+        Ok(self.hir.traits.insert(Trait {
+            name,
+            method_scope,
+            method_bindings,
+            methods,
+        }))
+    }
+
+    pub fn lower_trait_implementation(
+        &mut self,
+        trait_implementation: &ast::TraitImplementation,
+    ) -> CResult<()> {
+        let trait_name = self
+            .ctx
+            .scopes
+            .resolve_global(trait_implementation.trait_name);
+        let ty = self.lower_ast_type(trait_implementation.target_ty);
+
+        // Find the trait that's being implemented.
+        let (trait_id, trait_declaration) = self
+            .hir
+            .traits
+            .iter_pairs()
+            .find(|(_, trait_declaration)| trait_declaration.name == trait_name)
+            .unwrap();
+
+        let key = TraitImplementationKey { trait_id, ty };
+
+        // Ensure there's no conflicting trait implementation.
+        assert!(!self.hir.trait_implementations.contains_key(&key));
+
+        // Resolve the bindings for each method, and match them up with a `TraitMethodId`.
+        let implementation_bindings = trait_implementation
+            .methods
+            .iter()
+            .map(|(method_name, function_id)| {
+                (
+                    {
+                        let binding = self
+                            .ctx
+                            .scopes
+                            .resolve(trait_declaration.method_scope, *method_name);
+                        trait_declaration.method_bindings[&binding]
+                    },
+                    function_id,
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+        // Record the method mapping.
+        let mut methods = IndexedVec::new();
+        for (method_id, _) in trait_declaration.methods.iter_pairs() {
+            let original_function_id = *implementation_bindings[&method_id];
+            assert_eq!(
+                methods.insert(self.function_mapping[original_function_id]),
+                method_id
+            );
+        }
+
+        self.hir
+            .trait_implementations
+            .insert(key, TraitImplementation { methods });
+
+        Ok(())
     }
 
     /// Lower the provided function.
@@ -56,34 +166,45 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         // Create a new scope for the function.
         let function_scope = self.ctx.scopes.nest_scope_global();
 
-        // Process all of the parameters.
-        let parameters = function
-            .signature
-            .parameters
-            .iter()
-            .map(|parameter| {
-                (
-                    self.ctx.scopes.declare(function_scope, parameter.name),
-                    self.lower_ast_type(parameter.ty),
-                )
-            })
-            .collect();
-
-        // If no return type is provided, assume `()`.
-        let return_ty = match function.signature.return_ty {
-            Some(return_ty) => self.lower_ast_type(return_ty),
-            None => self.ctx.types.unit(),
-        };
+        let signature = self.lower_function_signature(&function.signature, function_scope);
 
         // Lower the body of the function.
         let entry = self.lower_block(&self.ast[function.body], function_scope)?;
 
         Ok(self.hir.functions.insert(Function {
             binding,
-            parameters,
-            return_ty,
+            signature,
             entry,
         }))
+    }
+
+    /// Lower a function signature.
+    pub fn lower_function_signature(
+        &mut self,
+        signature: &ast::FunctionSignature,
+        scope: ScopeId,
+    ) -> FunctionSignature {
+        let parameters = signature
+            .parameters
+            .iter()
+            .map(|parameter| {
+                (
+                    self.ctx.scopes.declare(scope, parameter.name),
+                    self.lower_ast_type(parameter.ty),
+                )
+            })
+            .collect();
+
+        // If no return type is provided, assume `()`.
+        let return_ty = match signature.return_ty {
+            Some(return_ty) => self.lower_ast_type(return_ty),
+            None => self.ctx.types.unit(),
+        };
+
+        FunctionSignature {
+            parameters,
+            return_ty,
+        }
     }
 
     /// Lower a block, using the provided scope as the parent scope.

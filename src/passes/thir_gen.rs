@@ -68,8 +68,8 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
         self.constraints.equal(
             self.type_vars.intern(function.binding),
             self.type_vars.intern(self.ctx.types.function(
-                function.parameters.iter().map(|(_, ty)| *ty),
-                function.return_ty,
+                function.signature.parameters.iter().map(|(_, ty)| *ty),
+                function.signature.return_ty,
             )),
         );
     }
@@ -78,7 +78,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
         let function = &self.hir[function_id];
 
         // Add constraints for the function parameters.
-        for (parameter_binding, parameter_ty) in &function.parameters {
+        for (parameter_binding, parameter_ty) in &function.signature.parameters {
             self.constraints.equal(
                 self.type_vars.intern(*parameter_binding),
                 self.type_vars.intern(*parameter_ty),
@@ -89,7 +89,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
         // return type).
         self.constraints.equal(
             self.type_vars.intern(self.hir[function.entry].expression),
-            self.type_vars.intern(function.return_ty),
+            self.type_vars.intern(function.signature.return_ty),
         );
 
         let ctx = ConstraintCtx::new(function_id);
@@ -120,7 +120,8 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     // Ensure the return expression matches the function return type.
                     self.constraints.equal(
                         self.type_vars.intern(*expression),
-                        self.type_vars.intern(self.hir[ctx.function].return_ty),
+                        self.type_vars
+                            .intern(self.hir[ctx.function].signature.return_ty),
                     );
                 }
                 Statement::Break(BreakStatement { expression }) => {
@@ -398,6 +399,8 @@ mod test {
             blocks: indexed_vec![],
             statements: indexed_vec![],
             expressions: indexed_vec![Aggregate::UNIT.into()],
+            traits: indexed_vec![],
+            trait_implementations: HashMap::new(),
         }
     }
 
@@ -426,17 +429,22 @@ mod test {
         #[case] return_ty: Type,
     ) {
         let function = Function {
-            parameters: parameters
-                .into_iter()
-                .map(|(binding, parameter)| (binding, ctx.types.get(parameter)))
-                .collect(),
-            return_ty: ctx.types.get(return_ty),
             binding: IdentifierBindingId::from_id(0),
+            signature: FunctionSignature {
+                parameters: parameters
+                    .into_iter()
+                    .map(|(binding, parameter)| (binding, ctx.types.get(parameter)))
+                    .collect(),
+                return_ty: ctx.types.get(return_ty),
+            },
             entry: BlockId::from_id(0),
         };
 
         // Used for debugging.
-        let signature_str = format!("{:?} => {:?}", function.parameters, function.return_ty);
+        let signature_str = format!(
+            "{:?} => {:?}",
+            function.signature.parameters, function.signature.return_ty
+        );
 
         let function_id = hir.functions.insert(function);
 
@@ -488,9 +496,11 @@ mod test {
 
         // Insert a fake function to pull the return type.
         hir.functions.insert(Function {
-            parameters: Vec::new(),
-            return_ty: ctx.types.u8(),
             binding: IdentifierBindingId::from_id(0),
+            signature: FunctionSignature {
+                parameters: Vec::new(),
+                return_ty: ctx.types.u8(),
+            },
             entry: block,
         });
 
