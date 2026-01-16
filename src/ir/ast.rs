@@ -190,6 +190,7 @@ mod expression {
         Variable(Variable),
         Tuple(Tuple),
         Field(Field),
+        QualifiedPath(QualifiedPath),
     }
 
     #[derive(Clone, Debug)]
@@ -258,6 +259,13 @@ mod expression {
         Unnamed(usize),
     }
 
+    #[derive(Clone, Debug)]
+    pub struct QualifiedPath {
+        pub ty: AstTypeId,
+        pub name: StringId,
+        pub item: StringId,
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -271,6 +279,7 @@ mod expression {
         Variable: Variable,
         Tuple: Tuple,
         Field: Field,
+        QualifiedPath: QualifiedPath,
     }
 }
 

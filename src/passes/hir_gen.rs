@@ -283,6 +283,9 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 },
             }
             .into(),
+            ast::Expression::QualifiedPath(ast::QualifiedPath { .. }) => {
+                todo!()
+            }
         };
 
         Ok(self.hir.expressions.insert(expression))

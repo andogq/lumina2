@@ -242,7 +242,14 @@ impl<'ctx> AstGen<'ctx> {
                 },
             }
             .into(),
-            cst::Expression::QualifiedPath(_) => todo!(),
+            cst::Expression::QualifiedPath(cst::QualifiedPath { ty, name, item, .. }) => {
+                QualifiedPath {
+                    ty: self.lower_type(&ty),
+                    name: self.ctx.strings.intern(&name.0),
+                    item: self.ctx.strings.intern(&item.0),
+                }
+                .into()
+            }
         };
 
         self.ast.expressions.insert(expression)
