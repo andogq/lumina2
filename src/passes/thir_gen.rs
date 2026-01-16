@@ -417,21 +417,21 @@ mod test {
     #[rstest]
     #[case("simple", [], Type::UNIT)]
     #[case("return integer", [], Type::I8)]
-    #[case("parameters", [(BindingId::from_id(1), Type::I8), (BindingId::from_id(2), Type::Boolean)], Type::Boolean)]
+    #[case("parameters", [(IdentifierBindingId::from_id(1), Type::I8), (IdentifierBindingId::from_id(2), Type::Boolean)], Type::Boolean)]
     fn function_declaration(
         mut hir: Hir,
         mut ctx: Ctx,
         #[case] name: &str,
-        #[case] parameters: impl IntoIterator<Item = (BindingId, Type)>,
+        #[case] parameters: impl IntoIterator<Item = (IdentifierBindingId, Type)>,
         #[case] return_ty: Type,
     ) {
         let function = Function {
-            binding: BindingId::from_id(0),
             parameters: parameters
                 .into_iter()
                 .map(|(binding, parameter)| (binding, ctx.types.get(parameter)))
                 .collect(),
             return_ty: ctx.types.get(return_ty),
+            binding: IdentifierBindingId::from_id(0),
             entry: BlockId::from_id(0),
         };
 
@@ -459,7 +459,7 @@ mod test {
     ) {
         let ty = ty(&mut ctx.types);
         let statement = hir.statements.insert(Statement::Declare(DeclareStatement {
-            binding: BindingId::from_id(0),
+            binding: IdentifierBindingId::from_id(0),
             ty: ty.clone(),
         }));
         let block = hir.blocks.insert(Block {
@@ -488,9 +488,9 @@ mod test {
 
         // Insert a fake function to pull the return type.
         hir.functions.insert(Function {
-            binding: BindingId::from_id(0),
             parameters: Vec::new(),
             return_ty: ctx.types.u8(),
+            binding: IdentifierBindingId::from_id(0),
             entry: block,
         });
 

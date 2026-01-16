@@ -9,7 +9,7 @@ pub struct MirGen<'ctx, 'hir, 'thir> {
 
     mir: Mir,
 
-    bindings: HashMap<BindingId, Binding>,
+    bindings: HashMap<IdentifierBindingId, Binding>,
     locals: FunctionLocals,
 
     function_ids: IndexedVec<FunctionId, hir::FunctionId>,
@@ -682,7 +682,9 @@ impl Binding {
 
 /// Track available locals within a function.
 #[derive(Clone, Debug, Default)]
-struct FunctionLocals(HashMap<FunctionId, IndexedVec<LocalId, (TypeId, Option<BindingId>)>>);
+struct FunctionLocals(
+    HashMap<FunctionId, IndexedVec<LocalId, (TypeId, Option<IdentifierBindingId>)>>,
+);
 impl FunctionLocals {
     /// Create a new instance.
     pub fn new() -> Self {
@@ -698,7 +700,7 @@ impl FunctionLocals {
         &mut self,
         function: FunctionId,
         ty: TypeId,
-        binding: BindingId,
+        binding: IdentifierBindingId,
     ) -> LocalId {
         self.0
             .entry(function)
@@ -709,7 +711,7 @@ impl FunctionLocals {
     pub fn generate_locals(
         &self,
         function: FunctionId,
-    ) -> IndexedVec<LocalId, (Option<BindingId>, TypeId)> {
+    ) -> IndexedVec<LocalId, (Option<IdentifierBindingId>, TypeId)> {
         let mut locals = IndexedVec::new();
 
         if let Some(function_locals) = self.0.get(&function) {

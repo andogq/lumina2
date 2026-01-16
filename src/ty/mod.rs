@@ -214,7 +214,7 @@ pub enum TypeVar {
     /// Variable is an expression.
     Expression(ExpressionId),
     /// Variable is a binding.
-    Binding(BindingId),
+    Binding(IdentifierBindingId),
     /// Variable is a type.
     Type(TypeId),
     /// Variable is a field on another variable.
@@ -224,7 +224,7 @@ pub enum TypeVar {
 enum_conversion! {
     [TypeVar]
     Expression: ExpressionId,
-    Binding: BindingId,
+    Binding: IdentifierBindingId,
     Type: TypeId,
 }
 

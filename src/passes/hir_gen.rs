@@ -368,7 +368,7 @@ mod test {
 
         // Declare all bindings used in `sample_ast`.
         for i in 0..3 {
-            ctx.scopes.declare_global(StringId::from_id(i));
+            let _: IdentifierBindingId = ctx.scopes.declare_global(StringId::from_id(i));
         }
 
         ctx

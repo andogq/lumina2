@@ -52,8 +52,8 @@ mod functions {
 
     #[derive(Clone, Debug)]
     pub struct Function {
-        pub binding: BindingId,
-        pub parameters: Vec<(BindingId, TypeId)>,
+        pub binding: IdentifierBindingId,
+        pub parameters: Vec<(IdentifierBindingId, TypeId)>,
         pub return_ty: TypeId,
         pub entry: BlockId,
     }
@@ -82,7 +82,7 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub struct DeclareStatement {
-        pub binding: BindingId,
+        pub binding: IdentifierBindingId,
         pub ty: DeclarationTy,
     }
 
@@ -179,7 +179,7 @@ mod expression {
 
     #[derive(Clone, Debug)]
     pub struct Variable {
-        pub binding: BindingId,
+        pub binding: IdentifierBindingId,
     }
 
     #[derive(Clone, Debug)]

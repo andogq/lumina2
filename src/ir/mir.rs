@@ -164,14 +164,14 @@ impl IndexMut<OperandId> for Mir {
 pub struct Function {
     pub return_ty: TypeId,
     pub parameters: Vec<TypeId>,
-    pub binding: BindingId,
+    pub binding: IdentifierBindingId,
 
-    pub locals: IndexedVec<LocalId, (Option<BindingId>, TypeId)>,
+    pub locals: IndexedVec<LocalId, (Option<IdentifierBindingId>, TypeId)>,
     pub entry: BasicBlockId,
 }
 
 impl Index<LocalId> for Function {
-    type Output = (Option<BindingId>, TypeId);
+    type Output = (Option<IdentifierBindingId>, TypeId);
 
     fn index(&self, index: LocalId) -> &Self::Output {
         &self.locals[index]

@@ -508,7 +508,7 @@ mod test {
     #[fixture]
     fn binding<const N: usize>() -> [TypeVar; N] {
         (0..N)
-            .map(|i| TypeVar::from(BindingId::from_id(i)))
+            .map(|i| TypeVar::from(IdentifierBindingId::from_id(i)))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap()
