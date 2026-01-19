@@ -208,6 +208,44 @@ mod test {
             );
         }
 
+        #[rstest]
+        // --- Arithmetic Precedence ---
+        #[case::mul_add("2 + 3 * 4", "u8", 14)] // (3 * 4) + 2
+        #[case::add_mul("3 * 4 + 2", "u8", 14)] // (3 * 4) + 2
+        #[case::div_sub("10 - 6 / 2", "u8", 7)] // 10 - (6 / 2)
+        #[case::complex_maths("1 + 2 * 3 - 4 / 2", "u8", 5)] // 1 + 6 - 2
+        // --- Bitwise Operations (&, |) ---
+        #[case::sum_bitwise("1 + 2 & 1", "u8", 1)] // (1 + 2) & 1 = 3 & 1 = 1
+        #[case::bitwise_and_or("1 | 2 & 2", "u8", 3)] // 1 | (2 & 2) = 1 | 2 = 3
+        #[case::bitwise_complex("1 + 1 | 2 * 2", "u8", 6)] // (1+1) | (2*2) = 2 | 4 = 6
+        // --- Comparison vs Arithmetic/Bitwise ---
+        #[case::cmp_add("1 + 2 < 4", "bool", 1)] // (1 + 2) < 4
+        #[case::cmp_mul("10 < 2 * 6", "bool", 1)] // 10 < (12)
+        #[case::bitwise_cmp("3 & 1 == 1", "bool", 1)] // (3 & 1) == 1 -> 1 == 1
+        // --- Logical Precedence ---
+        #[case::cmp_logical("1 == 1 && 2 == 3", "bool", 0)] // (1==1) && (2==3)
+        #[case::logic_precedence("true || false && false", "bool", 1)] // true || (false && false)
+        #[case::logic_mixed("5 > 3 && 2 == 2", "bool", 1)]
+        // --- Brackets (Explicit Override) ---
+        #[case::brackets_sum("(2 + 3) * 4", "u8", 20)]
+        #[case::brackets_logic("(true || false) && false", "bool", 0)]
+        #[case::brackets_bitwise("1 + (2 & 1)", "u8", 1)]
+        #[case::nested_brackets("2 * (3 + (10 / 5))", "u8", 10)]
+        // --- Signed Operations ---
+        #[case::div_signed("-12 / -4", "i8", 3)]
+        #[case::less_signed("-4 < -3", "bool", 1)]
+        #[case::assign_right_associative("{ let x = (); let y = 0; x = y = 5; y }", "u8", 5)]
+        fn precedence_operations(
+            #[case] source: &str,
+            #[case] return_ty: &str,
+            #[case] output: u8,
+        ) {
+            assert_eq!(
+                run(&format!("fn main() -> {return_ty} {{ {source} }}")),
+                output
+            );
+        }
+
         #[test]
         fn if_statement() {
             assert_eq!(run("fn main() -> u8 { if true { 123 } else { 99 } }"), 123);
