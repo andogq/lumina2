@@ -1,0 +1,5 @@
+exclude_globs = [
+    "src/passes/codegen.rs" # Until LLVM snapshot tests are implemented.
+]
+
+test_tool = "nextest"

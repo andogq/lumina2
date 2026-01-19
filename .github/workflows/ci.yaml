@@ -23,7 +23,7 @@ jobs:
           llvm-version: ${{ env.LLVM_VERSION }}
           llvm-path: ${{ env.LLVM_PATH }}
 
-      - name: Install cargo-llvm-cov and cargo-nextest
+      - name: Install cargo-llvm-cov and nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov,nextest
@@ -88,10 +88,10 @@ jobs:
           llvm-version: ${{ env.LLVM_VERSION }}
           llvm-path: ${{ env.LLVM_PATH }}
 
-      - name: Install cargo-mutants
+      - name: Install cargo-mutants and nextest
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-mutants
+          tool: cargo-mutants,nextest
 
       - run: cargo mutants -vV --in-place
 
