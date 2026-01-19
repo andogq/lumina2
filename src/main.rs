@@ -71,6 +71,7 @@ macro_rules! pipeline {
     };
 }
 
+#[mutants::skip(reason = "helper function to quickly run a script.")]
 fn run(source: &str) -> u8 {
     let mut ctx = Ctx::new();
     let ink = inkwell::context::Context::create();
@@ -101,6 +102,8 @@ fn run(source: &str) -> u8 {
             eprintln!("{error}");
             eprintln!();
         }
+
+        panic!("Compilation failed with fatal error");
     }
 
     let non_fatal_count = ctx.errors.iter_non_fatal().count();
@@ -129,6 +132,7 @@ fn run(source: &str) -> u8 {
     }
 }
 
+#[mutants::skip(reason = "entry point for binary.")]
 fn main() {
     let result = run(r#"fn main() -> u8 { let a = (1, 2, true); a.0 }"#);
 
