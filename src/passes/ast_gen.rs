@@ -262,7 +262,7 @@ mod test {
         Ctx::new()
     }
 
-    fn parse<T>(source: &'static str) -> T
+    fn parse<T>(source: &str) -> T
     where
         T: Parse,
     {
@@ -297,5 +297,15 @@ mod test {
         let mut pass = AstGen::new(&mut ctx);
         let expression_id = pass.lower_expression(&parse::<cst::Expression>(source));
         assert_debug_snapshot!(name, pass.ast[expression_id], source);
+    }
+
+    #[rstest]
+    #[case("expression_statement", "{ 1 }")]
+    #[case("expression_statement_semicolon", "{ 1; }")]
+    fn lower_block(#[case] name: &str, mut ctx: Ctx, #[case] source: &str) {
+        let mut pass = AstGen::new(&mut ctx);
+        let block = parse::<cst::Block>(source);
+        let block_id = pass.lower_block(&block);
+        assert_debug_snapshot!(name, pass.ast[block_id], source);
     }
 }
