@@ -167,8 +167,10 @@ mod test {
         #[test]
         fn booleans() {
             assert_eq!(
-                run("fn main() -> bool { let my_bool = true; let other_bool = false; my_bool }"),
-                1
+                run(
+                    "fn main() -> bool { let my_bool = true; let other_bool = false; my_bool && other_bool }"
+                ),
+                0
             );
         }
 
