@@ -293,6 +293,7 @@ impl IntegerKind {
             (Self::Any, Type::U8 | Type::I8)
                 | (Self::Signed, Type::I8)
                 | (Self::Unsigned, Type::U8 | Type::I8)
+                | (_, Type::Never) // Allow never to propagate.
         )
     }
 
