@@ -31,6 +31,7 @@ impl Parse for cst::Program {
                 }
                 tok => {
                     eprintln!("Unknown tok: {tok}");
+                    lexer.next();
                 }
             }
         }
