@@ -260,6 +260,16 @@ mod test {
         }
 
         #[test]
+        fn function_values() {
+            assert_eq!(
+                run(
+                    "fn get1() -> u8 { 1 } fn get2() -> u8 { 2 } fn main() -> u8 { let f = get1; if f() == 1 { f = get2; } f() }"
+                ),
+                2
+            );
+        }
+
+        #[test]
         fn reassignment() {
             assert_eq!(run("fn main() -> u8 { let a = 1; a = 2; a }"), 2);
         }
