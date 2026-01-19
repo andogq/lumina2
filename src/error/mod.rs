@@ -163,3 +163,57 @@ macro_rules! run_and_report {
         })
     };
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    mod error {
+        use super::*;
+
+        #[rstest]
+        #[case("standard_error", CError::from(HirGenError::IfMustHaveBlock))]
+        #[case("fatal_error", CError::from(HirGenError::IfMustHaveBlock).fatal())]
+        #[case("message_error", CError::from(HirGenError::IfMustHaveBlock).with_message("some message"))]
+        #[case("fatal_and_message_error", CError::from(HirGenError::IfMustHaveBlock).fatal().with_message("some message"))]
+        fn formatting(#[case] name: &str, #[case] error: CError) {
+            assert_snapshot!(name, error, &format!("{error:?}"));
+        }
+    }
+
+    mod list {
+        use super::*;
+
+        #[rstest]
+        #[case::empty([])]
+        #[case::single_non_fatal([CError::from(HirGenError::IfMustHaveBlock)])]
+        #[case::single_fatal([CError::from(HirGenError::IfMustHaveBlock).fatal()])]
+        #[case::multiple_non_fatal(vec![CError::from(HirGenError::IfMustHaveBlock); 3])]
+        #[case::multiple_fatal(vec![CError::from(HirGenError::IfMustHaveBlock).fatal(); 3])]
+        #[case::multiple([
+            CError::from(HirGenError::IfMustHaveBlock).fatal(),
+            CError::from(HirGenError::IfMustHaveBlock),
+            CError::from(HirGenError::IfMustHaveBlock).fatal(),
+        ])]
+        fn counting(#[case] errors: impl IntoIterator<Item = CError>) {
+            let mut list = CErrorList::default();
+            let mut fatal = 0;
+            let mut non_fatal = 0;
+
+            for error in errors {
+                // Count fatal errors.
+                if error.fatal {
+                    fatal += 1;
+                } else {
+                    non_fatal += 1;
+                }
+
+                // Report the error.
+                list.report(error);
+            }
+
+            assert_eq!(list.iter_fatal().count(), fatal);
+            assert_eq!(list.iter_non_fatal().count(), non_fatal);
+        }
+    }
+}
