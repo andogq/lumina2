@@ -238,7 +238,6 @@ mod expression {
     }
 
     impl Precedence {
-        // TODO: Don't have multiple precedence functions
         fn of(tok: &Tok) -> Self {
             match tok {
                 Tok::Dot => Self::Field,
@@ -645,6 +644,7 @@ mod test {
         #[case("expression_ident", "some_ident")]
         #[case("expression_add", "123 + 321")]
         #[case("expression_add_mul", "123 + 321 * 999")]
+        #[case("expression_greater_equal", "a >= b")]
         #[case("expression_unary_operation", "-123")]
         #[case("expression_unary_operation_add_mul", "123 + -321 * 999")]
         #[case("expression_assignment", "some_ident = 123 + other_ident")]
@@ -684,6 +684,9 @@ mod test {
         #[case("binary_variable", "+ b")]
         #[case("binary_literal", "+ 2")]
         #[case("binary_logical_and", "&& 2")]
+        #[case("binary_logical_or", "|| 2")]
+        #[case("binary_bitwise_and", "& 2")]
+        #[case("binary_bitwise_or", "| 2")]
         fn binary(#[case] name: &str, #[case] source: &str) {
             test_with_lexer(source, |lexer| {
                 let binary = cst::Binary::parse(

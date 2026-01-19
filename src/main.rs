@@ -174,6 +174,40 @@ mod test {
             );
         }
 
+        #[rstest]
+        #[case::add("1 + 2", "u8", 3)]
+        #[case::sub("10 - 4", "u8", 6)]
+        #[case::mul("10 * 4", "u8", 40)]
+        #[case::div("12 / 4", "u8", 3)]
+        #[case::div_signed("-12 / -4", "i8", 3)]
+        #[case::logical_and("true && true", "bool", 1)]
+        #[case::logical_or("true || false", "bool", 1)]
+        #[case::bitwise_and("3 & 2", "u8", 2)]
+        #[case::bitwise_or("4 | 2", "u8", 6)]
+        #[case::less_signed("-4 < -3", "bool", 1)]
+        #[case::less_equal_signed("-4 <= -4", "bool", 1)]
+        #[case::greater_equal_signed("-5 <= -4", "bool", 1)]
+        fn binary_operations(#[case] source: &str, #[case] return_ty: &str, #[case] output: u8) {
+            assert_eq!(
+                run(&format!("fn main() -> {return_ty} {{ {source} }}")),
+                output
+            );
+        }
+
+        #[rstest]
+        #[case::less("<", 1)]
+        #[case::less_equal("<=", 1)]
+        #[case::greater(">", 0)]
+        #[case::greater_equal(">=", 0)]
+        fn binary_unsigned_operations(#[case] symbol: &str, #[case] output: u8) {
+            assert_eq!(
+                run(&format!(
+                    "fn cmp(lhs: u8, rhs: u8) -> bool {{ lhs {symbol} rhs }}  fn main() -> bool {{ cmp(3, 4) }}"
+                )),
+                output
+            );
+        }
+
         #[test]
         fn if_statement() {
             assert_eq!(run("fn main() -> u8 { if true { 123 } else { 99 } }"), 123);
