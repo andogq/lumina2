@@ -53,9 +53,12 @@ impl<T> PassSuccess<T> {
     }
 
     /// Produce a reference to the outcome.
-    #[expect(
-        dead_code,
-        reason = "will be useful when better error handling is implemented."
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "will be useful when better error handling is implemented."
+        )
     )]
     pub fn outcome(&self) -> &T {
         match self {
@@ -65,9 +68,12 @@ impl<T> PassSuccess<T> {
     }
 
     /// Produce a slice to the errors.
-    #[expect(
-        dead_code,
-        reason = "will be useful when better error handling is implemented."
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "will be useful when better error handling is implemented."
+        )
     )]
     pub fn errors(&self) -> &[CErrorId] {
         match self {
@@ -88,5 +94,24 @@ impl<T> PassSuccess<T> {
 impl<T> From<T> for PassSuccess<T> {
     fn from(value: T) -> Self {
         Self::Ok(value)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn ok() {
+        let pass = PassSuccess::new(123, vec![]);
+        assert_eq!(pass.outcome(), &123);
+        assert_eq!(pass.errors(), []);
+    }
+
+    #[test]
+    fn partial() {
+        let pass = PassSuccess::new(123, vec![CErrorId::from_id(0)]);
+        assert_eq!(pass.outcome(), &123);
+        assert_eq!(pass.errors(), [CErrorId::from_id(0)]);
     }
 }

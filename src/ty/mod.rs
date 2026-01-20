@@ -292,7 +292,8 @@ impl IntegerKind {
             (self, &types[ty]),
             (Self::Any, Type::U8 | Type::I8)
                 | (Self::Signed, Type::I8)
-                | (Self::Unsigned, Type::U8)
+                | (Self::Unsigned, Type::U8 | Type::I8)
+                | (_, Type::Never) // Allow never to propagate.
         )
     }
 
@@ -389,5 +390,79 @@ mod test {
     #[case("{ let a = 1; a }", Type::I8)]
     fn assert_expression_ty(#[case] expression: &str, #[case] ty: Type) {
         assert_eq!(get_ty(expression), ty);
+    }
+
+    mod literal {
+        use super::*;
+
+        #[test]
+        fn coerce_literal_pass_through() {
+            let types = Types::new();
+            let literal = Literal::Integer(IntegerKind::Any);
+            assert!(literal.can_coerce(&types, types.i8()));
+            assert!(!literal.can_coerce(&types, types.boolean()));
+        }
+
+        #[rstest]
+        #[case::any_unsigned(IntegerKind::Any, Type::U8, true)]
+        #[case::any_signed(IntegerKind::Any, Type::I8, true)]
+        #[case::any_non_integer(IntegerKind::Any, Type::Boolean, false)]
+        #[case::signed_unsigned(IntegerKind::Signed, Type::U8, false)]
+        #[case::signed_signed(IntegerKind::Signed, Type::I8, true)]
+        #[case::signed_non_integer(IntegerKind::Signed, Type::Boolean, false)]
+        #[case::unsigned_unsigned(IntegerKind::Unsigned, Type::U8, true)]
+        #[case::unsigned_signed(IntegerKind::Unsigned, Type::I8, true)]
+        #[case::unsigned_non_integer(IntegerKind::Unsigned, Type::Boolean, false)]
+        fn coerce_integer(#[case] integer: IntegerKind, #[case] ty: Type, #[case] valid: bool) {
+            let mut types = Types::new();
+            let ty = types.get(ty);
+            assert_eq!(integer.can_coerce(&types, ty), valid);
+        }
+
+        #[rstest]
+        #[case::all_any(IntegerKind::Any, IntegerKind::Any, Some(IntegerKind::Any))]
+        #[case::all_signed(IntegerKind::Signed, IntegerKind::Signed, Some(IntegerKind::Signed))]
+        #[case::all_unsigned(
+            IntegerKind::Unsigned,
+            IntegerKind::Unsigned,
+            Some(IntegerKind::Unsigned)
+        )]
+        #[case::signed_unsigned(IntegerKind::Signed, IntegerKind::Unsigned, None)]
+        #[case::any_signed(IntegerKind::Any, IntegerKind::Signed, Some(IntegerKind::Signed))]
+        #[case::any_unsigned(IntegerKind::Any, IntegerKind::Unsigned, Some(IntegerKind::Unsigned))]
+        fn narrow_integer(
+            #[case] lhs: IntegerKind,
+            #[case] rhs: IntegerKind,
+            #[case] expect: Option<IntegerKind>,
+        ) {
+            assert_eq!(lhs.narrow(&rhs), expect);
+        }
+    }
+
+    mod types {
+        use super::*;
+
+        #[test]
+        fn offset_of_primitive_field_0() {
+            let types = Types::new();
+            let ty = types.u8();
+            assert_eq!(types.offset_of(ty, 0), Some(0));
+        }
+
+        #[test]
+        fn offset_of_primitive_field_1() {
+            let types = Types::new();
+            let ty = types.u8();
+            assert_eq!(types.offset_of(ty, 1), None);
+        }
+
+        #[test]
+        fn offset_of_tuple() {
+            let mut types = Types::new();
+            let ty = types.tuple([types.u8(), types.boolean()]);
+            assert_eq!(types.offset_of(ty, 0), Some(0));
+            assert_eq!(types.offset_of(ty, 1), Some(1));
+            assert_eq!(types.offset_of(ty, 2), None);
+        }
     }
 }

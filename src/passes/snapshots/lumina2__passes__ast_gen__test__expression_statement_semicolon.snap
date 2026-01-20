@@ -1,0 +1,12 @@
+---
+source: src/passes/ast_gen.rs
+expression: "{ 1; }"
+---
+Block {
+    statements: [
+        StatementId(
+            0,
+        ),
+    ],
+    expression: None,
+}

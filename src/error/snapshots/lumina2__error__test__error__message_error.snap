@@ -1,0 +1,5 @@
+---
+source: src/error/mod.rs
+expression: "CError { kind: HirGen(IfMustHaveBlock), message: Some(\"some message\"), fatal: false }"
+---
+an `if` expression must contain at least one block. (some message)

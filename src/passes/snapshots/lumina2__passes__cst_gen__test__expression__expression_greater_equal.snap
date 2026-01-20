@@ -1,0 +1,25 @@
+---
+source: src/passes/cst_gen.rs
+expression: a >= b
+---
+Binary(
+    Binary {
+        lhs: Variable(
+            Variable {
+                variable: Ident(
+                    "a",
+                ),
+            },
+        ),
+        operation: GreaterEqual(
+            GtEq,
+        ),
+        rhs: Variable(
+            Variable {
+                variable: Ident(
+                    "b",
+                ),
+            },
+        ),
+    },
+)

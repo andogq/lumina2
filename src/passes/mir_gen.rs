@@ -402,9 +402,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                     let lowered_block = self.lower_block(ctx, *default);
 
                     // Store the resulting block value.
-                    if let Some(result) = lowered_block.operand
-                        && !matches!(&self.ctx.types[switch_ty], Type::Never)
-                    {
+                    if let Some(result) = lowered_block.operand {
                         self.mir.add_statement(
                             lowered_block.exit,
                             Assign {

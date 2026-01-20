@@ -54,6 +54,7 @@ impl Constraints {
         dead_code,
         reason = "future constraints may require an unsigned integer."
     )]
+    #[mutants::skip]
     pub fn integer_unsigned(&mut self, var: impl Into<TypeVarId>) {
         self.constraints
             .push((var.into(), Constraint::Integer(IntegerKind::Unsigned)));
@@ -66,6 +67,7 @@ impl Constraints {
     }
 
     /// Add a [`Constraint::Function`] where `var` is a function with `parameters` and `return_ty`.
+    #[mutants::skip(reason = "until type checking functions is better fleshed out.")]
     pub fn function(
         &mut self,
         var: impl Into<TypeVarId>,

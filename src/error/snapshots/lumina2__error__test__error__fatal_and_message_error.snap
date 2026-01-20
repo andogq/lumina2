@@ -1,0 +1,5 @@
+---
+source: src/error/mod.rs
+expression: error
+---
+FATAL: an `if` expression must contain at least one block. (some message)
