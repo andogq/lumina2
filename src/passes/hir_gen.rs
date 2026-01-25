@@ -132,7 +132,10 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                         .ctx
                         .scopes
                         .resolve(trait_declaration.method_scope, *method_name);
-                    trait_declaration.method_bindings[&binding]
+                    *trait_declaration
+                        .method_bindings
+                        .get(&binding)
+                        .expect("method does not exist in trait declaration")
                 };
 
                 // Lower the method.
@@ -149,7 +152,9 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         // Order all of the lowered methods.
         let mut methods = IndexedVec::new();
         for method_id in trait_declaration.methods.iter_keys() {
-            let function_id = lowered_methods[&method_id];
+            let function_id = *lowered_methods
+                .get(&method_id)
+                .expect("trait implementation missing method");
             assert_eq!(methods.insert(function_id), method_id);
         }
 
