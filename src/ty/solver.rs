@@ -67,14 +67,46 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
     ) -> HashMap<TypeVarId, TypeId> {
         let mut solver = Self::new(types, type_vars);
 
-        for (var, constraint) in constraints {
-            solver.process_constraint(*var, constraint);
+        let mut constraints = Vec::from_iter(
+            constraints
+                .iter()
+                .map(|(var, constraint)| (var, constraint)),
+        );
+
+        while !constraints.is_empty() {
+            let mut advanced = false;
+
+            for (var, constraint) in std::mem::take(&mut constraints) {
+                let solution = solver.process_constraint(*var, constraint);
+
+                if solution.is_some() {
+                    advanced = true;
+                } else {
+                    constraints.push((var, constraint));
+                }
+            }
+
+            if !advanced {
+                break;
+            }
         }
+
+        assert!(constraints.is_empty(), "could not solve all constraints");
 
         solver.get_types()
     }
 
-    pub fn process_constraint(&mut self, var: TypeVarId, constraint: &Constraint) {
+    /// Process a constraint. If the constraint can be processed, the resulting [`TypeVarId`] will
+    /// be produced. If not, the constraint could not be processed and should be tried again later.
+    ///
+    /// Note that there is a difference between processing a constraint, and solving a constraint.
+    /// A constraint is processed if all the required information is present in the solver. A
+    /// constraint is solved if all required conditions are upheld.
+    pub fn process_constraint(
+        &mut self,
+        var: TypeVarId,
+        constraint: &Constraint,
+    ) -> Option<TypeVarId> {
         match constraint {
             Constraint::Eq(eq_var) => self.solve_eq(var, *eq_var),
             Constraint::Integer(integer_kind) => self.solve_integer(var, integer_kind),
@@ -87,20 +119,31 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         }
     }
 
-    fn solve_eq(&mut self, var: TypeVarId, eq_var: TypeVarId) {
-        self.merge(var, eq_var).unwrap();
+    /// Merge two variables.
+    ///
+    /// This internally calls [`Self::merge`], which will always be able to process the constraint.
+    fn solve_eq(&mut self, var: TypeVarId, eq_var: TypeVarId) -> Option<TypeVarId> {
+        Some(self.merge(var, eq_var))
     }
 
-    fn solve_integer(&mut self, var: TypeVarId, integer_kind: &IntegerKind) {
+    /// Solve a variable as an integer.
+    ///
+    /// This can always process the constraint.
+    fn solve_integer(&mut self, var: TypeVarId, integer_kind: &IntegerKind) -> Option<TypeVarId> {
         let var = self.root.find_set(var);
         let var_solution = self.get_solution(var);
         let integer_solution = Solution::Literal(Literal::Integer(integer_kind.clone()));
 
         self.simple_merge_and_insert(var, var_solution.as_ref(), Some(&integer_solution))
             .unwrap();
+
+        Some(var)
     }
 
-    fn solve_reference(&mut self, var: TypeVarId, ref_var: TypeVarId) {
+    /// Solve a variable as a reference to another variable.
+    ///
+    /// This can always process the constraint.
+    fn solve_reference(&mut self, var: TypeVarId, ref_var: TypeVarId) -> Option<TypeVarId> {
         let var = self.root.find_set(var);
         let ref_var = self.root.find_set(ref_var);
 
@@ -109,14 +152,19 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
 
         self.simple_merge_and_insert(var, var_solution.as_ref(), Some(&ref_solution))
             .unwrap();
+
+        Some(var)
     }
 
+    /// Solve a variable as a function.
+    ///
+    /// This can always process the constraint.
     fn solve_function(
         &mut self,
         var: TypeVarId,
         parameter_vars: &[TypeVarId],
         return_ty_var: TypeVarId,
-    ) {
+    ) -> Option<TypeVarId> {
         let Some((parameters, return_ty)) = self.get_solution(var).and_then(|solution| {
             let Solution::Type(ty) = solution else {
                 return None;
@@ -153,9 +201,14 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
 
         assert!(solved_return_ty.is_some());
         assert!(solved_parameters.len() == parameter_vars.len());
+
+        Some(var)
     }
 
-    fn solve_aggregate(&mut self, var: TypeVarId, size: usize) {
+    /// Solve a variable as an aggregate.
+    ///
+    /// This can always process the constraint.
+    fn solve_aggregate(&mut self, var: TypeVarId, size: usize) -> Option<TypeVarId> {
         let tuple_solution = Solution::Tuple(
             (0..size)
                 .map(|i| TypeVar::Field(var, i))
@@ -169,15 +222,18 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
 
         self.simple_merge_and_insert(var, solution.as_ref(), Some(&tuple_solution))
             .unwrap();
+
+        Some(var)
     }
 
-    fn merge(&mut self, lhs: TypeVarId, rhs: TypeVarId) -> Option<TypeVarId> {
+    /// Merge two nodes, producing the resulting merged [`TypeVarId`].
+    fn merge(&mut self, lhs: TypeVarId, rhs: TypeVarId) -> TypeVarId {
         let lhs = self.root.find_set(lhs);
         let rhs = self.root.find_set(rhs);
 
         if lhs == rhs {
             // Already merged!
-            return Some(lhs);
+            return lhs;
         }
 
         let lhs_solution = self.get_solution(lhs);
@@ -194,7 +250,7 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
         self.simple_merge_and_insert(root, lhs_solution.as_ref(), rhs_solution.as_ref())
             .unwrap();
 
-        Some(root)
+        root
     }
 
     /// Simplify the provided solution, attempting to convert to [`Solution::Type`] where possible.
@@ -246,12 +302,12 @@ impl<'types, 'type_vars> Solver<'types, 'type_vars> {
                 match self.merge_solutions(lhs_solution, rhs_solution) {
                     MergeResult::Substitute(solution) => Some(solution),
                     MergeResult::MergeAndReference(lhs, rhs) => {
-                        self.merge(lhs, rhs).map(Solution::Reference)
+                        Some(Solution::Reference(self.merge(lhs, rhs)))
                     }
                     MergeResult::TupleMergeAndSubstitute(values) => Some(Solution::Tuple(
                         values
                             .into_iter()
-                            .map(|(lhs, rhs)| self.merge(lhs, rhs).unwrap())
+                            .map(|(lhs, rhs)| self.merge(lhs, rhs))
                             .collect(),
                     )),
                     MergeResult::Incompatible(kind) => return Err(kind),
