@@ -345,15 +345,17 @@ mod test {
                 statements: vec![statement_id],
                 expression: None,
             });
-            ast.function_declarations.insert(ast::FunctionDeclaration {
+            let function_id = ast.function_declarations.insert(ast::FunctionDeclaration {
                 signature: ast::FunctionSignature {
                     name: ctx.strings.intern("main"),
                     parameters: Vec::new(),
                     return_ty: None,
                 },
                 body: block_id,
-            })
-        };
+            });
+            // Add function as top level function.
+            ast.item_functions.push(function_id);
+        }
 
         // Lower the AST into the HIR.
         let hir = HirGen::run(&mut ctx, &ast, ()).unwrap().into_outcome();

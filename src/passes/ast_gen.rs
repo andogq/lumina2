@@ -47,7 +47,9 @@ impl<'ctx> AstGen<'ctx> {
             signature: self.lower_function_signature(&function.signature),
             body: self.lower_block(&function.body),
         };
-        self.ast.function_declarations.insert(function_declaration)
+        let id = self.ast.function_declarations.insert(function_declaration);
+        self.ast.item_functions.push(id);
+        id
     }
 
     fn lower_function_signature(
@@ -244,7 +246,7 @@ impl<'ctx> AstGen<'ctx> {
             .into(),
             cst::Expression::QualifiedPath(cst::QualifiedPath { ty, name, item, .. }) => {
                 QualifiedPath {
-                    ty: self.lower_type(&ty),
+                    ty: self.lower_type(ty),
                     name: self.ctx.strings.intern(&name.0),
                     item: self.ctx.strings.intern(&item.0),
                 }

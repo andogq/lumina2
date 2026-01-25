@@ -21,6 +21,9 @@ pub struct Ast {
 
     pub types: IndexedVec<AstTypeId, AstType>,
 
+    /// Top-level function declarations.
+    pub item_functions: Vec<FunctionId>,
+
     pub traits: IndexedVec<TraitId, Trait>,
     pub trait_implementations: Vec<TraitImplementation>,
 }
@@ -33,6 +36,7 @@ impl Ast {
             statements: IndexedVec::new(),
             expressions: IndexedVec::new(),
             types: IndexedVec::new(),
+            item_functions: Vec::new(),
             traits: IndexedVec::new(),
             trait_implementations: Vec::new(),
         }

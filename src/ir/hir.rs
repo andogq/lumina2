@@ -71,9 +71,35 @@ mod functions {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub struct FunctionSignature {
-        pub parameters: Vec<(IdentifierBindingId, TypeId)>,
-        pub return_ty: TypeId,
+    pub struct FunctionSignature<Type = TypeId> {
+        pub parameters: Vec<(IdentifierBindingId, Type)>,
+        pub return_ty: Type,
+    }
+
+    impl FunctionSignature<MaybeSelfType> {
+        /// Substitute any occurrences of `Self` with the provided type.
+        pub fn with_self(self, current_self: TypeId) -> FunctionSignature {
+            FunctionSignature {
+                parameters: self
+                    .parameters
+                    .into_iter()
+                    .map(|(binding, ty)| (binding, ty.with_self(current_self)))
+                    .collect(),
+                return_ty: self.return_ty.with_self(current_self),
+            }
+        }
+
+        /// Resolve all types, ensuring `Self` isn't present.
+        pub fn without_self(self) -> Option<FunctionSignature> {
+            Some(FunctionSignature {
+                parameters: self
+                    .parameters
+                    .into_iter()
+                    .map(|(binding, ty)| Some((binding, ty.without_self()?)))
+                    .collect::<Option<_>>()?,
+                return_ty: self.return_ty.without_self()?,
+            })
+        }
     }
 
     #[derive(Clone, Debug)]
@@ -242,7 +268,7 @@ pub struct Trait {
     pub name: TraitBindingId,
     pub method_scope: ScopeId,
     pub method_bindings: HashMap<IdentifierBindingId, TraitMethodId>,
-    pub methods: IndexedVec<TraitMethodId, FunctionSignature>,
+    pub methods: IndexedVec<TraitMethodId, FunctionSignature<MaybeSelfType>>,
 }
 
 // Key to identifier a specific implementation of a trait for a given type.
@@ -258,4 +284,32 @@ pub struct TraitImplementationKey {
 pub struct TraitImplementation {
     /// [`FunctionId`] containing the implementation for each [`TraitMethodId`].
     pub methods: IndexedVec<TraitMethodId, FunctionId>,
+}
+
+/// A type that may be `Self`, or some other resolved type.
+#[derive(Clone, Debug)]
+pub enum MaybeSelfType {
+    SelfType,
+    Type(TypeId),
+}
+
+impl MaybeSelfType {
+    /// Fetch the type, using a fallback.
+    pub fn with_self(&self, current_self: TypeId) -> TypeId {
+        self.without_self().unwrap_or(current_self)
+    }
+
+    /// Fetch the type, or [`None`] if [`MaybeSelfType::SelfType`].
+    pub fn without_self(&self) -> Option<TypeId> {
+        match self {
+            MaybeSelfType::SelfType => None,
+            MaybeSelfType::Type(type_id) => Some(*type_id),
+        }
+    }
+}
+
+impl From<TypeId> for MaybeSelfType {
+    fn from(ty: TypeId) -> Self {
+        Self::Type(ty)
+    }
 }
