@@ -19,7 +19,7 @@ impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
         for item in &cst.items {
             match item {
                 cst::Item::FunctionDeclaration(function_declaration) => {
-                    ast_gen.lower_function(function_declaration);
+                    ast_gen.lower_item_function(function_declaration);
                 }
                 cst::Item::TraitDeclaration(trait_declaration) => {
                     ast_gen.lower_trait_declaration(trait_declaration);
@@ -47,7 +47,11 @@ impl<'ctx> AstGen<'ctx> {
             signature: self.lower_function_signature(&function.signature),
             body: self.lower_block(&function.body),
         };
-        let id = self.ast.function_declarations.insert(function_declaration);
+        self.ast.function_declarations.insert(function_declaration)
+    }
+
+    fn lower_item_function(&mut self, function: &cst::FunctionDeclaration) -> FunctionId {
+        let id = self.lower_function(function);
         self.ast.item_functions.push(id);
         id
     }
