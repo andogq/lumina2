@@ -418,5 +418,25 @@ mod test {
                 100
             )
         }
+
+        #[test]
+        fn trait_impl() {
+            assert_eq!(
+                run(r#"trait MyTrait {
+                        fn some_method() -> Self;
+                    }
+
+                    impl MyTrait for u8 {
+                        fn some_method() -> Self {
+                            10
+                        }
+                    }
+
+                    fn main() -> u8 {
+                        <u8 as MyTrait>::some_method()
+                    }"#),
+                10
+            );
+        }
     }
 }
