@@ -435,8 +435,34 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 },
             }
             .into(),
-            ast::Expression::QualifiedPath(ast::QualifiedPath { .. }) => {
-                todo!()
+            ast::Expression::QualifiedPath(ast::QualifiedPath { ty, name, item }) => {
+                let trait_name = self.ctx.scopes.resolve_global(*name);
+                let (trait_id, target_trait) = self
+                    .hir
+                    .traits
+                    .iter_pairs()
+                    .find(|&(_, t)| t.name == trait_name)
+                    .expect("trait must exist");
+                let item_binding = self.ctx.scopes.resolve(target_trait.method_scope, *item);
+                let item = *target_trait
+                    .method_bindings
+                    .get(&item_binding)
+                    .expect("valid method on trait");
+
+                Path {
+                    ty: {
+                        let ty = self.lower_ast_type(*ty);
+                        match ctx.current_self() {
+                            Some(current_self) => ty.with_self(current_self),
+                            None => ty
+                                .without_self()
+                                .expect("`Self` cannot be used in this context"),
+                        }
+                    },
+                    target_trait: trait_id,
+                    item,
+                }
+                .into()
             }
         };
 

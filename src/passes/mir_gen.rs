@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{ir::hir::TraitImplementationKey, prelude::*};
 
 use mir::{UnaryOperation, *};
 use thir::Thir;
@@ -595,6 +595,34 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
                 let place = self.mir.places.insert(lhs);
                 Some(self.mir.operands.insert(Operand::Place(place)))
+            }
+            hir::Expression::Path(hir::Path {
+                ty,
+                target_trait,
+                item,
+            }) => {
+                // Look up the trait implementation.
+                let trait_implementation = &self.thir[&TraitImplementationKey {
+                    trait_id: *target_trait,
+                    ty: *ty,
+                }];
+
+                // Look up the function ID corresponding with the method ID.
+                let thir_function_id = trait_implementation.methods[*item];
+
+                // Map from THIR function to MIR function.
+                let (function_id, _) = self
+                    .function_ids
+                    .iter_pairs()
+                    .find(|(_, id)| **id == thir_function_id)
+                    .expect("function to exist");
+
+                // Insert constant resolving to the function.
+                Some(
+                    self.mir
+                        .operands
+                        .insert(Operand::Constant(Constant::Function(function_id))),
+                )
             }
         }
     }

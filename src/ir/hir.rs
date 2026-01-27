@@ -183,6 +183,7 @@ mod expression {
         Unreachable,
         Aggregate(Aggregate),
         Field(Field),
+        Path(Path),
     }
 
     #[derive(Clone, Debug)]
@@ -247,6 +248,18 @@ mod expression {
         pub field: usize,
     }
 
+    /// A qualified path to a trait with an item.
+    ///
+    /// ```
+    /// <Ty as TargetTrait>::item
+    /// ```
+    #[derive(Clone, Debug)]
+    pub struct Path {
+        pub ty: TypeId,
+        pub target_trait: TraitId,
+        pub item: TraitMethodId,
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -260,6 +273,7 @@ mod expression {
         Variable: Variable,
         Aggregate: Aggregate,
         Field: Field,
+        Path: Path,
     }
 }
 
