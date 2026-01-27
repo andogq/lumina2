@@ -39,6 +39,7 @@ impl<B: BindingKind> PartialEq for BindingId<B> {
 }
 impl<B: BindingKind> Eq for BindingId<B> {}
 impl<B: BindingKind> Hash for BindingId<B> {
+    #[mutants::skip(reason = "tests don't cover hashing")]
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
@@ -69,17 +70,6 @@ impl<B: BindingKind> Binding<B> {
             string,
             kind: PhantomData,
         }
-    }
-}
-impl<B: BindingKind> TryFrom<ErasedBinding> for Binding<B> {
-    type Error = ErasedBinding;
-
-    fn try_from(binding: ErasedBinding) -> Result<Self, Self::Error> {
-        if binding.kind == B::get_marker() {
-            return Err(binding);
-        }
-
-        Ok(Self::new(binding.string))
     }
 }
 

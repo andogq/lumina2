@@ -438,5 +438,65 @@ mod test {
                 10
             );
         }
+
+        #[test]
+        #[should_panic(expected = "Type")]
+        fn trait_impl_mismatch() {
+            run(r#"trait MyTrait {
+                fn some_method() -> Self;
+            }
+
+            impl MyTrait for u8 {
+                fn some_method(parameter: bool) -> Self {
+                    10
+                }
+            }
+
+            fn main() -> u8 {
+                <u8 as MyTrait>::some_method()
+            }"#);
+        }
+
+        #[test]
+        #[should_panic(expected = "type must implement trait")]
+        fn trait_not_implemented() {
+            run(r#"trait MyTrait {
+                fn some_method() -> Self;
+            }
+
+            fn main() -> u8 {
+                <u8 as MyTrait>::some_method()
+            }"#);
+        }
+
+        #[test]
+        fn complex_path_usage() {
+            assert_eq!(
+                run(r#"trait MyTrait {
+                        fn some_method() -> Self;
+                    }
+
+                    impl MyTrait for u8 {
+                        fn some_method() -> Self {
+                            10
+                        }
+                    }
+
+                    fn fallback() -> u8 {
+                        3
+                    }
+
+                    fn main() -> u8 {
+                        let get_num = if true {
+                            <u8 as MyTrait>::some_method
+                        } else {
+                            fallback
+                        };
+
+                        get_num()
+                    }"#),
+                10
+            );
+        }
     }
 }

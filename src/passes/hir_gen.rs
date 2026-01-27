@@ -561,6 +561,7 @@ impl FunctionCtx {
         dead_code,
         reason = "tracking current trait may be useful for diagnostics"
     )]
+    #[mutants::skip(reason = "dead code")]
     fn current_trait(&self) -> Option<TraitId> {
         match self {
             Self::TraitMethod { current_trait, .. } => Some(*current_trait),
@@ -573,6 +574,7 @@ impl FunctionCtx {
         dead_code,
         reason = "tracking current method may be useful for diagnostics"
     )]
+    #[mutants::skip(reason = "dead code")]
     fn current_trait_method(&self) -> Option<TraitMethodId> {
         match self {
             Self::TraitMethod { method, .. } => Some(*method),
