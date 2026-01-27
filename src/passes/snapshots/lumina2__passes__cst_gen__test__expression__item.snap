@@ -1,0 +1,21 @@
+---
+source: src/passes/cst_gen.rs
+expression: "<Type as Trait>::item"
+---
+QualifiedPath {
+    tok_l_angle: LAngle,
+    ty: Named(
+        Ident(
+            "Type",
+        ),
+    ),
+    tok_as: As,
+    name: Ident(
+        "Trait",
+    ),
+    tok_r_angle: RAngle,
+    tok_colon_colon: ColonColon,
+    item: Ident(
+        "item",
+    ),
+}

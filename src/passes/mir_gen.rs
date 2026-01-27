@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{ir::hir::TraitImplementationKey, prelude::*};
 
 use mir::{UnaryOperation, *};
 use thir::Thir;
@@ -9,7 +9,7 @@ pub struct MirGen<'ctx, 'hir, 'thir> {
 
     mir: Mir,
 
-    bindings: HashMap<BindingId, Binding>,
+    bindings: HashMap<IdentifierBindingId, Binding>,
     locals: FunctionLocals,
 
     function_ids: IndexedVec<FunctionId, hir::FunctionId>,
@@ -77,10 +77,12 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
         // Create local for return value, as it must be the first.
         // TODO: Store this local in some context somewhere, to use it as the return local.
-        let return_local = self.locals.create(function_id, function.return_ty);
+        let return_local = self
+            .locals
+            .create(function_id, function.signature.return_ty);
 
         // Following locals are all for the parameters.
-        for (binding, ty) in &function.parameters {
+        for (binding, ty) in &function.signature.parameters {
             let local = self.locals.create_with_binding(function_id, *ty, *binding);
             self.bindings.insert(*binding, Binding::Local(local));
         }
@@ -95,7 +97,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
         if let Some(result) = block.operand {
             assert_eq!(
                 self.thir.type_of(body.expression),
-                function.return_ty,
+                function.signature.return_ty,
                 "ty check bug: body expression must match function return"
             );
 
@@ -114,8 +116,13 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
             .terminate_if_unterminated(block.exit, Terminator::Return);
 
         self.mir.functions.insert(Function {
-            return_ty: function.return_ty,
-            parameters: function.parameters.iter().map(|(_, ty)| *ty).collect(),
+            return_ty: function.signature.return_ty,
+            parameters: function
+                .signature
+                .parameters
+                .iter()
+                .map(|(_, ty)| *ty)
+                .collect(),
             binding: function.binding,
             locals: self.locals.generate_locals(function_id),
             entry: block.entry,
@@ -589,6 +596,34 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 let place = self.mir.places.insert(lhs);
                 Some(self.mir.operands.insert(Operand::Place(place)))
             }
+            hir::Expression::Path(hir::Path {
+                ty,
+                target_trait,
+                item,
+            }) => {
+                // Look up the trait implementation.
+                let trait_implementation = &self.thir[&TraitImplementationKey {
+                    trait_id: *target_trait,
+                    ty: *ty,
+                }];
+
+                // Look up the function ID corresponding with the method ID.
+                let thir_function_id = trait_implementation.methods[*item];
+
+                // Map from THIR function to MIR function.
+                let (function_id, _) = self
+                    .function_ids
+                    .iter_pairs()
+                    .find(|(_, id)| **id == thir_function_id)
+                    .expect("function to exist");
+
+                // Insert constant resolving to the function.
+                Some(
+                    self.mir
+                        .operands
+                        .insert(Operand::Constant(Constant::Function(function_id))),
+                )
+            }
         }
     }
 
@@ -682,7 +717,9 @@ impl Binding {
 
 /// Track available locals within a function.
 #[derive(Clone, Debug, Default)]
-struct FunctionLocals(HashMap<FunctionId, IndexedVec<LocalId, (TypeId, Option<BindingId>)>>);
+struct FunctionLocals(
+    HashMap<FunctionId, IndexedVec<LocalId, (TypeId, Option<IdentifierBindingId>)>>,
+);
 impl FunctionLocals {
     /// Create a new instance.
     pub fn new() -> Self {
@@ -698,7 +735,7 @@ impl FunctionLocals {
         &mut self,
         function: FunctionId,
         ty: TypeId,
-        binding: BindingId,
+        binding: IdentifierBindingId,
     ) -> LocalId {
         self.0
             .entry(function)
@@ -709,7 +746,7 @@ impl FunctionLocals {
     pub fn generate_locals(
         &self,
         function: FunctionId,
-    ) -> IndexedVec<LocalId, (Option<BindingId>, TypeId)> {
+    ) -> IndexedVec<LocalId, (Option<IdentifierBindingId>, TypeId)> {
         let mut locals = IndexedVec::new();
 
         if let Some(function_locals) = self.0.get(&function) {

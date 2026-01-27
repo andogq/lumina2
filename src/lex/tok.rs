@@ -108,6 +108,7 @@ toks! {
     Amp => "&",
     Bar => "|",
     Colon => ":",
+    ColonColon => "::",
     SemiColon => ";",
     Dot => ".",
     Comma => ",",
@@ -133,6 +134,10 @@ toks! {
     Else => "else",
     Loop => "loop",
     While => "while",
+    Trait => "trait",
+    Impl => "impl",
+    For => "for",
+    As => "as",
 
     Eof => "<Eof>",
 

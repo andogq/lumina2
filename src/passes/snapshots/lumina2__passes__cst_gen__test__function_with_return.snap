@@ -3,26 +3,28 @@ source: src/passes/cst_gen.rs
 expression: "fn some_function() -> u32 {}"
 ---
 FunctionDeclaration {
-    tok_fn: Fn,
-    name: Ident(
-        "some_function",
-    ),
-    tok_l_parenthesis: LParenthesis,
-    parameters: PunctuatedList {
-        items: [],
-        punctuation: [],
-    },
-    tok_r_parenthesis: RParenthesis,
-    return_ty: Some(
-        FunctionReturnType {
-            tok_thin_arrow: ThinArrow,
-            ty: Named(
-                Ident(
-                    "u32",
-                ),
-            ),
+    signature: FunctionSignature {
+        tok_fn: Fn,
+        name: Ident(
+            "some_function",
+        ),
+        tok_l_parenthesis: LParenthesis,
+        parameters: PunctuatedList {
+            items: [],
+            punctuation: [],
         },
-    ),
+        tok_r_parenthesis: RParenthesis,
+        return_ty: Some(
+            FunctionReturnType {
+                tok_thin_arrow: ThinArrow,
+                ty: Named(
+                    Ident(
+                        "u32",
+                    ),
+                ),
+            },
+        ),
+    },
     body: Block {
         tok_l_brace: LBrace,
         statements: [],

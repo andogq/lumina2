@@ -22,28 +22,83 @@ impl Program {
 
     pub fn add_function_declaration(&mut self, function_declaration: FunctionDeclaration) {
         self.items
-            .push(Item::FunctionDeclaration(function_declaration))
+            .push(Item::FunctionDeclaration(function_declaration));
+    }
+
+    pub fn add_trait_declaration(&mut self, trait_declaration: TraitDeclaration) {
+        self.items.push(Item::TraitDeclaration(trait_declaration));
+    }
+
+    pub fn add_trait_implementation(&mut self, trait_implementation: TraitImplementation) {
+        self.items
+            .push(Item::TraitImplementation(trait_implementation));
     }
 }
 
 /// A node which may appear at the top-level of a program.
 #[derive(Clone, Debug)]
 pub enum Item {
+    TraitDeclaration(TraitDeclaration),
+    TraitImplementation(TraitImplementation),
     FunctionDeclaration(FunctionDeclaration),
+}
+
+/// Trait declaration.
+///
+/// ```
+/// trait MyTrait {
+///     fn a() -> bool;
+///     fn b(n: i32);
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct TraitDeclaration {
+    #[expect(dead_code, reason = "token field")]
+    pub tok_trait: tok::Trait,
+    pub name: tok::Ident,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_l_brace: tok::LBrace,
+    pub methods: Vec<(FunctionSignature, tok::SemiColon)>,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_r_brace: tok::RBrace,
+}
+
+/// Trait implementation.
+///
+/// ```
+/// impl MyTrait for SomeType {
+///     fn a() -> bool {
+///         true
+///     }
+///
+///     fn b(n: 123) { }
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct TraitImplementation {
+    #[expect(dead_code, reason = "token field")]
+    pub tok_impl: tok::Impl,
+    pub name: tok::Ident,
+    #[expect(dead_code, reason = "named fields will be implemented with struct")]
+    pub tok_for: tok::For,
+    pub ty: CstType,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_l_brace: tok::LBrace,
+    pub methods: Vec<FunctionDeclaration>,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_r_brace: tok::RBrace,
 }
 
 mod function {
     use super::*;
 
-    /// Function declaration.
+    /// Function signature.
     ///
     /// ```
-    /// fn some_function(parameter_a: usize, parameter_b: bool) -> f64 {
-    ///     // Statements...
-    /// }
+    /// fn some_function(parameter_a: usize, parameter_b: bool) -> f64
     /// ```
     #[derive(Clone, Debug)]
-    pub struct FunctionDeclaration {
+    pub struct FunctionSignature {
         #[expect(dead_code, reason = "token field")]
         pub tok_fn: tok::Fn,
         /// Name of the function.
@@ -56,6 +111,20 @@ mod function {
         pub tok_r_parenthesis: tok::RParenthesis,
         /// Optional return type for the function.
         pub return_ty: Option<FunctionReturnType>,
+    }
+
+    /// Function declaration.
+    ///
+    /// ```
+    /// fn some_function(parameter_a: usize, parameter_b: bool) -> f64 {
+    ///     // Statements...
+    /// }
+    /// ```
+    #[derive(Clone, Debug)]
+    pub struct FunctionDeclaration {
+        /// Signature of the function.
+        pub signature: FunctionSignature,
+        /// Implementation of the function.
         pub body: Block,
     }
 
@@ -212,6 +281,7 @@ mod expression {
         Variable(Variable),
         Tuple(Tuple<Expression>),
         Field(Field),
+        QualifiedPath(QualifiedPath),
     }
 
     /// Assignment.
@@ -425,6 +495,29 @@ mod expression {
         Named(tok::Ident),
     }
 
+    /// Qualified path.
+    ///
+    /// ```
+    /// <Ty as Trait>::item
+    /// ```
+    #[derive(Clone, Debug)]
+    pub struct QualifiedPath {
+        #[expect(dead_code, reason = "named fields will be implemented with struct")]
+        pub tok_l_angle: tok::LAngle,
+        /// Self qualifier.
+        pub ty: CstType,
+        #[expect(dead_code, reason = "named fields will be implemented with struct")]
+        pub tok_as: tok::As,
+        /// Qualification.
+        pub name: tok::Ident,
+        #[expect(dead_code, reason = "named fields will be implemented with struct")]
+        pub tok_r_angle: tok::RAngle,
+        #[expect(dead_code, reason = "named fields will be implemented with struct")]
+        pub tok_colon_colon: tok::ColonColon,
+        /// Path item.
+        pub item: tok::Ident,
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -439,6 +532,7 @@ mod expression {
         Variable: Variable,
         Tuple: Tuple<Expression>,
         Field: Field,
+        QualifiedPath: QualifiedPath,
     }
 }
 

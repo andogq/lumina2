@@ -3,51 +3,53 @@ source: src/passes/cst_gen.rs
 expression: "fn some_function(a: u32, b: bool) -> bool { let a = 1; 1 + 2; }"
 ---
 FunctionDeclaration {
-    tok_fn: Fn,
-    name: Ident(
-        "some_function",
-    ),
-    tok_l_parenthesis: LParenthesis,
-    parameters: PunctuatedList {
-        items: [
-            FunctionParameter {
-                name: Ident(
-                    "a",
-                ),
-                tok_colon: Colon,
-                ty: Named(
-                    Ident(
-                        "u32",
+    signature: FunctionSignature {
+        tok_fn: Fn,
+        name: Ident(
+            "some_function",
+        ),
+        tok_l_parenthesis: LParenthesis,
+        parameters: PunctuatedList {
+            items: [
+                FunctionParameter {
+                    name: Ident(
+                        "a",
                     ),
-                ),
-            },
-            FunctionParameter {
-                name: Ident(
-                    "b",
-                ),
-                tok_colon: Colon,
+                    tok_colon: Colon,
+                    ty: Named(
+                        Ident(
+                            "u32",
+                        ),
+                    ),
+                },
+                FunctionParameter {
+                    name: Ident(
+                        "b",
+                    ),
+                    tok_colon: Colon,
+                    ty: Named(
+                        Ident(
+                            "bool",
+                        ),
+                    ),
+                },
+            ],
+            punctuation: [
+                Comma,
+            ],
+        },
+        tok_r_parenthesis: RParenthesis,
+        return_ty: Some(
+            FunctionReturnType {
+                tok_thin_arrow: ThinArrow,
                 ty: Named(
                     Ident(
                         "bool",
                     ),
                 ),
             },
-        ],
-        punctuation: [
-            Comma,
-        ],
+        ),
     },
-    tok_r_parenthesis: RParenthesis,
-    return_ty: Some(
-        FunctionReturnType {
-            tok_thin_arrow: ThinArrow,
-            ty: Named(
-                Ident(
-                    "bool",
-                ),
-            ),
-        },
-    ),
     body: Block {
         tok_l_brace: LBrace,
         statements: [

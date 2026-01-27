@@ -1,0 +1,20 @@
+---
+source: src/passes/ast_gen.rs
+expression: "trait MyTrait { fn something(); }"
+---
+Trait {
+    name: StringId(
+        1,
+    ),
+    methods: {
+        StringId(
+            0,
+        ): FunctionSignature {
+            name: StringId(
+                0,
+            ),
+            parameters: [],
+            return_ty: None,
+        },
+    },
+}

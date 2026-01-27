@@ -1,0 +1,42 @@
+---
+source: src/passes/ast_gen.rs
+expression: "trait MyTrait { fn something(n: u8); fn another() -> bool; }"
+---
+Trait {
+    name: StringId(
+        5,
+    ),
+    methods: {
+        StringId(
+            0,
+        ): FunctionSignature {
+            name: StringId(
+                0,
+            ),
+            parameters: [
+                FunctionParameter {
+                    name: StringId(
+                        1,
+                    ),
+                    ty: AstTypeId(
+                        0,
+                    ),
+                },
+            ],
+            return_ty: None,
+        },
+        StringId(
+            3,
+        ): FunctionSignature {
+            name: StringId(
+                3,
+            ),
+            parameters: [],
+            return_ty: Some(
+                AstTypeId(
+                    1,
+                ),
+            ),
+        },
+    },
+}

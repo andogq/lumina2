@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::prelude::*;
 
 pub use self::{block::*, expression::*, function::*, statement::*};
@@ -7,6 +9,7 @@ create_id!(ExpressionId);
 create_id!(FunctionId);
 create_id!(StatementId);
 create_id!(AstTypeId);
+create_id!(TraitId);
 
 #[derive(Clone, Debug)]
 pub struct Ast {
@@ -17,6 +20,12 @@ pub struct Ast {
     pub expressions: IndexedVec<ExpressionId, Expression>,
 
     pub types: IndexedVec<AstTypeId, AstType>,
+
+    /// Top-level function declarations.
+    pub item_functions: Vec<FunctionId>,
+
+    pub traits: IndexedVec<TraitId, Trait>,
+    pub trait_implementations: Vec<TraitImplementation>,
 }
 
 impl Ast {
@@ -27,6 +36,9 @@ impl Ast {
             statements: IndexedVec::new(),
             expressions: IndexedVec::new(),
             types: IndexedVec::new(),
+            item_functions: Vec::new(),
+            traits: IndexedVec::new(),
+            trait_implementations: Vec::new(),
         }
     }
 }
@@ -71,9 +83,19 @@ impl Index<AstTypeId> for Ast {
     }
 }
 
+impl Index<TraitId> for Ast {
+    type Output = Trait;
+
+    fn index(&self, index: TraitId) -> &Self::Output {
+        &self.traits[index]
+    }
+}
+
 /// Type representation used within the [`Ast`].
 #[derive(Clone, Debug)]
 pub enum AstType {
+    /// Built-in alias for the type where this type representation is used.
+    SelfType,
     /// A type referenced by a single interned name (eg. `i8`, `bool`).
     Named(StringId),
     /// A tuple type (`(i8, bool, u8)`).
@@ -84,10 +106,15 @@ mod function {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub struct FunctionDeclaration {
+    pub struct FunctionSignature {
         pub name: StringId,
         pub parameters: Vec<FunctionParameter>,
         pub return_ty: Option<AstTypeId>,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct FunctionDeclaration {
+        pub signature: FunctionSignature,
         pub body: BlockId,
     }
 
@@ -167,6 +194,7 @@ mod expression {
         Variable(Variable),
         Tuple(Tuple),
         Field(Field),
+        QualifiedPath(QualifiedPath),
     }
 
     #[derive(Clone, Debug)]
@@ -235,6 +263,13 @@ mod expression {
         Unnamed(usize),
     }
 
+    #[derive(Clone, Debug)]
+    pub struct QualifiedPath {
+        pub ty: AstTypeId,
+        pub name: StringId,
+        pub item: StringId,
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -248,5 +283,21 @@ mod expression {
         Variable: Variable,
         Tuple: Tuple,
         Field: Field,
+        QualifiedPath: QualifiedPath,
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Trait {
+    /// Original name of the trait.
+    pub name: StringId,
+    /// Methods defined within the trait.
+    pub methods: BTreeMap<StringId, FunctionSignature>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TraitImplementation {
+    pub trait_name: StringId,
+    pub target_ty: AstTypeId,
+    pub methods: BTreeMap<StringId, FunctionId>,
 }

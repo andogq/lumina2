@@ -1,0 +1,30 @@
+---
+source: src/passes/cst_gen.rs
+expression: "trait MyTrait { fn my_fn(); }"
+---
+TraitDeclaration {
+    tok_trait: Trait,
+    name: Ident(
+        "MyTrait",
+    ),
+    tok_l_brace: LBrace,
+    methods: [
+        (
+            FunctionSignature {
+                tok_fn: Fn,
+                name: Ident(
+                    "my_fn",
+                ),
+                tok_l_parenthesis: LParenthesis,
+                parameters: PunctuatedList {
+                    items: [],
+                    punctuation: [],
+                },
+                tok_r_parenthesis: RParenthesis,
+                return_ty: None,
+            },
+            SemiColon,
+        ),
+    ],
+    tok_r_brace: RBrace,
+}

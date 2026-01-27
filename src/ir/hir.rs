@@ -6,6 +6,8 @@ create_id!(BlockId);
 create_id!(ExpressionId);
 create_id!(FunctionId);
 create_id!(StatementId);
+create_id!(TraitId);
+create_id!(TraitMethodId);
 
 #[derive(Clone, Debug, Default)]
 pub struct Hir {
@@ -13,6 +15,8 @@ pub struct Hir {
     pub blocks: IndexedVec<BlockId, Block>,
     pub statements: IndexedVec<StatementId, Statement>,
     pub expressions: IndexedVec<ExpressionId, Expression>,
+    pub traits: IndexedVec<TraitId, Trait>,
+    pub trait_implementations: HashMap<TraitImplementationKey, TraitImplementation>,
 }
 
 impl Index<FunctionId> for Hir {
@@ -47,14 +51,61 @@ impl Index<ExpressionId> for Hir {
     }
 }
 
+impl Index<TraitId> for Hir {
+    type Output = Trait;
+
+    fn index(&self, index: TraitId) -> &Self::Output {
+        &self.traits[index]
+    }
+}
+
+impl Index<&TraitImplementationKey> for Hir {
+    type Output = TraitImplementation;
+
+    fn index(&self, index: &TraitImplementationKey) -> &Self::Output {
+        &self.trait_implementations[index]
+    }
+}
+
 mod functions {
     use super::*;
 
     #[derive(Clone, Debug)]
+    pub struct FunctionSignature<Type = TypeId> {
+        pub parameters: Vec<(IdentifierBindingId, Type)>,
+        pub return_ty: Type,
+    }
+
+    impl FunctionSignature<MaybeSelfType> {
+        /// Substitute any occurrences of `Self` with the provided type.
+        pub fn with_self(self, current_self: TypeId) -> FunctionSignature {
+            FunctionSignature {
+                parameters: self
+                    .parameters
+                    .into_iter()
+                    .map(|(binding, ty)| (binding, ty.with_self(current_self)))
+                    .collect(),
+                return_ty: self.return_ty.with_self(current_self),
+            }
+        }
+
+        /// Resolve all types, ensuring `Self` isn't present.
+        pub fn without_self(self) -> Option<FunctionSignature> {
+            Some(FunctionSignature {
+                parameters: self
+                    .parameters
+                    .into_iter()
+                    .map(|(binding, ty)| Some((binding, ty.without_self()?)))
+                    .collect::<Option<_>>()?,
+                return_ty: self.return_ty.without_self()?,
+            })
+        }
+    }
+
+    #[derive(Clone, Debug)]
     pub struct Function {
-        pub binding: BindingId,
-        pub parameters: Vec<(BindingId, TypeId)>,
-        pub return_ty: TypeId,
+        pub binding: IdentifierBindingId,
+        pub signature: FunctionSignature,
         pub entry: BlockId,
     }
 }
@@ -82,7 +133,7 @@ mod statement {
 
     #[derive(Clone, Debug)]
     pub struct DeclareStatement {
-        pub binding: BindingId,
+        pub binding: IdentifierBindingId,
         pub ty: DeclarationTy,
     }
 
@@ -132,6 +183,7 @@ mod expression {
         Unreachable,
         Aggregate(Aggregate),
         Field(Field),
+        Path(Path),
     }
 
     #[derive(Clone, Debug)]
@@ -179,7 +231,7 @@ mod expression {
 
     #[derive(Clone, Debug)]
     pub struct Variable {
-        pub binding: BindingId,
+        pub binding: IdentifierBindingId,
     }
 
     #[derive(Clone, Debug)]
@@ -196,6 +248,18 @@ mod expression {
         pub field: usize,
     }
 
+    /// A qualified path to a trait with an item.
+    ///
+    /// ```
+    /// <Ty as TargetTrait>::item
+    /// ```
+    #[derive(Clone, Debug)]
+    pub struct Path {
+        pub ty: TypeId,
+        pub target_trait: TraitId,
+        pub item: TraitMethodId,
+    }
+
     enum_conversion! {
         [Expression]
         Assign: Assign,
@@ -209,5 +273,57 @@ mod expression {
         Variable: Variable,
         Aggregate: Aggregate,
         Field: Field,
+        Path: Path,
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Trait {
+    pub name: TraitBindingId,
+    pub method_scope: ScopeId,
+    pub method_bindings: HashMap<IdentifierBindingId, TraitMethodId>,
+    pub methods: IndexedVec<TraitMethodId, FunctionSignature<MaybeSelfType>>,
+}
+
+// Key to identifier a specific implementation of a trait for a given type.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TraitImplementationKey {
+    /// Trait that is being implemented.
+    pub trait_id: TraitId,
+    /// Type the trait is implemented on.
+    pub ty: TypeId,
+}
+
+#[derive(Clone, Debug)]
+pub struct TraitImplementation {
+    /// [`FunctionId`] containing the implementation for each [`TraitMethodId`].
+    pub methods: IndexedVec<TraitMethodId, FunctionId>,
+}
+
+/// A type that may be `Self`, or some other resolved type.
+#[derive(Clone, Debug)]
+pub enum MaybeSelfType {
+    SelfType,
+    Type(TypeId),
+}
+
+impl MaybeSelfType {
+    /// Fetch the type, using a fallback.
+    pub fn with_self(&self, current_self: TypeId) -> TypeId {
+        self.without_self().unwrap_or(current_self)
+    }
+
+    /// Fetch the type, or [`None`] if [`MaybeSelfType::SelfType`].
+    pub fn without_self(&self) -> Option<TypeId> {
+        match self {
+            MaybeSelfType::SelfType => None,
+            MaybeSelfType::Type(type_id) => Some(*type_id),
+        }
+    }
+}
+
+impl From<TypeId> for MaybeSelfType {
+    fn from(ty: TypeId) -> Self {
+        Self::Type(ty)
     }
 }

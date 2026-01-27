@@ -1,0 +1,24 @@
+---
+source: src/passes/ast_gen.rs
+expression: "impl MyTrait for MyType { fn something(n: u8) {} fn another() -> bool { true } }"
+---
+TraitImplementation {
+    trait_name: StringId(
+        6,
+    ),
+    target_ty: AstTypeId(
+        2,
+    ),
+    methods: {
+        StringId(
+            0,
+        ): FunctionId(
+            0,
+        ),
+        StringId(
+            3,
+        ): FunctionId(
+            1,
+        ),
+    },
+}

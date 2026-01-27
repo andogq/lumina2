@@ -3,17 +3,19 @@ source: src/passes/cst_gen.rs
 expression: "fn some_function() {}"
 ---
 FunctionDeclaration {
-    tok_fn: Fn,
-    name: Ident(
-        "some_function",
-    ),
-    tok_l_parenthesis: LParenthesis,
-    parameters: PunctuatedList {
-        items: [],
-        punctuation: [],
+    signature: FunctionSignature {
+        tok_fn: Fn,
+        name: Ident(
+            "some_function",
+        ),
+        tok_l_parenthesis: LParenthesis,
+        parameters: PunctuatedList {
+            items: [],
+            punctuation: [],
+        },
+        tok_r_parenthesis: RParenthesis,
+        return_ty: None,
     },
-    tok_r_parenthesis: RParenthesis,
-    return_ty: None,
     body: Block {
         tok_l_brace: LBrace,
         statements: [],

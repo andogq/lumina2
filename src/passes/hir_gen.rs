@@ -29,9 +29,24 @@ impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
         // Errors generated throughout this pass.
         let mut errors = Vec::new();
 
-        // Lower each function.
-        for function in ast.function_declarations.iter() {
-            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen.lower_function(function));
+        // Register each trait declaration.
+        for trait_declaration in ast.traits.iter() {
+            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
+                .lower_trait_declaration(trait_declaration));
+        }
+
+        // Lower each top-level function, saving a map from the old to new ID.
+        let item_ctx = FunctionCtx::item();
+        for &function_id in &ast.item_functions {
+            let function = &ast[function_id];
+            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
+                .lower_function(&item_ctx, function));
+        }
+
+        // Lower each trait implementation.
+        for trait_implementation in ast.trait_implementations.iter() {
+            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
+                .lower_trait_implementation(trait_implementation));
         }
 
         Ok(PassSuccess::new(hir_gen.hir, errors))
@@ -48,45 +63,178 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         }
     }
 
+    /// Lower the provided trait declaration.
+    fn lower_trait_declaration(&mut self, trait_declaration: &ast::Trait) -> CResult<TraitId> {
+        let name = self.ctx.scopes.declare_global(trait_declaration.name);
+
+        let method_scope = self.ctx.scopes.nest_scope_global();
+
+        let mut methods = IndexedVec::new();
+        let mut method_bindings = HashMap::new();
+
+        for (method, signature) in &trait_declaration.methods {
+            let binding = self.ctx.scopes.declare(method_scope, *method);
+
+            // Create a dummy scope just to declare the parameters in.
+            let parameter_scope = self.ctx.scopes.nest_scope(method_scope);
+            let signature = self.lower_function_signature(signature, parameter_scope);
+
+            let method_id = methods.insert(signature);
+
+            // Record the method ID which corresponds with the binding.
+            method_bindings.insert(binding, method_id);
+        }
+
+        Ok(self.hir.traits.insert(Trait {
+            name,
+            method_scope,
+            method_bindings,
+            methods,
+        }))
+    }
+
+    fn lower_trait_implementation(
+        &mut self,
+        trait_implementation: &ast::TraitImplementation,
+    ) -> CResult<()> {
+        let trait_name = self
+            .ctx
+            .scopes
+            .resolve_global(trait_implementation.trait_name);
+        let ty = self
+            .lower_ast_type(trait_implementation.target_ty)
+            .without_self()
+            .expect("`Self` cannot be used as the implementing type of a trait.");
+
+        // Find the trait that's being implemented.
+        let (trait_id, trait_declaration) = self
+            .hir
+            .traits
+            .iter_pairs()
+            .find(|(_, trait_declaration)| trait_declaration.name == trait_name)
+            .unwrap();
+        // HACK: Clone here not really needed.
+        let trait_declaration = trait_declaration.clone();
+
+        let key = TraitImplementationKey { trait_id, ty };
+
+        // Ensure there's no conflicting trait implementation.
+        assert!(!self.hir.trait_implementations.contains_key(&key));
+
+        // Lower each method, and store it against the corresponding `TraitMethodId`.
+        let lowered_methods: HashMap<_, _> = trait_implementation
+            .methods
+            .iter()
+            .map(|(method_name, function_id)| {
+                // Determine which method this corresponds to.
+                let trait_method = {
+                    let binding = self
+                        .ctx
+                        .scopes
+                        .resolve(trait_declaration.method_scope, *method_name);
+                    *trait_declaration
+                        .method_bindings
+                        .get(&binding)
+                        .expect("method does not exist in trait declaration")
+                };
+
+                // Lower the method.
+                let method = &self.ast.function_declarations[*function_id];
+                let function_id = self.lower_function(
+                    &FunctionCtx::trait_method(ty, trait_id, trait_method),
+                    method,
+                )?;
+
+                Ok((trait_method, function_id))
+            })
+            .collect::<CResult<_>>()?;
+
+        // Order all of the lowered methods.
+        let mut methods = IndexedVec::new();
+        for method_id in trait_declaration.methods.iter_keys() {
+            let function_id = *lowered_methods
+                .get(&method_id)
+                .expect("trait implementation missing method");
+            assert_eq!(methods.insert(function_id), method_id);
+        }
+
+        self.hir
+            .trait_implementations
+            .insert(key, TraitImplementation { methods });
+
+        Ok(())
+    }
+
     /// Lower the provided function.
-    pub fn lower_function(&mut self, function: &ast::FunctionDeclaration) -> CResult<FunctionId> {
+    fn lower_function(
+        &mut self,
+        ctx: &FunctionCtx,
+        function: &ast::FunctionDeclaration,
+    ) -> CResult<FunctionId> {
         // Add the function identifier to the global scope.
-        let binding = self.ctx.scopes.declare_global(function.name);
+        let binding = self.ctx.scopes.declare_global(function.signature.name);
 
         // Create a new scope for the function.
         let function_scope = self.ctx.scopes.nest_scope_global();
 
-        // Process all of the parameters.
-        let parameters = function
+        let signature = {
+            // Lower the signature.
+            let signature = self.lower_function_signature(&function.signature, function_scope);
+            // Resolve `Self` depending whether it's valid in this context or not.
+            match ctx.current_self() {
+                Some(current_self) => signature.with_self(current_self),
+                None => signature
+                    .without_self()
+                    .expect("`Self` cannot be used in this context."),
+            }
+        };
+
+        // Lower the body of the function.
+        let entry = self.lower_block(ctx, &self.ast[function.body], function_scope)?;
+
+        Ok(self.hir.functions.insert(Function {
+            binding,
+            signature,
+            entry,
+        }))
+    }
+
+    /// Lower a function signature.
+    fn lower_function_signature(
+        &mut self,
+        signature: &ast::FunctionSignature,
+        scope: ScopeId,
+    ) -> FunctionSignature<MaybeSelfType> {
+        let parameters = signature
             .parameters
             .iter()
             .map(|parameter| {
                 (
-                    self.ctx.scopes.declare(function_scope, parameter.name),
+                    self.ctx.scopes.declare(scope, parameter.name),
                     self.lower_ast_type(parameter.ty),
                 )
             })
             .collect();
 
         // If no return type is provided, assume `()`.
-        let return_ty = match function.return_ty {
+        let return_ty = match signature.return_ty {
             Some(return_ty) => self.lower_ast_type(return_ty),
-            None => self.ctx.types.unit(),
+            None => self.ctx.types.unit().into(),
         };
 
-        // Lower the body of the function.
-        let entry = self.lower_block(&self.ast[function.body], function_scope)?;
-
-        Ok(self.hir.functions.insert(Function {
-            binding,
+        FunctionSignature {
             parameters,
             return_ty,
-            entry,
-        }))
+        }
     }
 
     /// Lower a block, using the provided scope as the parent scope.
-    pub fn lower_block(&mut self, block: &ast::Block, parent_scope: ScopeId) -> CResult<BlockId> {
+    fn lower_block(
+        &mut self,
+        ctx: &FunctionCtx,
+        block: &ast::Block,
+        parent_scope: ScopeId,
+    ) -> CResult<BlockId> {
         // Create a new scope for this block.
         let scope = self.ctx.scopes.nest_scope(parent_scope);
 
@@ -102,7 +250,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     let binding = self.ctx.scopes.declare(scope, *variable);
 
                     // Lower the value.
-                    let value = self.lower_expression(&self.ast[*value], scope)?;
+                    let value = self.lower_expression(ctx, &self.ast[*value], scope)?;
 
                     // Add the declaration.
                     statements.push(self.hir.statements.insert(Statement::Declare(
@@ -130,7 +278,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     });
                 }
                 ast::Statement::Return(ast::ReturnStatement { expression }) => {
-                    let expression = self.lower_expression(&self.ast[*expression], scope)?;
+                    let expression = self.lower_expression(ctx, &self.ast[*expression], scope)?;
                     statements.push(
                         self.hir
                             .statements
@@ -138,7 +286,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     );
                 }
                 ast::Statement::Break(ast::BreakStatement { expression }) => {
-                    let expression = self.lower_expression(&self.ast[*expression], scope)?;
+                    let expression = self.lower_expression(ctx, &self.ast[*expression], scope)?;
                     statements.push(
                         self.hir
                             .statements
@@ -146,7 +294,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     )
                 }
                 ast::Statement::Expression(ast::ExpressionStatement { expression }) => {
-                    let expression = self.lower_expression(&self.ast[*expression], scope)?;
+                    let expression = self.lower_expression(ctx, &self.ast[*expression], scope)?;
                     statements.push(
                         self.hir
                             .statements
@@ -165,7 +313,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 .map(|statement| &self.ast[*statement]),
         ) {
             // Use the provided expression to end the block.
-            (Some(expression), _) => self.lower_expression(&self.ast[expression], scope)?,
+            (Some(expression), _) => self.lower_expression(ctx, &self.ast[expression], scope)?,
             // Otherwise, if the final statement is `return` then add an unreachable marker.
             (None, Some(ast::Statement::Return(_))) => {
                 self.hir.expressions.insert(Expression::Unreachable)
@@ -181,15 +329,16 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
     }
 
     /// Lower an expression within the provided scope.
-    pub fn lower_expression(
+    fn lower_expression(
         &mut self,
+        ctx: &FunctionCtx,
         expression: &ast::Expression,
         scope: ScopeId,
     ) -> CResult<ExpressionId> {
         let expression = match expression {
             ast::Expression::Assign(ast::Assign { variable, value }) => Assign {
-                variable: self.lower_expression(&self.ast[*variable], scope)?,
-                value: self.lower_expression(&self.ast[*value], scope)?,
+                variable: self.lower_expression(ctx, &self.ast[*variable], scope)?,
+                value: self.lower_expression(ctx, &self.ast[*value], scope)?,
             }
             .into(),
             ast::Expression::Binary(ast::Binary {
@@ -197,14 +346,14 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 operation,
                 rhs,
             }) => Binary {
-                lhs: self.lower_expression(&self.ast[*lhs], scope)?,
+                lhs: self.lower_expression(ctx, &self.ast[*lhs], scope)?,
                 operation: *operation,
-                rhs: self.lower_expression(&self.ast[*rhs], scope)?,
+                rhs: self.lower_expression(ctx, &self.ast[*rhs], scope)?,
             }
             .into(),
             ast::Expression::Unary(ast::Unary { operation, value }) => Unary {
                 operation: *operation,
-                value: self.lower_expression(&self.ast[*value], scope)?,
+                value: self.lower_expression(ctx, &self.ast[*value], scope)?,
             }
             .into(),
             ast::Expression::If(ast::If {
@@ -216,18 +365,20 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 // Optional default expression to apply to end of switch statements.
                 let mut default = otherwise
                     .map(|otherwise| {
-                        Ok::<_, CError>(Expression::Block(
-                            self.lower_block(&self.ast[otherwise], scope)?,
-                        ))
+                        Ok::<_, CError>(Expression::Block(self.lower_block(
+                            ctx,
+                            &self.ast[otherwise],
+                            scope,
+                        )?))
                     })
                     .transpose()?;
 
                 for (condition, block) in conditions.iter().rev() {
                     switch = Some(Switch {
-                        discriminator: self.lower_expression(&self.ast[*condition], scope)?,
+                        discriminator: self.lower_expression(ctx, &self.ast[*condition], scope)?,
                         branches: vec![(
                             Literal::Boolean(true),
-                            self.lower_block(&self.ast[*block], scope)?,
+                            self.lower_block(ctx, &self.ast[*block], scope)?,
                         )],
                         // Try use the default expression.
                         default: default
@@ -247,7 +398,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 switch.ok_or(HirGenError::IfMustHaveBlock)?.into()
             }
             ast::Expression::Loop(ast::Loop { body }) => Loop {
-                body: self.lower_block(&self.ast[*body], scope)?,
+                body: self.lower_block(ctx, &self.ast[*body], scope)?,
             }
             .into(),
             ast::Expression::Literal(literal) => match literal {
@@ -256,14 +407,16 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             }
             .into(),
             ast::Expression::Call(ast::Call { callee, arguments }) => Call {
-                callee: self.lower_expression(&self.ast[*callee], scope)?,
+                callee: self.lower_expression(ctx, &self.ast[*callee], scope)?,
                 arguments: arguments
                     .iter()
-                    .map(|argument| self.lower_expression(&self.ast[*argument], scope))
+                    .map(|argument| self.lower_expression(ctx, &self.ast[*argument], scope))
                     .collect::<Result<_, _>>()?,
             }
             .into(),
-            ast::Expression::Block(block) => self.lower_block(&self.ast[*block], scope)?.into(),
+            ast::Expression::Block(block) => {
+                self.lower_block(ctx, &self.ast[*block], scope)?.into()
+            }
             ast::Expression::Variable(ast::Variable { variable }) => Variable {
                 binding: self.ctx.scopes.resolve(scope, *variable),
             }
@@ -271,17 +424,46 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             ast::Expression::Tuple(ast::Tuple { values }) => Aggregate {
                 values: values
                     .iter()
-                    .map(|value| self.lower_expression(&self.ast[*value], scope))
+                    .map(|value| self.lower_expression(ctx, &self.ast[*value], scope))
                     .collect::<Result<_, _>>()?,
             }
             .into(),
             ast::Expression::Field(ast::Field { lhs, field }) => Field {
-                lhs: self.lower_expression(&self.ast[*lhs], scope)?,
+                lhs: self.lower_expression(ctx, &self.ast[*lhs], scope)?,
                 field: match field {
                     ast::FieldKey::Unnamed(field) => *field,
                 },
             }
             .into(),
+            ast::Expression::QualifiedPath(ast::QualifiedPath { ty, name, item }) => {
+                let trait_name = self.ctx.scopes.resolve_global(*name);
+                let (trait_id, target_trait) = self
+                    .hir
+                    .traits
+                    .iter_pairs()
+                    .find(|&(_, t)| t.name == trait_name)
+                    .expect("trait must exist");
+                let item_binding = self.ctx.scopes.resolve(target_trait.method_scope, *item);
+                let item = *target_trait
+                    .method_bindings
+                    .get(&item_binding)
+                    .expect("valid method on trait");
+
+                Path {
+                    ty: {
+                        let ty = self.lower_ast_type(*ty);
+                        match ctx.current_self() {
+                            Some(current_self) => ty.with_self(current_self),
+                            None => ty
+                                .without_self()
+                                .expect("`Self` cannot be used in this context"),
+                        }
+                    },
+                    target_trait: trait_id,
+                    item,
+                }
+                .into()
+            }
         };
 
         Ok(self.hir.expressions.insert(expression))
@@ -290,9 +472,10 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
     /// Lower an [`ast::AstType`] into a unique [`TypeId`].
     ///
     /// This will handle ensure that types are correctly equated where necessary.
-    fn lower_ast_type(&mut self, ty: ast::AstTypeId) -> TypeId {
+    fn lower_ast_type(&mut self, ty: ast::AstTypeId) -> MaybeSelfType {
         match &self.ast[ty] {
-            ast::AstType::Named(string_id) => {
+            ast::AstType::SelfType => MaybeSelfType::SelfType,
+            ast::AstType::Named(string_id) => MaybeSelfType::Type({
                 // HACK: This only handles built-in types.
                 match self.ctx.strings.get(*string_id) {
                     "u8" => self.ctx.types.u8(),
@@ -300,14 +483,102 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     "bool" => self.ctx.types.boolean(),
                     ty => panic!("unknown type: {ty}"),
                 }
-            }
-            ast::AstType::Tuple(ast_type_ids) => {
+            }),
+            ast::AstType::Tuple(ast_type_ids) => MaybeSelfType::Type({
                 let fields = ast_type_ids
                     .iter()
-                    .map(|ty| self.lower_ast_type(*ty))
+                    .map(|ty| {
+                        let MaybeSelfType::Type(ty) = self.lower_ast_type(*ty) else {
+                            // TODO: Allow `Self` within other types.
+                            unimplemented!("`Self` within aggregate types is not supported.");
+                        };
+
+                        ty
+                    })
                     .collect::<Vec<_>>();
                 self.ctx.types.tuple(fields)
-            }
+            }),
+        }
+    }
+}
+
+/// Context required when processing a function.
+#[derive(Clone, Debug)]
+enum FunctionCtx {
+    /// An item function (top-level function).
+    Item,
+    /// A method within an `impl` block.
+    Method {
+        /// Type that the method is defined on.
+        current_self: TypeId,
+    },
+    /// A method within a trait implementation.
+    TraitMethod {
+        /// Type that is implementing the trait.
+        current_self: TypeId,
+        /// Trait that is being implemented.
+        current_trait: TraitId,
+        /// Method on the trait which is being implemented.
+        method: TraitMethodId,
+    },
+}
+
+impl FunctionCtx {
+    /// Create a new context for function item (top-level function).
+    fn item() -> Self {
+        Self::Item
+    }
+
+    /// Create a new context for a method (within an `impl` block).
+    #[expect(
+        dead_code,
+        reason = "stand-alone implementations will be added in the future"
+    )]
+    fn method(current_self: TypeId) -> Self {
+        Self::Method { current_self }
+    }
+
+    /// Create a new context for a method in a trait implementation.
+    fn trait_method(current_self: TypeId, current_trait: TraitId, method: TraitMethodId) -> Self {
+        Self::TraitMethod {
+            current_self,
+            current_trait,
+            method,
+        }
+    }
+
+    /// Fetch the type that represents `Self` within this context.
+    fn current_self(&self) -> Option<TypeId> {
+        match self {
+            Self::Item => None,
+            Self::Method { current_self } => Some(*current_self),
+            Self::TraitMethod { current_self, .. } => Some(*current_self),
+        }
+    }
+
+    /// Fetch the trait that is currently being implemented.
+    #[expect(
+        dead_code,
+        reason = "tracking current trait may be useful for diagnostics"
+    )]
+    #[mutants::skip(reason = "dead code")]
+    fn current_trait(&self) -> Option<TraitId> {
+        match self {
+            Self::TraitMethod { current_trait, .. } => Some(*current_trait),
+            _ => None,
+        }
+    }
+
+    /// Fetch the trait method that is currently being implemented.
+    #[expect(
+        dead_code,
+        reason = "tracking current method may be useful for diagnostics"
+    )]
+    #[mutants::skip(reason = "dead code")]
+    fn current_trait_method(&self) -> Option<TraitMethodId> {
+        match self {
+            Self::TraitMethod { method, .. } => Some(*method),
+            _ => None,
         }
     }
 }
@@ -363,7 +634,7 @@ mod test {
 
         // Declare all bindings used in `sample_ast`.
         for i in 0..3 {
-            ctx.scopes.declare_global(StringId::from_id(i));
+            let _: IdentifierBindingId = ctx.scopes.declare_global(StringId::from_id(i));
         }
 
         ctx
@@ -394,7 +665,9 @@ mod test {
     ) {
         let scope = ctx.scopes.nest_scope_global();
         let mut pass = HirGen::new(&mut ctx, sample_ast);
-        let block_id = pass.lower_block(&block, scope).unwrap();
+        let block_id = pass
+            .lower_block(&FunctionCtx::item(), &block, scope)
+            .unwrap();
         assert_debug_snapshot!(name, &pass.hir[block_id], &format!("{block:?}"));
     }
 
@@ -464,7 +737,53 @@ mod test {
     ) {
         let scope = ctx.scopes.nest_scope_global();
         let mut pass = HirGen::new(&mut ctx, sample_ast);
-        let expression_id = pass.lower_expression(&expression, scope).unwrap();
+        let expression_id = pass
+            .lower_expression(&FunctionCtx::item(), &expression, scope)
+            .unwrap();
         assert_debug_snapshot!(name, &pass.hir[expression_id], &format!("{expression:?}"));
+    }
+
+    #[rstest]
+    #[case("empty", [], None, None)]
+    #[case("empty_with_self", [], None, Some(Type::U8))]
+    #[case("self_parameter", vec![ast::AstType::SelfType], None, Some(Type::U8))]
+    #[case("self_return_type", vec![], Some(ast::AstType::SelfType), Some(Type::U8))]
+    fn lower_function_signature(
+        mut ctx: Ctx,
+        sample_ast: &ast::Ast,
+        #[case] name: &str,
+        #[case] parameters: impl IntoIterator<Item = ast::AstType>,
+        #[case] return_ty: Option<ast::AstType>,
+        #[case] current_self: Option<Type>,
+    ) {
+        let mut sample_ast = sample_ast.clone();
+
+        let signature = ast::FunctionSignature {
+            name: StringId::from_id(0),
+            parameters: parameters
+                .into_iter()
+                .enumerate()
+                .map(|(i, parameter)| ast::FunctionParameter {
+                    name: StringId::from_id(i + 1),
+                    ty: sample_ast.types.insert(parameter),
+                })
+                .collect(),
+            return_ty: return_ty.map(|return_ty| sample_ast.types.insert(return_ty)),
+        };
+
+        let scope = ctx.scopes.nest_scope_global();
+        let mut pass = HirGen::new(&mut ctx, &sample_ast);
+
+        let lowered_signature = pass.lower_function_signature(&signature, scope);
+        let lowered_signature = if let Some(current_self) = &current_self {
+            lowered_signature.with_self(pass.ctx.types.get(current_self.clone()))
+        } else {
+            lowered_signature.without_self().unwrap()
+        };
+        assert_debug_snapshot!(
+            name,
+            lowered_signature,
+            &format!("{signature:?} ({current_self:?})")
+        );
     }
 }

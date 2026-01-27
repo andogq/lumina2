@@ -132,7 +132,14 @@ impl<'src> Lexer<'src> {
             }
             ':' => {
                 self.expect_char(':');
-                Tok::Colon
+
+                match self.peek_char() {
+                    Some(':') => {
+                        self.next_char();
+                        Tok::ColonColon
+                    }
+                    _ => Tok::Colon,
+                }
             }
             ';' => {
                 self.expect_char(';');
@@ -280,6 +287,10 @@ impl<'src> Lexer<'src> {
                     "loop" => Tok::Loop,
                     "break" => Tok::Break,
                     "while" => Tok::While,
+                    "trait" => Tok::Trait,
+                    "impl" => Tok::Impl,
+                    "for" => Tok::For,
+                    "as" => Tok::As,
                     _ => Tok::Ident(ident),
                 }
             }
@@ -327,6 +338,7 @@ mod test {
     #[case("&", &[Tok::Amp, Tok::Eof])]
     #[case("|", &[Tok::Bar, Tok::Eof])]
     #[case(":", &[Tok::Colon, Tok::Eof])]
+    #[case("::", &[Tok::ColonColon, Tok::Eof])]
     #[case(";", &[Tok::SemiColon, Tok::Eof])]
     #[case(",", &[Tok::Comma, Tok::Eof])]
     #[case("==", &[Tok::EqEq, Tok::Eof])]
@@ -345,6 +357,10 @@ mod test {
     #[case("if", &[Tok::If, Tok::Eof])]
     #[case("loop", &[Tok::Loop, Tok::Eof])]
     #[case("while", &[Tok::While, Tok::Eof])]
+    #[case("trait", &[Tok::Trait, Tok::Eof])]
+    #[case("impl", &[Tok::Impl, Tok::Eof])]
+    #[case("for", &[Tok::For, Tok::Eof])]
+    #[case("as", &[Tok::As, Tok::Eof])]
     #[case("some_ident", &[Tok::Ident("some_ident".to_string()), Tok::Eof])]
     #[case("u32", &[Tok::Ident("u32".to_string()), Tok::Eof])]
     #[case("123", &[Tok::IntegerLiteral(123), Tok::Eof])]

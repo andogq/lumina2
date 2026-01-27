@@ -214,7 +214,7 @@ pub enum TypeVar {
     /// Variable is an expression.
     Expression(ExpressionId),
     /// Variable is a binding.
-    Binding(BindingId),
+    Binding(IdentifierBindingId),
     /// Variable is a type.
     Type(TypeId),
     /// Variable is a field on another variable.
@@ -224,7 +224,7 @@ pub enum TypeVar {
 enum_conversion! {
     [TypeVar]
     Expression: ExpressionId,
-    Binding: BindingId,
+    Binding: IdentifierBindingId,
     Type: TypeId,
 }
 
@@ -345,13 +345,17 @@ mod test {
                 statements: vec![statement_id],
                 expression: None,
             });
-            ast.function_declarations.insert(ast::FunctionDeclaration {
-                name: ctx.strings.intern("main"),
-                parameters: Vec::new(),
-                return_ty: None,
+            let function_id = ast.function_declarations.insert(ast::FunctionDeclaration {
+                signature: ast::FunctionSignature {
+                    name: ctx.strings.intern("main"),
+                    parameters: Vec::new(),
+                    return_ty: None,
+                },
                 body: block_id,
-            })
-        };
+            });
+            // Add function as top level function.
+            ast.item_functions.push(function_id);
+        }
 
         // Lower the AST into the HIR.
         let hir = HirGen::run(&mut ctx, &ast, ()).unwrap().into_outcome();
