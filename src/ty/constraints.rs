@@ -1,4 +1,4 @@
-use crate::{prelude::*, ty::TypeVarId};
+use crate::{ir::hir::TraitId, prelude::*, ty::TypeVarId};
 
 use super::IntegerKind;
 
@@ -19,6 +19,8 @@ pub enum Constraint {
     },
     /// Variable is an aggregate with some number of fields..
     Aggregate(usize),
+    /// Variable implements given trait.
+    Implements(TraitId),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -90,6 +92,12 @@ impl Constraints {
     pub fn aggregate(&mut self, var: impl Into<TypeVarId>, size: usize) {
         self.constraints
             .push((var.into(), Constraint::Aggregate(size)));
+    }
+
+    /// Add a [`Constraint::Implements`] `target_trait`.
+    pub fn implements(&mut self, var: impl Into<TypeVarId>, target_trait: TraitId) {
+        self.constraints
+            .push((var.into(), Constraint::Implements(target_trait)));
     }
 }
 

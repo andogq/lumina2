@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use crate::ty::{Constraints, Solver, TypeVars};
+use crate::ty::{Constraints, Solver, TypeVarId, TypeVars};
 
 use hir::*;
 use thir::Thir;
@@ -37,10 +37,19 @@ impl<'ctx, 'hir> Pass<'ctx, 'hir> for ThirGen<'ctx, 'hir> {
             thir_gen.add_function_constraints(function);
         }
 
+        // Add constraints for each trait implementation.
+        for trait_implementation in thir_gen.hir.trait_implementations.keys() {
+            thir_gen.add_trait_implementation(trait_implementation);
+        }
+
+        // Collect trait implementations.
+        let trait_implementations = thir_gen.hir.trait_implementations.keys().cloned().collect();
+
         // Run the solver.
         let types = Solver::run(
             &mut thir_gen.ctx.types,
             &mut thir_gen.type_vars,
+            &trait_implementations,
             &thir_gen.constraints,
         );
 
@@ -65,13 +74,18 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
     fn add_function_declaration(&mut self, function_id: FunctionId) {
         let function = &self.hir[function_id];
 
-        self.constraints.equal(
-            self.type_vars.intern(function.binding),
-            self.type_vars.intern(self.ctx.types.function(
-                function.signature.parameters.iter().map(|(_, ty)| *ty),
-                function.signature.return_ty,
-            )),
-        );
+        let binding = self.type_vars.intern(function.binding);
+        let signature = self.signature_as_type_var(&function.signature);
+
+        self.constraints.equal(binding, signature);
+    }
+
+    /// Produce a [`TypeVar`] for the given [`FunctionSignature`].
+    fn signature_as_type_var(&mut self, signature: &FunctionSignature) -> TypeVarId {
+        self.type_vars.intern(self.ctx.types.function(
+            signature.parameters.iter().map(|(_, ty)| *ty),
+            signature.return_ty,
+        ))
     }
 
     fn add_function_constraints(&mut self, function_id: FunctionId) {
@@ -94,6 +108,32 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
 
         let ctx = ConstraintCtx::new(function_id);
         self.add_block_constraints(&ctx, function.entry);
+    }
+
+    /// Add constraints required to check a trait implementation. Will ensure that all implemented
+    /// methods match the signature of the trait, but does not verify whether all methods were
+    /// implemented.
+    fn add_trait_implementation(&mut self, implementation_key: &TraitImplementationKey) {
+        let implementation = &self.hir[implementation_key];
+        let target_trait = &self.hir[implementation_key.trait_id];
+
+        let implementing_ty = implementation_key.ty;
+
+        for (method_id, method) in implementation.methods.iter_pairs() {
+            // Fetch the intended signature.
+            let trait_method_signature = self.signature_as_type_var(
+                &target_trait.methods[method_id]
+                    .clone()
+                    .with_self(implementing_ty),
+            );
+
+            // Fetch the method signature.
+            let implemented_signature = self.signature_as_type_var(&self.hir[*method].signature);
+
+            // Emit constraint that they're equal.
+            self.constraints
+                .equal(trait_method_signature, implemented_signature);
+        }
     }
 
     fn add_block_constraints(&mut self, ctx: &ConstraintCtx, block_id: BlockId) {
@@ -341,6 +381,25 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     expression,
                     self.type_vars.intern(TypeVar::Field(lhs, *field)),
                 );
+            }
+            Expression::Path(Path {
+                ty,
+                target_trait,
+                item,
+            }) => {
+                let ty_var = self.type_vars.intern(*ty);
+
+                // Enforce the type implements the trait.
+                self.constraints.implements(ty_var, *target_trait);
+
+                // This expression results in the signature of the trait item.
+                let item_signature = self.hir[*target_trait].methods[*item]
+                    .clone()
+                    // Since the trait method signature is used, substitute `Self` with the current
+                    // type.
+                    .with_self(*ty);
+                let signature_var = self.signature_as_type_var(&item_signature);
+                self.constraints.equal(expression, signature_var);
             }
         }
     }
