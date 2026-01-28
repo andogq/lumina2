@@ -301,7 +301,7 @@ pub struct TraitImplementation {
 }
 
 /// A type that may be `Self`, or some other resolved type.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MaybeSelfType {
     SelfType,
     Type(TypeId),

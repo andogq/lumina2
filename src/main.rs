@@ -7,6 +7,7 @@ mod ir;
 mod lex;
 mod passes;
 mod prelude;
+mod query;
 mod ty;
 mod util;
 
