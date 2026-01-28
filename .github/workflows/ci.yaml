@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: "always"
+  CARGO_INCREMENTAL: 0
   LLVM_PATH: "${{ github.workspace }}/llvm"
   LLVM_VERSION: "18.1"
 
@@ -101,4 +102,3 @@ jobs:
           name: mutants-out
           path: mutants.out
 
-# spell-checker:ignore libtinfo,Swatinem

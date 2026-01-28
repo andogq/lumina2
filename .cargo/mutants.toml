@@ -1,3 +1,5 @@
+profile = "mutants"
+
 exclude_globs = [
     "src/passes/codegen.rs", # Until LLVM snapshot tests are implemented.
     "src/ty/solver.rs", # Until solver is hardened and tested.

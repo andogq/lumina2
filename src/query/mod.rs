@@ -1,12 +1,9 @@
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "queries are not used yet"),
-    expect(unused_imports, reason = "queries are not used yet")
-)]
+#![cfg_attr(not(test), expect(dead_code, reason = "queries are not used yet"))]
 
 use crate::prelude::*;
 use hir::*;
 
+#[expect(unused_imports, reason = "queries are not used yet")]
 pub use self::traits::*;
 
 /// Query builder for searching through the [`Hir`] for some [`Queryable`].
@@ -169,148 +166,161 @@ mod traits {
             true
         }
     }
-}
 
-#[cfg(test)]
-mod test {
-    use super::*;
+    #[cfg(test)]
+    mod test {
+        use super::*;
 
-    #[fixture]
-    fn ctx() -> Ctx {
-        Ctx::new()
-    }
+        #[fixture]
+        fn hir() -> Hir {
+            let mut hir = Hir::default();
 
-    #[fixture]
-    fn hir() -> Hir {
-        let mut hir = Hir::default();
+            // Empty trait.
+            hir.traits.insert(Trait {
+                name: TraitBindingId::from_id(0),
+                method_scope: ScopeId::from_id(0),
+                method_bindings: HashMap::new(),
+                methods: IndexedVec::new(),
+            });
 
-        // Empty trait.
-        hir.traits.insert(Trait {
-            name: TraitBindingId::from_id(0),
-            method_scope: ScopeId::from_id(0),
-            method_bindings: HashMap::new(),
-            methods: IndexedVec::new(),
-        });
+            // Single method trait.
+            hir.traits.insert(Trait {
+                name: TraitBindingId::from_id(1),
+                method_scope: ScopeId::from_id(1),
+                method_bindings: HashMap::from_iter([(
+                    IdentifierBindingId::from_id(0),
+                    TraitMethodId::from_id(0),
+                )]),
+                methods: indexed_vec![FunctionSignature {
+                    parameters: vec![],
+                    return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
+                }],
+            });
 
-        // Single method trait.
-        hir.traits.insert(Trait {
-            name: TraitBindingId::from_id(1),
-            method_scope: ScopeId::from_id(1),
-            method_bindings: HashMap::from_iter([(
-                IdentifierBindingId::from_id(0),
-                TraitMethodId::from_id(0),
-            )]),
-            methods: indexed_vec![FunctionSignature {
-                parameters: vec![],
-                return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
-            }],
-        });
+            // Single method trait with parameters.
+            hir.traits.insert(Trait {
+                name: TraitBindingId::from_id(2),
+                method_scope: ScopeId::from_id(2),
+                method_bindings: HashMap::from_iter([(
+                    IdentifierBindingId::from_id(0),
+                    TraitMethodId::from_id(0),
+                )]),
+                methods: indexed_vec![FunctionSignature {
+                    parameters: vec![
+                        (IdentifierBindingId::from_id(1), MaybeSelfType::SelfType),
+                        (
+                            IdentifierBindingId::from_id(2),
+                            MaybeSelfType::Type(TypeId::from_id(0))
+                        ),
+                    ],
+                    return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
+                }],
+            });
 
-        // Single method trait with parameters.
-        hir.traits.insert(Trait {
-            name: TraitBindingId::from_id(2),
-            method_scope: ScopeId::from_id(2),
-            method_bindings: HashMap::from_iter([(
-                IdentifierBindingId::from_id(0),
-                TraitMethodId::from_id(0),
-            )]),
-            methods: indexed_vec![FunctionSignature {
-                parameters: vec![
-                    (IdentifierBindingId::from_id(1), MaybeSelfType::SelfType),
-                    (
-                        IdentifierBindingId::from_id(2),
-                        MaybeSelfType::Type(TypeId::from_id(0))
-                    ),
+            // Multi method trait.
+            hir.traits.insert(Trait {
+                name: TraitBindingId::from_id(3),
+                method_scope: ScopeId::from_id(3),
+                method_bindings: HashMap::from_iter([
+                    (IdentifierBindingId::from_id(0), TraitMethodId::from_id(0)),
+                    (IdentifierBindingId::from_id(1), TraitMethodId::from_id(1)),
+                ]),
+                methods: indexed_vec![
+                    FunctionSignature {
+                        parameters: vec![],
+                        return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
+                    },
+                    FunctionSignature {
+                        parameters: vec![],
+                        return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
+                    }
                 ],
-                return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
-            }],
-        });
+            });
 
-        // Multi method trait.
-        hir.traits.insert(Trait {
-            name: TraitBindingId::from_id(1),
-            method_scope: ScopeId::from_id(1),
-            method_bindings: HashMap::from_iter([
-                (IdentifierBindingId::from_id(0), TraitMethodId::from_id(0)),
-                (IdentifierBindingId::from_id(1), TraitMethodId::from_id(1)),
-            ]),
-            methods: indexed_vec![
-                FunctionSignature {
-                    parameters: vec![],
-                    return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
-                },
-                FunctionSignature {
-                    parameters: vec![],
-                    return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
-                }
-            ],
-        });
+            hir
+        }
 
-        hir
-    }
+        #[rstest]
+        fn all_traits(hir: Hir) {
+            assert_eq!(Query::traits().query(&hir).count(), 4);
+        }
 
-    #[rstest]
-    fn all_traits(hir: Hir) {
-        assert_eq!(Query::traits().query(&hir).count(), 4);
-    }
+        #[rstest]
+        fn single_method_traits(hir: Hir) {
+            assert_eq!(
+                Query::traits()
+                    .methods([SignatureFilter::new()])
+                    .query(&hir)
+                    .count(),
+                2
+            );
+        }
 
-    #[rstest]
-    fn single_method_traits(hir: Hir) {
-        assert_eq!(
-            Query::traits()
-                .methods([SignatureFilter::new()])
-                .query(&hir)
-                .count(),
-            2
-        );
-    }
+        #[rstest]
+        fn single_method_traits_returning_ty(hir: Hir) {
+            assert_eq!(
+                Query::traits()
+                    .methods([SignatureFilter::new().return_ty(TypeId::from_id(0))])
+                    .query(&hir)
+                    .count(),
+                2
+            );
+        }
 
-    #[rstest]
-    fn single_method_traits_returning_ty(hir: Hir) {
-        assert_eq!(
-            Query::traits()
-                .methods([SignatureFilter::new().return_ty(TypeId::from_id(0))])
-                .query(&hir)
-                .count(),
-            2
-        );
-    }
+        #[rstest]
+        fn single_method_trait_no_parameters_returning_ty(hir: Hir) {
+            assert_eq!(
+                Query::traits()
+                    .methods([SignatureFilter::new()
+                        .parameters([])
+                        .return_ty(TypeId::from_id(0))])
+                    .query(&hir)
+                    .count(),
+                1
+            );
+        }
 
-    #[rstest]
-    fn single_method_trait_no_parameters_returning_ty(hir: Hir) {
-        assert_eq!(
-            Query::traits()
-                .methods([SignatureFilter::new()
-                    .parameters([])
-                    .return_ty(TypeId::from_id(0))])
-                .query(&hir)
-                .count(),
-            1
-        );
-    }
+        #[rstest]
+        fn single_method_trait_with_parameters(hir: Hir) {
+            assert_eq!(
+                Query::traits()
+                    .methods([SignatureFilter::new().parameters([
+                        MaybeSelfType::SelfType,
+                        MaybeSelfType::Type(TypeId::from_id(0))
+                    ])])
+                    .query(&hir)
+                    .count(),
+                1
+            );
+        }
 
-    #[rstest]
-    fn single_method_trait_with_parameters(hir: Hir) {
-        assert_eq!(
-            Query::traits()
-                .methods([SignatureFilter::new().parameters([
-                    MaybeSelfType::SelfType,
-                    MaybeSelfType::Type(TypeId::from_id(0))
-                ])])
-                .query(&hir)
-                .count(),
-            1
-        );
-    }
+        #[rstest]
+        fn multiple_method_trait(hir: Hir) {
+            assert_eq!(
+                Query::traits()
+                    .methods([SignatureFilter::new(), SignatureFilter::new()])
+                    .query(&hir)
+                    .count(),
+                1
+            );
+        }
 
-    #[rstest]
-    fn multiple_method_trait(hir: Hir) {
-        assert_eq!(
-            Query::traits()
-                .methods([SignatureFilter::new(), SignatureFilter::new()])
-                .query(&hir)
-                .count(),
-            1
-        );
+        #[rstest]
+        fn signature_filter_parameter_match() {
+            let filter = SignatureFilter::new().parameters([TypeId::from_id(0).into()]);
+            assert!(filter.validate(&FunctionSignature {
+                parameters: vec![(IdentifierBindingId::from_id(0), TypeId::from_id(0).into())],
+                return_ty: TypeId::from_id(0).into(),
+            }));
+        }
+
+        #[rstest]
+        fn signature_filter_parameter_mismatch() {
+            let filter = SignatureFilter::new().parameters([TypeId::from_id(0).into()]);
+            assert!(!filter.validate(&FunctionSignature {
+                parameters: vec![(IdentifierBindingId::from_id(0), TypeId::from_id(1).into())],
+                return_ty: TypeId::from_id(0).into(),
+            }));
+        }
     }
 }
