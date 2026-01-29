@@ -10,6 +10,7 @@ create_id!(FunctionId);
 create_id!(StatementId);
 create_id!(AstTypeId);
 create_id!(TraitId);
+create_id!(AnnotationId);
 
 #[derive(Clone, Debug)]
 pub struct Ast {
@@ -18,6 +19,7 @@ pub struct Ast {
     pub blocks: IndexedVec<BlockId, Block>,
     pub statements: IndexedVec<StatementId, Statement>,
     pub expressions: IndexedVec<ExpressionId, Expression>,
+    pub annotations: IndexedVec<AnnotationId, Annotation>,
 
     pub types: IndexedVec<AstTypeId, AstType>,
 
@@ -35,6 +37,7 @@ impl Ast {
             blocks: IndexedVec::new(),
             statements: IndexedVec::new(),
             expressions: IndexedVec::new(),
+            annotations: IndexedVec::new(),
             types: IndexedVec::new(),
             item_functions: Vec::new(),
             traits: IndexedVec::new(),
@@ -75,6 +78,14 @@ impl Index<StatementId> for Ast {
     }
 }
 
+impl Index<AnnotationId> for Ast {
+    type Output = Annotation;
+
+    fn index(&self, index: AnnotationId) -> &Self::Output {
+        &self.annotations[index]
+    }
+}
+
 impl Index<AstTypeId> for Ast {
     type Output = AstType;
 
@@ -102,6 +113,15 @@ pub enum AstType {
     Tuple(Vec<AstTypeId>),
 }
 
+/// An annotation attached to an item.
+#[derive(Clone, Debug)]
+pub struct Annotation {
+    /// Key of the annotation.
+    pub key: StringId,
+    /// Value of the annotation, which may or may not be present.
+    pub value: Option<StringId>,
+}
+
 mod function {
     use super::*;
 
@@ -114,6 +134,7 @@ mod function {
 
     #[derive(Clone, Debug)]
     pub struct FunctionDeclaration {
+        pub annotations: Vec<AnnotationId>,
         pub signature: FunctionSignature,
         pub body: BlockId,
     }
@@ -289,6 +310,8 @@ mod expression {
 
 #[derive(Clone, Debug)]
 pub struct Trait {
+    /// Annotations attached to this trait.
+    pub annotations: Vec<AnnotationId>,
     /// Original name of the trait.
     pub name: StringId,
     /// Methods defined within the trait.
@@ -297,6 +320,8 @@ pub struct Trait {
 
 #[derive(Clone, Debug)]
 pub struct TraitImplementation {
+    /// Annotations attached to this trait implementation.
+    pub annotations: Vec<AnnotationId>,
     pub trait_name: StringId,
     pub target_ty: AstTypeId,
     pub methods: BTreeMap<StringId, FunctionId>,
