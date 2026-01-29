@@ -113,6 +113,7 @@ toks! {
     Dot => ".",
     Comma => ",",
     Bang => "!",
+    At => "@",
 
     EqEq => "==",
     BangEq => "!=",

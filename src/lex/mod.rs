@@ -189,6 +189,10 @@ impl<'src> Lexer<'src> {
                     _ => Tok::Bang,
                 }
             }
+            '@' => {
+                self.expect_char('@');
+                Tok::At
+            }
             '=' => {
                 self.expect_char('=');
 
@@ -341,6 +345,8 @@ mod test {
     #[case("::", &[Tok::ColonColon, Tok::Eof])]
     #[case(";", &[Tok::SemiColon, Tok::Eof])]
     #[case(",", &[Tok::Comma, Tok::Eof])]
+    #[case("!", &[Tok::Bang, Tok::Eof])]
+    #[case("@", &[Tok::At, Tok::Eof])]
     #[case("==", &[Tok::EqEq, Tok::Eof])]
     #[case("!=", &[Tok::BangEq, Tok::Eof])]
     #[case(">=", &[Tok::GtEq, Tok::Eof])]

@@ -17,14 +17,14 @@ impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
         let mut ast_gen = Self::new(ctx);
 
         for item in &cst.items {
-            match item {
-                cst::Item::FunctionDeclaration(function_declaration) => {
+            match &item.kind {
+                cst::ItemKind::FunctionDeclaration(function_declaration) => {
                     ast_gen.lower_item_function(function_declaration);
                 }
-                cst::Item::TraitDeclaration(trait_declaration) => {
+                cst::ItemKind::TraitDeclaration(trait_declaration) => {
                     ast_gen.lower_trait_declaration(trait_declaration);
                 }
-                cst::Item::TraitImplementation(trait_implementation) => {
+                cst::ItemKind::TraitImplementation(trait_implementation) => {
                     ast_gen.lower_trait_implementation(trait_implementation);
                 }
             }

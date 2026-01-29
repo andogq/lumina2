@@ -1,0 +1,11 @@
+---
+source: src/passes/cst_gen.rs
+expression: "@some_annotation"
+---
+Annotation {
+    tok_at: At,
+    key: Ident(
+        "some_annotation",
+    ),
+    value: None,
+}
