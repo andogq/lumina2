@@ -1,0 +1,26 @@
+---
+source: src/passes/cst_gen.rs
+expression: "@some_annotation trait MyTrait {}"
+---
+Item {
+    annotations: [
+        Annotation {
+            tok_at: At,
+            key: Ident(
+                "some_annotation",
+            ),
+            value: None,
+        },
+    ],
+    kind: TraitDeclaration(
+        TraitDeclaration {
+            tok_trait: Trait,
+            name: Ident(
+                "MyTrait",
+            ),
+            tok_l_brace: LBrace,
+            methods: [],
+            tok_r_brace: RBrace,
+        },
+    ),
+}

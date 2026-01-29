@@ -1,0 +1,50 @@
+---
+source: src/passes/cst_gen.rs
+expression: "@some_annotation @another_annotation(with_value) fn my_fn() {}"
+---
+Item {
+    annotations: [
+        Annotation {
+            tok_at: At,
+            key: Ident(
+                "some_annotation",
+            ),
+            value: None,
+        },
+        Annotation {
+            tok_at: At,
+            key: Ident(
+                "another_annotation",
+            ),
+            value: Value {
+                tok_l_parenthesis: LParenthesis,
+                value: Ident(
+                    "with_value",
+                ),
+                tok_r_parenthesis: RParenthesis,
+            },
+        },
+    ],
+    kind: FunctionDeclaration(
+        FunctionDeclaration {
+            signature: FunctionSignature {
+                tok_fn: Fn,
+                name: Ident(
+                    "my_fn",
+                ),
+                tok_l_parenthesis: LParenthesis,
+                parameters: PunctuatedList {
+                    items: [],
+                    punctuation: [],
+                },
+                tok_r_parenthesis: RParenthesis,
+                return_ty: None,
+            },
+            body: Block {
+                tok_l_brace: LBrace,
+                statements: [],
+                tok_r_brace: RBrace,
+            },
+        },
+    ),
+}

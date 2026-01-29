@@ -3,6 +3,7 @@ source: src/passes/ast_gen.rs
 expression: "impl MyTrait for MyType { fn something(n: u8) {} fn another() -> bool { true } }"
 ---
 TraitImplementation {
+    annotations: [],
     trait_name: StringId(
         6,
     ),

@@ -1,0 +1,14 @@
+---
+source: src/passes/ast_gen.rs
+expression: "@some_annotation(value)"
+---
+Annotation {
+    key: StringId(
+        0,
+    ),
+    value: Some(
+        StringId(
+            1,
+        ),
+    ),
+}

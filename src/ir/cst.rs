@@ -19,28 +19,54 @@ impl Program {
     pub const fn new() -> Self {
         Self { items: Vec::new() }
     }
-
-    pub fn add_function_declaration(&mut self, function_declaration: FunctionDeclaration) {
-        self.items
-            .push(Item::FunctionDeclaration(function_declaration));
-    }
-
-    pub fn add_trait_declaration(&mut self, trait_declaration: TraitDeclaration) {
-        self.items.push(Item::TraitDeclaration(trait_declaration));
-    }
-
-    pub fn add_trait_implementation(&mut self, trait_implementation: TraitImplementation) {
-        self.items
-            .push(Item::TraitImplementation(trait_implementation));
-    }
 }
 
 /// A node which may appear at the top-level of a program.
 #[derive(Clone, Debug)]
-pub enum Item {
+pub struct Item {
+    /// Annotations attached to this item.
+    pub annotations: Vec<Annotation>,
+    /// The actual item.
+    pub kind: ItemKind,
+}
+
+#[derive(Clone, Debug)]
+pub enum ItemKind {
     TraitDeclaration(TraitDeclaration),
     TraitImplementation(TraitImplementation),
     FunctionDeclaration(FunctionDeclaration),
+}
+
+/// An annotation the source, which may or may not have a value.
+///
+/// ```
+/// @some_annotation
+///
+/// @some_annotation(with_value)
+/// ```
+#[derive(Clone, Debug)]
+pub struct Annotation {
+    #[expect(dead_code, reason = "token field")]
+    pub tok_at: tok::At,
+    /// Key of the annotation.
+    pub key: tok::Ident,
+    /// Value of the annotation.
+    pub value: AnnotationValue,
+}
+
+/// Value for an annotation.
+#[derive(Clone, Debug)]
+pub enum AnnotationValue {
+    /// No value.
+    None,
+    /// Value within parenthesis.
+    Value {
+        #[expect(dead_code, reason = "token field")]
+        tok_l_parenthesis: tok::LParenthesis,
+        value: tok::Ident,
+        #[expect(dead_code, reason = "token field")]
+        tok_r_parenthesis: tok::RParenthesis,
+    },
 }
 
 /// Trait declaration.

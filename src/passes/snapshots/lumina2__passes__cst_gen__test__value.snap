@@ -1,0 +1,17 @@
+---
+source: src/passes/cst_gen.rs
+expression: "@some_annotation(value)"
+---
+Annotation {
+    tok_at: At,
+    key: Ident(
+        "some_annotation",
+    ),
+    value: Value {
+        tok_l_parenthesis: LParenthesis,
+        value: Ident(
+            "value",
+        ),
+        tok_r_parenthesis: RParenthesis,
+    },
+}

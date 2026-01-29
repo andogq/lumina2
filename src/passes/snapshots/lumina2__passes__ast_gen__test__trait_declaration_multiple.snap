@@ -3,6 +3,7 @@ source: src/passes/ast_gen.rs
 expression: "trait MyTrait { fn something(n: u8); fn another() -> bool; }"
 ---
 Trait {
+    annotations: [],
     name: StringId(
         5,
     ),
