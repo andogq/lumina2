@@ -115,6 +115,7 @@ pub enum AstType {
 
 /// An annotation attached to an item.
 #[derive(Clone, Debug)]
+#[expect(dead_code, reason = "annotations not used yet")]
 pub struct Annotation {
     /// Key of the annotation.
     pub key: StringId,
@@ -133,6 +134,7 @@ mod function {
     }
 
     #[derive(Clone, Debug)]
+    #[expect(dead_code, reason = "annotations not used yet")]
     pub struct FunctionDeclaration {
         pub annotations: Vec<AnnotationId>,
         pub signature: FunctionSignature,
@@ -311,6 +313,7 @@ mod expression {
 #[derive(Clone, Debug)]
 pub struct Trait {
     /// Annotations attached to this trait.
+    #[expect(dead_code, reason = "annotations not used yet")]
     pub annotations: Vec<AnnotationId>,
     /// Original name of the trait.
     pub name: StringId,
@@ -321,6 +324,7 @@ pub struct Trait {
 #[derive(Clone, Debug)]
 pub struct TraitImplementation {
     /// Annotations attached to this trait implementation.
+    #[expect(dead_code, reason = "annotations not used yet")]
     pub annotations: Vec<AnnotationId>,
     pub trait_name: StringId,
     pub target_ty: AstTypeId,
