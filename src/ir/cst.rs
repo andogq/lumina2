@@ -19,27 +19,6 @@ impl Program {
     pub const fn new() -> Self {
         Self { items: Vec::new() }
     }
-<<<<<<< HEAD
-=======
-
-    pub fn add_function_declaration(&mut self, function_declaration: FunctionDeclaration) {
-        self.items
-            .push(Item::FunctionDeclaration(function_declaration));
-    }
-
-    pub fn add_trait_declaration(&mut self, trait_declaration: TraitDeclaration) {
-        self.items.push(Item::TraitDeclaration(trait_declaration));
-    }
-
-    pub fn add_trait_implementation(&mut self, trait_implementation: TraitImplementation) {
-        self.items
-            .push(Item::TraitImplementation(trait_implementation));
-    }
-
-    pub fn add_external_function(&mut self, external_function: ExternalFunction) {
-        self.items.push(Item::ExternalFunction(external_function));
-    }
->>>>>>> c890597 (feat(cst): add external functions)
 }
 
 /// A node which may appear at the top-level of a program.

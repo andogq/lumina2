@@ -3,6 +3,7 @@ source: src/passes/ast_gen.rs
 expression: "extern fn some_function(parameter: u8) -> bool;"
 ---
 FunctionDeclaration {
+    annotations: [],
     signature: FunctionSignature {
         name: StringId(
             0,

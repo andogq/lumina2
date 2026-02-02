@@ -40,7 +40,7 @@ impl Parse for cst::Program {
                 }
                 Tok::Extern => {
                     let external_function = cst::ExternalFunction::parse(lexer);
-                    program.add_external_function(external_function);
+                    cst::ItemKind::ExternalFunction(external_function)
                 }
                 tok => {
                     eprintln!("Unknown tok: {tok}");
@@ -1093,9 +1093,10 @@ mod test {
         test_with_lexer(source, |lexer| {
             let item = cst::Item::parse(lexer);
             assert_debug_snapshot!(name, item, source);
-        )};
+        });
     }
 
+    #[rstest]
     #[case("external_function_simple", "extern fn some_function();")]
     #[case(
         "external_function_parameters",

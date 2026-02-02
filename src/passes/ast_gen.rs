@@ -33,8 +33,8 @@ impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
                 cst::ItemKind::TraitImplementation(trait_implementation) => {
                     ast_gen.lower_trait_implementation(trait_implementation, annotations);
                 }
-                cst::Item::ExternalFunction(external_function) => {
-                    ast_gen.lower_external_function(external_function);
+                cst::ItemKind::ExternalFunction(external_function) => {
+                    ast_gen.lower_external_function(external_function, annotations);
                 }
             }
         }
@@ -87,9 +87,14 @@ impl<'ctx> AstGen<'ctx> {
         id
     }
 
-    fn lower_external_function(&mut self, external_function: &cst::ExternalFunction) -> FunctionId {
+    fn lower_external_function(
+        &mut self,
+        external_function: &cst::ExternalFunction,
+        annotations: Vec<AnnotationId>,
+    ) -> FunctionId {
         let signature = self.lower_function_signature(&external_function.signature);
         let id = self.ast.function_declarations.insert(FunctionDeclaration {
+            annotations,
             signature,
             implementation: FunctionImplementation::None,
         });
@@ -486,7 +491,7 @@ mod test {
     )]
     fn external_function(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
         let mut pass = AstGen::new(&mut ctx);
-        let id = pass.lower_external_function(&parse(source));
+        let id = pass.lower_external_function(&parse(source), vec![]);
         assert_debug_snapshot!(name, pass.ast[id], source);
     }
 }
