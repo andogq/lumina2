@@ -352,7 +352,7 @@ mod test {
                     parameters: Vec::new(),
                     return_ty: None,
                 },
-                body: block_id,
+                implementation: ast::FunctionImplementation::Body(block_id),
             });
             // Add function as top level function.
             ast.item_functions.push(function_id);

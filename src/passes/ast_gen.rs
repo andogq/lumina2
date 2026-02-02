@@ -34,7 +34,7 @@ impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
                     ast_gen.lower_trait_implementation(trait_implementation, annotations);
                 }
                 cst::Item::ExternalFunction(external_function) => {
-                    todo!();
+                    ast_gen.lower_external_function(external_function);
                 }
             }
         }
@@ -72,7 +72,7 @@ impl<'ctx> AstGen<'ctx> {
         let function_declaration = FunctionDeclaration {
             annotations,
             signature: self.lower_function_signature(&function.signature),
-            body: self.lower_block(&function.body),
+            implementation: FunctionImplementation::Body(self.lower_block(&function.body)),
         };
         self.ast.function_declarations.insert(function_declaration)
     }
@@ -83,6 +83,16 @@ impl<'ctx> AstGen<'ctx> {
         annotations: Vec<AnnotationId>,
     ) -> FunctionId {
         let id = self.lower_function(function, annotations);
+        self.ast.item_functions.push(id);
+        id
+    }
+
+    fn lower_external_function(&mut self, external_function: &cst::ExternalFunction) -> FunctionId {
+        let signature = self.lower_function_signature(&external_function.signature);
+        let id = self.ast.function_declarations.insert(FunctionDeclaration {
+            signature,
+            implementation: FunctionImplementation::None,
+        });
         self.ast.item_functions.push(id);
         id
     }
@@ -461,5 +471,22 @@ mod test {
         let mut pass = AstGen::new(&mut ctx);
         let annotation = pass.lower_annotation(&parse(source));
         assert_debug_snapshot!(name, pass.ast.annotations[annotation], source);
+    }
+
+    #[rstest]
+    #[case("external_function_simple", "extern fn some_function();")]
+    #[case(
+        "external_function_parameters",
+        "extern fn some_function(parameter: u8);"
+    )]
+    #[case("external_function_return", "extern fn some_function() -> bool;")]
+    #[case(
+        "external_function_full",
+        "extern fn some_function(parameter: u8) -> bool;"
+    )]
+    fn external_function(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
+        let mut pass = AstGen::new(&mut ctx);
+        let id = pass.lower_external_function(&parse(source));
+        assert_debug_snapshot!(name, pass.ast[id], source);
     }
 }

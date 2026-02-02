@@ -1,0 +1,23 @@
+---
+source: src/passes/ast_gen.rs
+expression: "extern fn some_function(parameter: u8);"
+---
+FunctionDeclaration {
+    signature: FunctionSignature {
+        name: StringId(
+            0,
+        ),
+        parameters: [
+            FunctionParameter {
+                name: StringId(
+                    1,
+                ),
+                ty: AstTypeId(
+                    0,
+                ),
+            },
+        ],
+        return_ty: None,
+    },
+    implementation: None,
+}

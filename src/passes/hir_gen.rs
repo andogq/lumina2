@@ -190,7 +190,14 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         };
 
         // Lower the body of the function.
-        let entry = self.lower_block(ctx, &self.ast[function.body], function_scope)?;
+        let entry = match &function.implementation {
+            ast::FunctionImplementation::Body(body) => {
+                self.lower_block(ctx, &self.ast[*body], function_scope)?
+            }
+            ast::FunctionImplementation::None => {
+                panic!("cannot generate HIR for function without implementation")
+            }
+        };
 
         Ok(self.hir.functions.insert(Function {
             binding,

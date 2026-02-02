@@ -138,7 +138,17 @@ mod function {
     pub struct FunctionDeclaration {
         pub annotations: Vec<AnnotationId>,
         pub signature: FunctionSignature,
-        pub body: BlockId,
+        pub implementation: FunctionImplementation,
+    }
+
+    /// The implementation of a function.
+    #[derive(Clone, Debug)]
+    pub enum FunctionImplementation {
+        /// No implementation has been provided for the function, although one may be added by a
+        /// later stage.
+        None,
+        /// Implementation exists within the provided [`Block`].
+        Body(BlockId),
     }
 
     #[derive(Clone, Debug)]
