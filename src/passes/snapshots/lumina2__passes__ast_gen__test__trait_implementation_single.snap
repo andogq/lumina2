@@ -3,6 +3,7 @@ source: src/passes/ast_gen.rs
 expression: "impl MyTrait for MyType { fn something() {} }"
 ---
 TraitImplementation {
+    annotations: [],
     trait_name: StringId(
         2,
     ),

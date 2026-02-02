@@ -22,29 +22,89 @@ impl Parse for cst::Program {
     fn parse(lexer: &mut Lexer<'_>) -> Self {
         let mut program = cst::Program::new();
 
+        let mut annotations = Vec::new();
         loop {
-            match lexer.peek() {
+            let kind = match lexer.peek() {
                 Tok::Eof => break,
                 Tok::Fn => {
                     let function_declaration = cst::FunctionDeclaration::parse(lexer);
-                    program.add_function_declaration(function_declaration);
+                    cst::ItemKind::FunctionDeclaration(function_declaration)
                 }
                 Tok::Trait => {
                     let trait_declaration = cst::TraitDeclaration::parse(lexer);
-                    program.add_trait_declaration(trait_declaration);
+                    cst::ItemKind::TraitDeclaration(trait_declaration)
                 }
                 Tok::Impl => {
                     let trait_implementation = cst::TraitImplementation::parse(lexer);
-                    program.add_trait_implementation(trait_implementation);
+                    cst::ItemKind::TraitImplementation(trait_implementation)
                 }
                 tok => {
                     eprintln!("Unknown tok: {tok}");
                     lexer.next();
+                    continue;
                 }
-            }
+            };
+
+            program.items.push(cst::Item {
+                annotations: std::mem::take(&mut annotations),
+                kind,
+            });
         }
 
         program
+    }
+}
+
+impl Parse for cst::Item {
+    fn parse(lexer: &mut Lexer<'_>) -> Self {
+        let annotations = std::iter::from_fn(|| {
+            if !matches!(lexer.peek(), Tok::At) {
+                return None;
+            }
+
+            Some(cst::Annotation::parse(lexer))
+        })
+        .collect();
+
+        let kind = match lexer.peek() {
+            Tok::Fn => {
+                let function_declaration = cst::FunctionDeclaration::parse(lexer);
+                cst::ItemKind::FunctionDeclaration(function_declaration)
+            }
+            Tok::Trait => {
+                let trait_declaration = cst::TraitDeclaration::parse(lexer);
+                cst::ItemKind::TraitDeclaration(trait_declaration)
+            }
+            Tok::Impl => {
+                let trait_implementation = cst::TraitImplementation::parse(lexer);
+                cst::ItemKind::TraitImplementation(trait_implementation)
+            }
+            tok => {
+                panic!("Unknown tok for item: {tok}");
+            }
+        };
+
+        Self { annotations, kind }
+    }
+}
+
+impl Parse for cst::Annotation {
+    fn parse(lexer: &mut Lexer<'_>) -> Self {
+        Self {
+            tok_at: lexer.expect().unwrap(),
+            key: lexer.expect().unwrap(),
+            value: {
+                if matches!(lexer.peek(), Tok::LParenthesis) {
+                    cst::AnnotationValue::Value {
+                        tok_l_parenthesis: lexer.expect().unwrap(),
+                        value: lexer.expect().unwrap(),
+                        tok_r_parenthesis: lexer.expect().unwrap(),
+                    }
+                } else {
+                    cst::AnnotationValue::None
+                }
+            },
+        }
     }
 }
 
@@ -992,6 +1052,33 @@ mod test {
         test_with_lexer(source, |lexer| {
             let trait_implementation = cst::TraitImplementation::parse(lexer);
             assert_debug_snapshot!(name, trait_implementation, source);
+        });
+    }
+
+    #[rstest]
+    #[case("no_value", "@some_annotation")]
+    #[case("value", "@some_annotation(value)")]
+    #[should_panic]
+    #[case("parenthesis_no_value", "@some_annotation()")]
+    fn annotations(#[case] name: &str, #[case] source: &str) {
+        test_with_lexer(source, |lexer| {
+            let annotation = cst::Annotation::parse(lexer);
+            assert_debug_snapshot!(name, annotation, source);
+        });
+    }
+
+    #[rstest]
+    #[case("annotation_fn", "@some_annotation fn my_fn() {}")]
+    #[case("annotation_trait", "@some_annotation trait MyTrait {}")]
+    #[case("annotation_impl", "@some_annotation impl MyTrait for SomeType {}")]
+    #[case(
+        "annotation_multiple",
+        "@some_annotation @another_annotation(with_value) fn my_fn() {}"
+    )]
+    fn annotation_items(#[case] name: &str, #[case] source: &str) {
+        test_with_lexer(source, |lexer| {
+            let item = cst::Item::parse(lexer);
+            assert_debug_snapshot!(name, item, source);
         });
     }
 

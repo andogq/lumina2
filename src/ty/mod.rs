@@ -346,6 +346,7 @@ mod test {
                 expression: None,
             });
             let function_id = ast.function_declarations.insert(ast::FunctionDeclaration {
+                annotations: Vec::new(),
                 signature: ast::FunctionSignature {
                     name: ctx.strings.intern("main"),
                     parameters: Vec::new(),
