@@ -33,6 +33,9 @@ impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
                 cst::ItemKind::TraitImplementation(trait_implementation) => {
                     ast_gen.lower_trait_implementation(trait_implementation, annotations);
                 }
+                cst::Item::ExternalFunction(external_function) => {
+                    todo!();
+                }
             }
         }
 

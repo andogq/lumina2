@@ -1,0 +1,21 @@
+---
+source: src/passes/cst_gen.rs
+expression: extern fn some_function();
+---
+ExternalFunction {
+    tok_extern: Extern,
+    signature: FunctionSignature {
+        tok_fn: Fn,
+        name: Ident(
+            "some_function",
+        ),
+        tok_l_parenthesis: LParenthesis,
+        parameters: PunctuatedList {
+            items: [],
+            punctuation: [],
+        },
+        tok_r_parenthesis: RParenthesis,
+        return_ty: None,
+    },
+    tok_semicolon: SemiColon,
+}

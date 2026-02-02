@@ -127,6 +127,7 @@ toks! {
     True => "true",
     False => "false",
 
+    Extern => "extern",
     Fn => "fn",
     Let => "let",
     Break => "break",
