@@ -1,0 +1,15 @@
+---
+source: src/passes/ast_gen.rs
+expression: extern fn some_function();
+---
+FunctionDeclaration {
+    annotations: [],
+    signature: FunctionSignature {
+        name: StringId(
+            0,
+        ),
+        parameters: [],
+        return_ty: None,
+    },
+    implementation: None,
+}

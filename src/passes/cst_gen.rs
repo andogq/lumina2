@@ -38,6 +38,10 @@ impl Parse for cst::Program {
                     let trait_implementation = cst::TraitImplementation::parse(lexer);
                     cst::ItemKind::TraitImplementation(trait_implementation)
                 }
+                Tok::Extern => {
+                    let external_function = cst::ExternalFunction::parse(lexer);
+                    cst::ItemKind::ExternalFunction(external_function)
+                }
                 tok => {
                     eprintln!("Unknown tok: {tok}");
                     lexer.next();
@@ -149,6 +153,16 @@ impl Parse for cst::TraitImplementation {
                 methods
             },
             tok_r_brace: lexer.expect().unwrap(),
+        }
+    }
+}
+
+impl Parse for cst::ExternalFunction {
+    fn parse(lexer: &mut Lexer<'_>) -> Self {
+        Self {
+            tok_extern: lexer.expect().unwrap(),
+            signature: cst::FunctionSignature::parse(lexer),
+            tok_semicolon: lexer.expect().unwrap(),
         }
     }
 }
@@ -1079,6 +1093,24 @@ mod test {
         test_with_lexer(source, |lexer| {
             let item = cst::Item::parse(lexer);
             assert_debug_snapshot!(name, item, source);
+        });
+    }
+
+    #[rstest]
+    #[case("external_function_simple", "extern fn some_function();")]
+    #[case(
+        "external_function_parameters",
+        "extern fn some_function(parameter_a: bool);"
+    )]
+    #[case("external_function_return", "extern fn some_function() -> u8;")]
+    #[case(
+        "external_function_full",
+        "extern fn some_function(parameter_a: bool) -> u8;"
+    )]
+    fn external_function(#[case] name: &str, #[case] source: &str) {
+        test_with_lexer(source, |lexer| {
+            let external_function = cst::ExternalFunction::parse(lexer);
+            assert_debug_snapshot!(name, external_function, source);
         });
     }
 

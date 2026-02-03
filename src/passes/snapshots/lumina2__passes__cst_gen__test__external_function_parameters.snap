@@ -1,0 +1,33 @@
+---
+source: src/passes/cst_gen.rs
+expression: "extern fn some_function(parameter_a: bool);"
+---
+ExternalFunction {
+    tok_extern: Extern,
+    signature: FunctionSignature {
+        tok_fn: Fn,
+        name: Ident(
+            "some_function",
+        ),
+        tok_l_parenthesis: LParenthesis,
+        parameters: PunctuatedList {
+            items: [
+                FunctionParameter {
+                    name: Ident(
+                        "parameter_a",
+                    ),
+                    tok_colon: Colon,
+                    ty: Named(
+                        Ident(
+                            "bool",
+                        ),
+                    ),
+                },
+            ],
+            punctuation: [],
+        },
+        tok_r_parenthesis: RParenthesis,
+        return_ty: None,
+    },
+    tok_semicolon: SemiColon,
+}

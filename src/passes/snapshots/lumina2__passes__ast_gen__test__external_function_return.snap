@@ -1,0 +1,19 @@
+---
+source: src/passes/ast_gen.rs
+expression: extern fn some_function() -> bool;
+---
+FunctionDeclaration {
+    annotations: [],
+    signature: FunctionSignature {
+        name: StringId(
+            0,
+        ),
+        parameters: [],
+        return_ty: Some(
+            AstTypeId(
+                0,
+            ),
+        ),
+    },
+    implementation: None,
+}

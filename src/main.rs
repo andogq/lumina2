@@ -499,5 +499,19 @@ mod test {
                 10
             );
         }
+
+        #[test]
+        #[should_panic(expected = "cannot generate HIR for function without implementation")]
+        fn extern_function_no_implementation() {
+            run(r#"extern fn something() -> bool;
+
+            fn main() -> u8 {
+                if something() {
+                    3
+                } else {
+                    7
+                }
+            }"#);
+        }
     }
 }

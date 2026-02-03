@@ -35,6 +35,7 @@ pub enum ItemKind {
     TraitDeclaration(TraitDeclaration),
     TraitImplementation(TraitImplementation),
     FunctionDeclaration(FunctionDeclaration),
+    ExternalFunction(ExternalFunction),
 }
 
 /// An annotation the source, which may or may not have a value.
@@ -181,6 +182,20 @@ mod function {
         /// Return type.
         pub ty: CstType,
     }
+}
+
+/// An external function declaration.
+/// ```
+/// extern fn some_function();
+/// ```
+#[derive(Clone, Debug)]
+pub struct ExternalFunction {
+    #[expect(dead_code, reason = "token field")]
+    pub tok_extern: tok::Extern,
+    /// The signature of the external function.
+    pub signature: FunctionSignature,
+    #[expect(dead_code, reason = "token field")]
+    pub tok_semicolon: tok::SemiColon,
 }
 
 /// Block, containing a collection of [`Statement`]s.
