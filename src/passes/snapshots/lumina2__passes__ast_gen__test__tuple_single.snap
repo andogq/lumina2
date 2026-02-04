@@ -2,12 +2,17 @@
 source: src/passes/ast_gen.rs
 expression: "(1,)"
 ---
-Tuple(
-    Tuple {
-        values: [
-            ExpressionId(
-                0,
-            ),
-        ],
-    },
-)
+Expression {
+    id: AstId(
+        1,
+    ),
+    kind: Tuple(
+        Tuple {
+            values: [
+                ExpressionId(
+                    0,
+                ),
+            ],
+        },
+    ),
+}

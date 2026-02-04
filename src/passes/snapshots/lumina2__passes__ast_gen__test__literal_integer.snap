@@ -2,8 +2,13 @@
 source: src/passes/ast_gen.rs
 expression: "123"
 ---
-Literal(
-    Integer(
-        123,
+Expression {
+    id: AstId(
+        0,
     ),
-)
+    kind: Literal(
+        Integer(
+            123,
+        ),
+    ),
+}

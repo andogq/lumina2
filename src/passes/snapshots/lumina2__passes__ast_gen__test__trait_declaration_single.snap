@@ -3,6 +3,9 @@ source: src/passes/ast_gen.rs
 expression: "trait MyTrait { fn something(); }"
 ---
 Trait {
+    id: AstId(
+        0,
+    ),
     annotations: [],
     name: StringId(
         1,

@@ -4,6 +4,7 @@ use crate::prelude::*;
 
 pub use self::{block::*, expression::*, function::*, statement::*};
 
+create_id!(AstId);
 create_id!(BlockId);
 create_id!(ExpressionId);
 create_id!(FunctionId);
@@ -14,6 +15,8 @@ create_id!(AnnotationId);
 
 #[derive(Clone, Debug)]
 pub struct Ast {
+    nodes: IndexedVec<AstId, AstNodePtr>,
+
     pub function_declarations: IndexedVec<FunctionId, FunctionDeclaration>,
 
     pub blocks: IndexedVec<BlockId, Block>,
@@ -33,6 +36,7 @@ pub struct Ast {
 impl Ast {
     pub fn new() -> Self {
         Self {
+            nodes: IndexedVec::new(),
             function_declarations: IndexedVec::new(),
             blocks: IndexedVec::new(),
             statements: IndexedVec::new(),
@@ -43,6 +47,85 @@ impl Ast {
             traits: IndexedVec::new(),
             trait_implementations: Vec::new(),
         }
+    }
+
+    /// Determine the next [`AstId`] by looking at the length of [`Self::nodes`].
+    fn next_id(&mut self) -> AstId {
+        AstId::from_id(self.nodes.len())
+    }
+
+    /// Add a [`FunctionDeclaration`] to the AST.
+    pub fn add_function_declaration(
+        &mut self,
+        annotations: Vec<AnnotationId>,
+        signature: FunctionSignature,
+        implementation: FunctionImplementation,
+    ) -> FunctionId {
+        let id = self.next_id();
+        let id = self.function_declarations.insert(FunctionDeclaration {
+            id,
+            annotations,
+            signature,
+            implementation,
+        });
+        self.nodes.insert(id.into());
+        id
+    }
+
+    /// Add a [`Block`] to the AST.
+    pub fn add_block(
+        &mut self,
+        statements: Vec<StatementId>,
+        expression: Option<ExpressionId>,
+    ) -> BlockId {
+        let id = self.next_id();
+        let id = self.blocks.insert(Block {
+            id,
+            statements,
+            expression,
+        });
+        self.nodes.insert(id.into());
+        id
+    }
+
+    /// Add a [`Statement`] to the AST.
+    pub fn add_statement(&mut self, statement: impl Into<StatementKind>) -> StatementId {
+        let id = self.next_id();
+        let id = self.statements.insert(Statement {
+            id,
+            kind: statement.into(),
+        });
+        self.nodes.insert(id.into());
+        id
+    }
+
+    /// Add an [`Expression`] to the AST.
+    pub fn add_expression(&mut self, expression: impl Into<ExpressionKind>) -> ExpressionId {
+        let id = self.next_id();
+        let id = self.expressions.insert(Expression {
+            id,
+            kind: expression.into(),
+        });
+        self.nodes.insert(id.into());
+        id
+    }
+
+    /// Add a [`Trait`] to the AST.
+    pub fn add_trait(
+        &mut self,
+        annotations: Vec<AnnotationId>,
+        name: StringId,
+        methods: BTreeMap<StringId, FunctionSignature>,
+    ) -> TraitId {
+        let id = self.next_id();
+        let id = self.traits.insert(Trait {
+            id,
+            annotations,
+            name,
+            methods,
+        });
+        self.nodes.insert(id.into());
+        id
     }
 }
 
@@ -56,6 +139,24 @@ indexing! {
         types[AstTypeId] -> AstType,
         traits[TraitId] -> Trait,
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum AstNodePtr {
+    FunctionDeclaration(FunctionId),
+    Block(BlockId),
+    Statement(StatementId),
+    Expression(ExpressionId),
+    Trait(TraitId),
+}
+
+enum_conversion! {
+    [AstNodePtr]
+    FunctionDeclaration: FunctionId,
+    Block: BlockId,
+    Statement: StatementId,
+    Expression: ExpressionId,
+    Trait: TraitId,
 }
 
 /// Type representation used within the [`Ast`].
@@ -90,8 +191,9 @@ mod function {
     }
 
     #[derive(Clone, Debug)]
-    #[expect(dead_code, reason = "annotations not used yet")]
     pub struct FunctionDeclaration {
+        pub id: AstId,
+        #[expect(dead_code, reason = "annotations not used yet")]
         pub annotations: Vec<AnnotationId>,
         pub signature: FunctionSignature,
         pub implementation: FunctionImplementation,
@@ -119,6 +221,7 @@ mod block {
 
     #[derive(Clone, Debug)]
     pub struct Block {
+        pub id: AstId,
         pub statements: Vec<StatementId>,
         pub expression: Option<ExpressionId>,
     }
@@ -130,7 +233,21 @@ mod statement {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub enum Statement {
+    pub struct Statement {
+        pub id: AstId,
+        pub kind: StatementKind,
+    }
+
+    impl Deref for Statement {
+        type Target = StatementKind;
+
+        fn deref(&self) -> &Self::Target {
+            &self.kind
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    pub enum StatementKind {
         Let(LetStatement),
         Return(ReturnStatement),
         Break(BreakStatement),
@@ -159,7 +276,7 @@ mod statement {
     }
 
     enum_conversion! {
-        [Statement]
+        [StatementKind]
         Let: LetStatement,
         Return: ReturnStatement,
         Break: BreakStatement,
@@ -171,7 +288,21 @@ mod expression {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub enum Expression {
+    pub struct Expression {
+        pub id: AstId,
+        pub kind: ExpressionKind,
+    }
+
+    impl Deref for Expression {
+        type Target = ExpressionKind;
+
+        fn deref(&self) -> &Self::Target {
+            &self.kind
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    pub enum ExpressionKind {
         Assign(Assign),
         Binary(Binary),
         Unary(Unary),
@@ -260,7 +391,7 @@ mod expression {
     }
 
     enum_conversion! {
-        [Expression]
+        [ExpressionKind]
         Assign: Assign,
         Binary: Binary,
         Unary: Unary,
@@ -278,6 +409,7 @@ mod expression {
 
 #[derive(Clone, Debug)]
 pub struct Trait {
+    pub id: AstId,
     /// Annotations attached to this trait.
     #[expect(dead_code, reason = "annotations not used yet")]
     pub annotations: Vec<AnnotationId>,

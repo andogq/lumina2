@@ -335,25 +335,20 @@ mod test {
         // HACK: Manually add a block to the AST with the expression. Then insert a
         // function declaration with the block as the body.
         {
-            let statement_id = ast
-                .statements
-                .insert(ast::Statement::Let(ast::LetStatement {
-                    variable,
-                    value: expression_id,
-                }));
-            let block_id = ast.blocks.insert(ast::Block {
-                statements: vec![statement_id],
-                expression: None,
+            let statement_id = ast.add_statement(ast::LetStatement {
+                variable,
+                value: expression_id,
             });
-            let function_id = ast.function_declarations.insert(ast::FunctionDeclaration {
-                annotations: Vec::new(),
-                signature: ast::FunctionSignature {
+            let block_id = ast.add_block(vec![statement_id], None);
+            let function_id = ast.add_function_declaration(
+                Vec::new(),
+                ast::FunctionSignature {
                     name: ctx.strings.intern("main"),
                     parameters: Vec::new(),
                     return_ty: None,
                 },
-                implementation: ast::FunctionImplementation::Body(block_id),
-            });
+                ast::FunctionImplementation::Body(block_id),
+            );
             // Add function as top level function.
             ast.item_functions.push(function_id);
         }

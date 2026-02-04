@@ -2,21 +2,26 @@
 source: src/passes/ast_gen.rs
 expression: "some_ident(1, something, true)"
 ---
-Call(
-    Call {
-        callee: ExpressionId(
-            0,
-        ),
-        arguments: [
-            ExpressionId(
-                1,
+Expression {
+    id: AstId(
+        4,
+    ),
+    kind: Call(
+        Call {
+            callee: ExpressionId(
+                0,
             ),
-            ExpressionId(
-                2,
-            ),
-            ExpressionId(
-                3,
-            ),
-        ],
-    },
-)
+            arguments: [
+                ExpressionId(
+                    1,
+                ),
+                ExpressionId(
+                    2,
+                ),
+                ExpressionId(
+                    3,
+                ),
+            ],
+        },
+    ),
+}
