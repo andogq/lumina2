@@ -1,0 +1,9 @@
+---
+source: src/passes/hir_gen/mod.rs
+expression: "Tuple(Tuple { values: [] })"
+---
+Aggregate(
+    Aggregate {
+        values: [],
+    },
+)

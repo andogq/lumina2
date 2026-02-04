@@ -1,0 +1,10 @@
+---
+source: src/passes/hir_gen/mod.rs
+expression: "Block { statements: [], expression: None }"
+---
+Block {
+    statements: [],
+    expression: ExpressionId(
+        0,
+    ),
+}

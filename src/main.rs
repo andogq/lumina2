@@ -513,5 +513,18 @@ mod test {
                 }
             }"#);
         }
+
+        #[test]
+        fn simple_intrinsic() {
+            assert_eq!(
+                run(r#"@intrinsic
+                    extern fn add_u8_wrapping(lhs: u8, rhs: u8) -> u8;
+
+                    fn main() -> u8 {
+                        add_u8_wrapping(7, 10)
+                    }"#),
+                17
+            );
+        }
     }
 }

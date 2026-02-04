@@ -27,6 +27,12 @@ impl Index<FunctionId> for Hir {
     }
 }
 
+impl IndexMut<FunctionId> for Hir {
+    fn index_mut(&mut self, index: FunctionId) -> &mut Self::Output {
+        &mut self.functions[index]
+    }
+}
+
 impl Index<BlockId> for Hir {
     type Output = Block;
 

@@ -1,0 +1,14 @@
+---
+source: src/passes/hir_gen/mod.rs
+expression: "Assign(Assign { variable: ExpressionId(0), value: ExpressionId(1) })"
+---
+Assign(
+    Assign {
+        variable: ExpressionId(
+            0,
+        ),
+        value: ExpressionId(
+            1,
+        ),
+    },
+)

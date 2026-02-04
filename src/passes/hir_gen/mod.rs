@@ -1,3 +1,5 @@
+mod annotations;
+
 use crate::prelude::*;
 
 use hir::*;

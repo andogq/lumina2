@@ -1,0 +1,15 @@
+---
+source: src/passes/hir_gen/mod.rs
+expression: "Binary(Binary { lhs: ExpressionId(0), operation: Plus, rhs: ExpressionId(1) })"
+---
+Binary(
+    Binary {
+        lhs: ExpressionId(
+            0,
+        ),
+        operation: Plus,
+        rhs: ExpressionId(
+            1,
+        ),
+    },
+)

@@ -1,0 +1,14 @@
+---
+source: src/passes/hir_gen/mod.rs
+expression: "Variable(Variable { variable: StringId(0) })"
+---
+Variable(
+    Variable {
+        binding: BindingId {
+            id: InnerBindingId(
+                0,
+            ),
+            kind: PhantomData<fn() -> lumina2::util::scopes::Identifier>,
+        },
+    },
+)
