@@ -46,59 +46,15 @@ impl Ast {
     }
 }
 
-impl Index<BlockId> for Ast {
-    type Output = Block;
-
-    fn index(&self, index: BlockId) -> &Self::Output {
-        &self.blocks[index]
-    }
-}
-
-impl Index<ExpressionId> for Ast {
-    type Output = Expression;
-
-    fn index(&self, index: ExpressionId) -> &Self::Output {
-        &self.expressions[index]
-    }
-}
-
-impl Index<FunctionId> for Ast {
-    type Output = FunctionDeclaration;
-
-    fn index(&self, index: FunctionId) -> &Self::Output {
-        &self.function_declarations[index]
-    }
-}
-
-impl Index<StatementId> for Ast {
-    type Output = Statement;
-
-    fn index(&self, index: StatementId) -> &Self::Output {
-        &self.statements[index]
-    }
-}
-
-impl Index<AnnotationId> for Ast {
-    type Output = Annotation;
-
-    fn index(&self, index: AnnotationId) -> &Self::Output {
-        &self.annotations[index]
-    }
-}
-
-impl Index<AstTypeId> for Ast {
-    type Output = AstType;
-
-    fn index(&self, index: AstTypeId) -> &Self::Output {
-        &self.types[index]
-    }
-}
-
-impl Index<TraitId> for Ast {
-    type Output = Trait;
-
-    fn index(&self, index: TraitId) -> &Self::Output {
-        &self.traits[index]
+indexing! {
+    Ast {
+        function_declarations[FunctionId] -> FunctionDeclaration,
+        blocks[BlockId] -> Block,
+        statements[StatementId] -> Statement,
+        expressions[ExpressionId] -> Expression,
+        annotations[AnnotationId] -> Annotation,
+        types[AstTypeId] -> AstType,
+        traits[TraitId] -> Trait,
     }
 }
 

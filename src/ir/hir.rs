@@ -19,49 +19,13 @@ pub struct Hir {
     pub trait_implementations: HashMap<TraitImplementationKey, TraitImplementation>,
 }
 
-impl Index<FunctionId> for Hir {
-    type Output = Function;
-
-    fn index(&self, index: FunctionId) -> &Self::Output {
-        &self.functions[index]
-    }
-}
-
-impl IndexMut<FunctionId> for Hir {
-    fn index_mut(&mut self, index: FunctionId) -> &mut Self::Output {
-        &mut self.functions[index]
-    }
-}
-
-impl Index<BlockId> for Hir {
-    type Output = Block;
-
-    fn index(&self, index: BlockId) -> &Self::Output {
-        &self.blocks[index]
-    }
-}
-
-impl Index<StatementId> for Hir {
-    type Output = Statement;
-
-    fn index(&self, index: StatementId) -> &Self::Output {
-        &self.statements[index]
-    }
-}
-
-impl Index<ExpressionId> for Hir {
-    type Output = Expression;
-
-    fn index(&self, index: ExpressionId) -> &Self::Output {
-        &self.expressions[index]
-    }
-}
-
-impl Index<TraitId> for Hir {
-    type Output = Trait;
-
-    fn index(&self, index: TraitId) -> &Self::Output {
-        &self.traits[index]
+indexing! {
+    Hir {
+        functions[FunctionId] -> Function,
+        blocks[BlockId] -> Block,
+        statements[StatementId] -> Statement,
+        expressions[ExpressionId] -> Expression,
+        traits[TraitId] -> Trait,
     }
 }
 
