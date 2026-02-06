@@ -140,8 +140,8 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
         let block = &self.hir[block_id];
 
         for statement in &block.statements {
-            match &self.hir[*statement] {
-                Statement::Declare(DeclareStatement { binding, ty }) => match ty {
+            match &self.hir[*statement].kind {
+                StatementKind::Declare(DeclareStatement { binding, ty }) => match ty {
                     // Directly set variable type.
                     DeclarationTy::Type(ty) => self
                         .constraints
@@ -153,7 +153,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     ),
                 },
                 // Expression must equal the return type of the current function.
-                Statement::Return(ReturnStatement { expression }) => {
+                StatementKind::Return(ReturnStatement { expression }) => {
                     // Generate constraints for the return expression.
                     self.add_expression_constraints(ctx, *expression);
 
@@ -164,7 +164,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                             .intern(self.hir[ctx.function].signature.return_ty),
                     );
                 }
-                Statement::Break(BreakStatement { expression }) => {
+                StatementKind::Break(BreakStatement { expression }) => {
                     // Generate constraints for the break expression.
                     self.add_expression_constraints(ctx, *expression);
 
@@ -181,7 +181,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                             .push(self.ctx.errors.report(ThirGenError::InvalidBreak)),
                     }
                 }
-                Statement::Expression(ExpressionStatement { expression }) => {
+                StatementKind::Expression(ExpressionStatement { expression }) => {
                     self.add_expression_constraints(ctx, *expression)
                 }
             }
@@ -198,8 +198,8 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
         let ty_boolean = self.type_vars.intern(self.ctx.types.boolean());
         let ty_never = self.type_vars.intern(self.ctx.types.never());
 
-        match &self.hir[expression_id] {
-            Expression::Assign(Assign { variable, value }) => {
+        match &self.hir[expression_id].kind {
+            ExpressionKind::Assign(Assign { variable, value }) => {
                 // Value of the assignment must match the variable it's being assigned to.
                 self.constraints.equal(
                     self.type_vars.intern(*value),
@@ -211,7 +211,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                 self.add_expression_constraints(ctx, *variable);
                 self.add_expression_constraints(ctx, *value);
             }
-            Expression::Binary(Binary {
+            ExpressionKind::Binary(Binary {
                 lhs,
                 operation,
                 rhs,
@@ -265,7 +265,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     }
                 }
             }
-            Expression::Unary(Unary { operation, value }) => {
+            ExpressionKind::Unary(Unary { operation, value }) => {
                 self.add_expression_constraints(ctx, *value);
 
                 let value = self.type_vars.intern(*value);
@@ -290,7 +290,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     UnaryOperation::Ref => self.constraints.reference(expression, value),
                 }
             }
-            Expression::Switch(Switch {
+            ExpressionKind::Switch(Switch {
                 discriminator,
                 branches,
                 default,
@@ -323,7 +323,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     None => self.constraints.equal(expression, ty_unit),
                 }
             }
-            Expression::Loop(Loop { body }) => {
+            ExpressionKind::Loop(Loop { body }) => {
                 // Ensure the body of the loop doesn't yield any non-unit expressions.
                 self.constraints
                     .equal(self.type_vars.intern(self.hir[*body].expression), ty_unit);
@@ -332,8 +332,8 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                 let ctx = ctx.push_loop(expression_id);
                 self.add_block_constraints(&ctx, *body);
             }
-            Expression::Literal(literal) => self.add_literal_constraint(expression_id, literal),
-            Expression::Call(Call { callee, arguments }) => {
+            ExpressionKind::Literal(literal) => self.add_literal_constraint(expression_id, literal),
+            ExpressionKind::Call(Call { callee, arguments }) => {
                 self.add_expression_constraints(ctx, *callee);
                 for argument in arguments {
                     self.add_expression_constraints(ctx, *argument);
@@ -347,7 +347,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     expression,
                 );
             }
-            Expression::Block(block_id) => {
+            ExpressionKind::Block(block_id) => {
                 self.add_block_constraints(ctx, *block_id);
 
                 // Type of this expression will be the type of the block.
@@ -356,11 +356,11 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     self.type_vars.intern(self.hir[*block_id].expression),
                 );
             }
-            Expression::Variable(Variable { binding }) => self
+            ExpressionKind::Variable(Variable { binding }) => self
                 .constraints
                 .equal(expression, self.type_vars.intern(*binding)),
-            Expression::Unreachable => self.constraints.equal(expression, ty_never),
-            Expression::Aggregate(Aggregate { values }) => {
+            ExpressionKind::Unreachable => self.constraints.equal(expression, ty_never),
+            ExpressionKind::Aggregate(Aggregate { values }) => {
                 // Add constraints for each contained expression.
                 for (i, value) in values.iter().enumerate() {
                     self.add_expression_constraints(ctx, *value);
@@ -373,7 +373,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
 
                 self.constraints.aggregate(expression, values.len());
             }
-            Expression::Field(Field { lhs, field }) => {
+            ExpressionKind::Field(Field { lhs, field }) => {
                 self.add_expression_constraints(ctx, *lhs);
 
                 let lhs = self.type_vars.intern(*lhs);
@@ -382,7 +382,7 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                     self.type_vars.intern(TypeVar::Field(lhs, *field)),
                 );
             }
-            Expression::Path(Path {
+            ExpressionKind::Path(Path {
                 ty,
                 target_trait,
                 item,
@@ -453,14 +453,9 @@ mod test {
 
     #[fixture]
     fn hir() -> Hir {
-        Hir {
-            functions: indexed_vec![],
-            blocks: indexed_vec![],
-            statements: indexed_vec![],
-            expressions: indexed_vec![Aggregate::UNIT.into()],
-            traits: indexed_vec![],
-            trait_implementations: HashMap::new(),
-        }
+        let mut hir = Hir::new();
+        hir.add_expression(Aggregate::UNIT);
+        hir
     }
 
     #[fixture]
@@ -487,25 +482,24 @@ mod test {
         #[case] parameters: impl IntoIterator<Item = (IdentifierBindingId, Type)>,
         #[case] return_ty: Type,
     ) {
-        let function = Function {
-            binding: IdentifierBindingId::from_id(0),
-            signature: FunctionSignature {
+        let function_id = hir.add_function(
+            IdentifierBindingId::from_id(0),
+            FunctionSignature {
                 parameters: parameters
                     .into_iter()
                     .map(|(binding, parameter)| (binding, ctx.types.get(parameter)))
                     .collect(),
                 return_ty: ctx.types.get(return_ty),
             },
-            entry: BlockId::from_id(0),
-        };
+            BlockId::from_id(0),
+        );
+        let function = &hir[function_id];
 
         // Used for debugging.
         let signature_str = format!(
             "{:?} => {:?}",
             function.signature.parameters, function.signature.return_ty
         );
-
-        let function_id = hir.functions.insert(function);
 
         let mut pass = ThirGen::new(&mut ctx, &hir);
         pass.add_function_declaration(function_id);
@@ -525,14 +519,11 @@ mod test {
         #[case] ty: impl Fn(&mut Types) -> DeclarationTy,
     ) {
         let ty = ty(&mut ctx.types);
-        let statement = hir.statements.insert(Statement::Declare(DeclareStatement {
+        let statement = hir.add_statement(DeclareStatement {
             binding: IdentifierBindingId::from_id(0),
             ty: ty.clone(),
-        }));
-        let block = hir.blocks.insert(Block {
-            statements: vec![statement],
-            expression: ExpressionId::from_id(0),
         });
+        let block = hir.add_block(vec![statement], ExpressionId::from_id(0));
 
         let mut pass = ThirGen::new(&mut ctx, &hir);
         pass.add_block_constraints(&constraint_ctx, block);
@@ -542,26 +533,19 @@ mod test {
 
     #[rstest]
     fn return_statement(mut hir: Hir, mut ctx: Ctx, constraint_ctx: ConstraintCtx) {
-        let expression = hir
-            .expressions
-            .insert(Expression::Literal(Literal::Integer(123)));
-        let statement = hir
-            .statements
-            .insert(Statement::Return(ReturnStatement { expression }));
-        let block = hir.blocks.insert(Block {
-            statements: vec![statement],
-            expression: ExpressionId::from_id(0),
-        });
+        let expression = hir.add_expression(Literal::Integer(123));
+        let statement = hir.add_statement(ReturnStatement { expression });
+        let block = hir.add_block(vec![statement], ExpressionId::from_id(0));
 
         // Insert a fake function to pull the return type.
-        hir.functions.insert(Function {
-            binding: IdentifierBindingId::from_id(0),
-            signature: FunctionSignature {
+        hir.add_function(
+            IdentifierBindingId::from_id(0),
+            FunctionSignature {
                 parameters: Vec::new(),
                 return_ty: ctx.types.u8(),
             },
-            entry: block,
-        });
+            block,
+        );
 
         let mut pass = ThirGen::new(&mut ctx, &hir);
         pass.add_block_constraints(&constraint_ctx, block);
@@ -583,19 +567,12 @@ mod test {
 
         // Add some dummy expressions for the loops.
         (0..3).for_each(|_| {
-            hir.expressions.insert(Expression::Unreachable);
+            hir.add_expression(ExpressionKind::Unreachable);
         });
 
-        let expression = hir
-            .expressions
-            .insert(Expression::Literal(Literal::Integer(123)));
-        let statement = hir
-            .statements
-            .insert(Statement::Break(BreakStatement { expression }));
-        let block = hir.blocks.insert(Block {
-            statements: vec![statement],
-            expression: ExpressionId::from_id(0),
-        });
+        let expression = hir.add_expression(Literal::Integer(123));
+        let statement = hir.add_statement(BreakStatement { expression });
+        let block = hir.add_block(vec![statement], ExpressionId::from_id(0));
 
         let mut pass = ThirGen::new(&mut ctx, &hir);
         pass.add_block_constraints(&constraint_ctx, block);
@@ -605,16 +582,9 @@ mod test {
 
     #[rstest]
     fn break_statement_no_loop(mut hir: Hir, mut ctx: Ctx, constraint_ctx: ConstraintCtx) {
-        let expression = hir
-            .expressions
-            .insert(Expression::Literal(Literal::Integer(123)));
-        let statement = hir
-            .statements
-            .insert(Statement::Break(BreakStatement { expression }));
-        let block = hir.blocks.insert(Block {
-            statements: vec![statement],
-            expression: ExpressionId::from_id(0),
-        });
+        let expression = hir.add_expression(Literal::Integer(123));
+        let statement = hir.add_statement(BreakStatement { expression });
+        let block = hir.add_block(vec![statement], ExpressionId::from_id(0));
 
         let mut pass = ThirGen::new(&mut ctx, &hir);
         pass.add_block_constraints(&constraint_ctx, block);
@@ -627,16 +597,9 @@ mod test {
 
     #[rstest]
     fn expression_statement(mut hir: Hir, mut ctx: Ctx, constraint_ctx: ConstraintCtx) {
-        let expression = hir
-            .expressions
-            .insert(Expression::Literal(Literal::Integer(123)));
-        let statement = hir
-            .statements
-            .insert(Statement::Expression(ExpressionStatement { expression }));
-        let block = hir.blocks.insert(Block {
-            statements: vec![statement],
-            expression: ExpressionId::from_id(0),
-        });
+        let expression = hir.add_expression(Literal::Integer(123));
+        let statement = hir.add_statement(ExpressionStatement { expression });
+        let block = hir.add_block(vec![statement], ExpressionId::from_id(0));
 
         let mut pass = ThirGen::new(&mut ctx, &hir);
         pass.add_block_constraints(&constraint_ctx, block);
@@ -684,10 +647,10 @@ mod test {
         mut ctx: Ctx,
         constraint_ctx: ConstraintCtx,
         #[case] name: &str,
-        #[case] expression: impl Into<Expression> + Debug,
+        #[case] expression: impl Into<ExpressionKind> + Debug,
     ) {
         let dbg_str = format!("{expression:?}");
-        let expression_id = hir.expressions.insert(expression.into());
+        let expression_id = hir.add_expression(expression);
 
         let mut pass = ThirGen::new(&mut ctx, &hir);
         pass.add_expression_constraints(&constraint_ctx, expression_id);

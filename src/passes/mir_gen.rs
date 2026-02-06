@@ -142,8 +142,8 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
         let mut current_basic_block = entry;
 
         for statement in &block.statements {
-            match &self.thir[*statement] {
-                hir::Statement::Declare(hir::DeclareStatement { binding, .. }) => {
+            match &self.thir[*statement].kind {
+                hir::StatementKind::Declare(hir::DeclareStatement { binding, .. }) => {
                     // Fetch the type of the binding.
                     let ty = self.thir.type_of(*binding);
 
@@ -153,7 +153,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                     // Register the local against the binding.
                     self.bindings.insert(*binding, Binding::Local(local));
                 }
-                hir::Statement::Return(hir::ReturnStatement { expression }) => {
+                hir::StatementKind::Return(hir::ReturnStatement { expression }) => {
                     // If a value is present, store it within the return local.
                     if let Some(value) =
                         self.lower_expression(ctx, &mut current_basic_block, *expression)
@@ -173,7 +173,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
                     self.mir.terminate(entry, Terminator::Return);
                 }
-                hir::Statement::Break(hir::BreakStatement { expression }) => {
+                hir::StatementKind::Break(hir::BreakStatement { expression }) => {
                     let (loop_place, loop_exit) =
                         ctx.current_loop().expect("currently within a loop");
 
@@ -196,7 +196,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                         },
                     );
                 }
-                hir::Statement::Expression(hir::ExpressionStatement { expression }) => {
+                hir::StatementKind::Expression(hir::ExpressionStatement { expression }) => {
                     self.lower_expression(ctx, &mut current_basic_block, *expression);
                 }
             }
@@ -219,8 +219,8 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
         basic_block: &mut BasicBlockId,
         expression_id: hir::ExpressionId,
     ) -> Option<OperandId> {
-        match &self.thir[expression_id] {
-            hir::Expression::Assign(hir::Assign { variable, value }) => {
+        match &self.thir[expression_id].kind {
+            hir::ExpressionKind::Assign(hir::Assign { variable, value }) => {
                 let value = self.lower_expression(ctx, basic_block, *value)?;
                 let place = self.expression_to_place(*variable);
                 let place = self.mir.places.insert(place);
@@ -235,7 +235,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
                 None
             }
-            hir::Expression::Binary(hir::Binary {
+            hir::ExpressionKind::Binary(hir::Binary {
                 lhs,
                 operation,
                 rhs,
@@ -262,7 +262,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
                 Some(self.mir.operands.insert(Operand::Place(result_place)))
             }
-            hir::Expression::Unary(hir::Unary { operation, value }) => {
+            hir::ExpressionKind::Unary(hir::Unary { operation, value }) => {
                 let value = self.lower_expression(ctx, basic_block, *value)?;
 
                 /// Helper to create a new place to store the result of the unary operation.
@@ -354,7 +354,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                     }
                 })
             }
-            hir::Expression::Switch(hir::Switch {
+            hir::ExpressionKind::Switch(hir::Switch {
                 discriminator,
                 branches,
                 default,
@@ -447,7 +447,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
 
                 Some(self.mir.operands.insert(Operand::Place(switch_place)))
             }
-            hir::Expression::Loop(hir::Loop { body }) => {
+            hir::ExpressionKind::Loop(hir::Loop { body }) => {
                 // Create a new local for the loop break value.
                 let loop_local = self
                     .locals
@@ -483,10 +483,14 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 // Produce the local for the break value.
                 Some(self.mir.operands.insert(Operand::Place(loop_place)))
             }
-            hir::Expression::Literal(literal) => Some(self.mir.operands.insert(Operand::Constant(
-                literal_to_constant(&self.ctx.types, literal, self.thir.type_of(expression_id)),
-            ))),
-            hir::Expression::Call(hir::Call { callee, arguments }) => {
+            hir::ExpressionKind::Literal(literal) => Some(self.mir.operands.insert(
+                Operand::Constant(literal_to_constant(
+                    &self.ctx.types,
+                    literal,
+                    self.thir.type_of(expression_id),
+                )),
+            )),
+            hir::ExpressionKind::Call(hir::Call { callee, arguments }) => {
                 // Create a local to store the resulting value.
                 let result = self.mir.places.insert(
                     self.locals
@@ -523,7 +527,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 // Produce the value of this function.
                 Some(self.mir.operands.insert(Operand::Place(result)))
             }
-            hir::Expression::Block(block_id) => {
+            hir::ExpressionKind::Block(block_id) => {
                 // Lower the block
                 let lowered_block = self.lower_block(ctx, *block_id);
 
@@ -541,7 +545,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 // Yield the block's value.
                 lowered_block.operand
             }
-            hir::Expression::Variable(hir::Variable { binding }) => {
+            hir::ExpressionKind::Variable(hir::Variable { binding }) => {
                 Some(match self.bindings[binding] {
                     Binding::Local(local) => {
                         let place = self.mir.places.insert(local.into());
@@ -553,8 +557,8 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                         .insert(Operand::Constant(Constant::Function(function_id))),
                 })
             }
-            hir::Expression::Unreachable => None,
-            hir::Expression::Aggregate(hir::Aggregate { values }) => {
+            hir::ExpressionKind::Unreachable => None,
+            hir::ExpressionKind::Aggregate(hir::Aggregate { values }) => {
                 let ty = self.thir.type_of(expression_id);
 
                 // Create a local to store the resulting value in.
@@ -585,7 +589,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 // Produce the resulting place.
                 Some(self.mir.operands.insert(Operand::Place(result_place)))
             }
-            hir::Expression::Field(hir::Field { lhs, field }) => {
+            hir::ExpressionKind::Field(hir::Field { lhs, field }) => {
                 let lhs_operand = self.lower_expression(ctx, basic_block, *lhs).unwrap();
                 let lhs_place = self.operand_as_place(ctx.function, basic_block, lhs_operand);
 
@@ -596,7 +600,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 let place = self.mir.places.insert(lhs);
                 Some(self.mir.operands.insert(Operand::Place(place)))
             }
-            hir::Expression::Path(hir::Path {
+            hir::ExpressionKind::Path(hir::Path {
                 ty,
                 target_trait,
                 item,
@@ -628,11 +632,11 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
     }
 
     fn expression_to_place(&mut self, expression_id: hir::ExpressionId) -> Place {
-        match &self.thir[expression_id] {
-            hir::Expression::Variable(hir::Variable { binding }) => {
+        match &self.thir[expression_id].kind {
+            hir::ExpressionKind::Variable(hir::Variable { binding }) => {
                 self.bindings[binding].clone().into_local().into()
             }
-            hir::Expression::Unary(hir::Unary {
+            hir::ExpressionKind::Unary(hir::Unary {
                 operation: crate::ir::UnaryOperation::Deref,
                 value,
             }) => {
@@ -641,7 +645,7 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
                 value.projection.push(Projection::Deref);
                 value
             }
-            hir::Expression::Field(hir::Field { lhs, field }) => {
+            hir::ExpressionKind::Field(hir::Field { lhs, field }) => {
                 let mut value = self.expression_to_place(*lhs);
                 value.projection.push(Projection::Field(*field));
                 value

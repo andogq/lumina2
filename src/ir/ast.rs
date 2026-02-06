@@ -12,7 +12,7 @@ create_id!(StatementId);
 create_id!(AstTypeId);
 create_id!(TraitId);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Ast {
     nodes: IndexedVec<AstId, AstNodePtr>,
 
@@ -36,18 +36,7 @@ pub struct Ast {
 
 impl Ast {
     pub fn new() -> Self {
-        Self {
-            nodes: IndexedVec::new(),
-            function_declarations: IndexedVec::new(),
-            blocks: IndexedVec::new(),
-            statements: IndexedVec::new(),
-            expressions: IndexedVec::new(),
-            annotations: BTreeMap::new(),
-            types: IndexedVec::new(),
-            item_functions: Vec::new(),
-            traits: IndexedVec::new(),
-            trait_implementations: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Determine the next [`AstId`] by looking at the length of [`Self::nodes`].

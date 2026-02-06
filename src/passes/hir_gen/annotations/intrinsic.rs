@@ -66,14 +66,12 @@ impl Annotation for IntrinsicAnnotation {
                 );
 
                 // Create an expression referencing the parameter.
-                let value = hir
-                    .expressions
-                    .insert(hir::Expression::Variable(hir::Variable {
-                        binding: hir_signature.parameters[0].0,
-                    }));
+                let value = hir.add_expression(hir::Variable {
+                    binding: hir_signature.parameters[0].0,
+                });
 
                 // Apply unary operation to parameter.
-                hir::Expression::Unary(hir::Unary {
+                hir.add_expression(hir::Unary {
                     operation: *unary_operation,
                     value,
                 })
@@ -87,13 +85,10 @@ impl Annotation for IntrinsicAnnotation {
 
                 // Create expressions for each parameter.
                 let [lhs, rhs] = [hir_signature.parameters[0].0, hir_signature.parameters[1].0]
-                    .map(|binding| {
-                        hir.expressions
-                            .insert(hir::Expression::Variable(hir::Variable { binding }))
-                    });
+                    .map(|binding| hir.add_expression(hir::Variable { binding }));
 
                 // Apply binary operation to parameters.
-                hir::Expression::Binary(hir::Binary {
+                hir.add_expression(hir::Binary {
                     lhs,
                     operation: *binary_operation,
                     rhs,
@@ -102,13 +97,8 @@ impl Annotation for IntrinsicAnnotation {
             IntrinsicImplementation::LlvmIntrinsic(llvm_intrinsic) => todo!(),
         };
 
-        let expression = hir.expressions.insert(expression);
-
         // Update the body of the HIR node.
-        let entry = hir.blocks.insert(hir::Block {
-            statements: vec![],
-            expression,
-        });
+        let entry = hir.add_block(vec![], expression);
         hir[hir_node].entry = entry;
     }
 }

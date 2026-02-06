@@ -2,25 +2,30 @@
 source: src/passes/hir_gen/mod.rs
 expression: "If(If { conditions: [(ExpressionId(0), BlockId(0)), (ExpressionId(1), BlockId(1))], otherwise: None })"
 ---
-Switch(
-    Switch {
-        discriminator: ExpressionId(
-            2,
-        ),
-        branches: [
-            (
-                Boolean(
-                    true,
-                ),
-                BlockId(
-                    1,
-                ),
-            ),
-        ],
-        default: Some(
-            BlockId(
+Expression {
+    id: HirId(
+        8,
+    ),
+    kind: Switch(
+        Switch {
+            discriminator: ExpressionId(
                 2,
             ),
-        ),
-    },
-)
+            branches: [
+                (
+                    Boolean(
+                        true,
+                    ),
+                    BlockId(
+                        1,
+                    ),
+                ),
+            ],
+            default: Some(
+                BlockId(
+                    2,
+                ),
+            ),
+        },
+    ),
+}
