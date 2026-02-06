@@ -6,7 +6,6 @@ FunctionDeclaration {
     id: AstId(
         0,
     ),
-    annotations: [],
     signature: FunctionSignature {
         name: StringId(
             0,

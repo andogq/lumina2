@@ -6,7 +6,6 @@ Trait {
     id: AstId(
         0,
     ),
-    annotations: [],
     name: StringId(
         5,
     ),

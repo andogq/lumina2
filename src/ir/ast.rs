@@ -11,7 +11,6 @@ create_id!(FunctionId);
 create_id!(StatementId);
 create_id!(AstTypeId);
 create_id!(TraitId);
-create_id!(AnnotationId);
 
 #[derive(Clone, Debug)]
 pub struct Ast {
@@ -22,7 +21,9 @@ pub struct Ast {
     pub blocks: IndexedVec<BlockId, Block>,
     pub statements: IndexedVec<StatementId, Statement>,
     pub expressions: IndexedVec<ExpressionId, Expression>,
-    pub annotations: IndexedVec<AnnotationId, Annotation>,
+
+    /// Storage for each annotation against their node.
+    pub annotations: BTreeMap<AstId, Vec<Annotation>>,
 
     pub types: IndexedVec<AstTypeId, AstType>,
 
@@ -41,7 +42,7 @@ impl Ast {
             blocks: IndexedVec::new(),
             statements: IndexedVec::new(),
             expressions: IndexedVec::new(),
-            annotations: IndexedVec::new(),
+            annotations: BTreeMap::new(),
             types: IndexedVec::new(),
             item_functions: Vec::new(),
             traits: IndexedVec::new(),
@@ -57,19 +58,17 @@ impl Ast {
     /// Add a [`FunctionDeclaration`] to the AST.
     pub fn add_function_declaration(
         &mut self,
-        annotations: Vec<AnnotationId>,
         signature: FunctionSignature,
         implementation: FunctionImplementation,
     ) -> FunctionId {
         let id = self.next_id();
-        let id = self.function_declarations.insert(FunctionDeclaration {
+        let function_id = self.function_declarations.insert(FunctionDeclaration {
             id,
-            annotations,
             signature,
             implementation,
         });
-        self.nodes.insert(id.into());
-        id
+        self.nodes.insert(function_id.into());
+        function_id
     }
 
     /// Add a [`Block`] to the AST.
@@ -113,19 +112,27 @@ impl Ast {
     /// Add a [`Trait`] to the AST.
     pub fn add_trait(
         &mut self,
-        annotations: Vec<AnnotationId>,
         name: StringId,
         methods: BTreeMap<StringId, FunctionSignature>,
     ) -> TraitId {
         let id = self.next_id();
-        let id = self.traits.insert(Trait {
-            id,
-            annotations,
-            name,
-            methods,
-        });
-        self.nodes.insert(id.into());
-        id
+        let trait_id = self.traits.insert(Trait { id, name, methods });
+        self.nodes.insert(trait_id.into());
+        trait_id
+    }
+
+    /// Get the [`AstId`] of a node.
+    pub fn get_id<I>(&mut self, id: I) -> AstId
+    where
+        I: AstNodeId,
+        Self: Index<I, Output = I::Node>,
+    {
+        I::get_id(&self[id])
+    }
+
+    /// Annotate a node.
+    pub fn annotate(&mut self, node: AstId, annotation: Annotation) {
+        self.annotations.entry(node).or_default().push(annotation);
     }
 }
 
@@ -135,7 +142,6 @@ indexing! {
         blocks[BlockId] -> Block,
         statements[StatementId] -> Statement,
         expressions[ExpressionId] -> Expression,
-        annotations[AnnotationId] -> Annotation,
         types[AstTypeId] -> AstType,
         traits[TraitId] -> Trait,
     }
@@ -159,6 +165,12 @@ enum_conversion! {
     Trait: TraitId,
 }
 
+pub trait AstNodeId {
+    type Node;
+
+    fn get_id(node: &Self::Node) -> AstId;
+}
+
 /// Type representation used within the [`Ast`].
 #[derive(Clone, Debug)]
 pub enum AstType {
@@ -180,6 +192,20 @@ pub struct Annotation {
     pub value: Option<StringId>,
 }
 
+impl Annotation {
+    pub fn new(key: StringId, value: Option<StringId>) -> Self {
+        Self { key, value }
+    }
+
+    pub fn key(key: StringId) -> Self {
+        Self::new(key, None)
+    }
+
+    pub fn key_value(key: StringId, value: StringId) -> Self {
+        Self::new(key, Some(value))
+    }
+}
+
 mod function {
     use super::*;
 
@@ -193,10 +219,16 @@ mod function {
     #[derive(Clone, Debug)]
     pub struct FunctionDeclaration {
         pub id: AstId,
-        #[expect(dead_code, reason = "annotations not used yet")]
-        pub annotations: Vec<AnnotationId>,
         pub signature: FunctionSignature,
         pub implementation: FunctionImplementation,
+    }
+
+    impl AstNodeId for FunctionId {
+        type Node = FunctionDeclaration;
+
+        fn get_id(node: &Self::Node) -> AstId {
+            node.id
+        }
     }
 
     /// The implementation of a function.
@@ -225,6 +257,14 @@ mod block {
         pub statements: Vec<StatementId>,
         pub expression: Option<ExpressionId>,
     }
+
+    impl AstNodeId for BlockId {
+        type Node = Block;
+
+        fn get_id(node: &Self::Node) -> AstId {
+            node.id
+        }
+    }
 }
 
 mod statement {
@@ -236,6 +276,14 @@ mod statement {
     pub struct Statement {
         pub id: AstId,
         pub kind: StatementKind,
+    }
+
+    impl AstNodeId for StatementId {
+        type Node = Statement;
+
+        fn get_id(node: &Self::Node) -> AstId {
+            node.id
+        }
     }
 
     impl Deref for Statement {
@@ -291,6 +339,14 @@ mod expression {
     pub struct Expression {
         pub id: AstId,
         pub kind: ExpressionKind,
+    }
+
+    impl AstNodeId for ExpressionId {
+        type Node = Expression;
+
+        fn get_id(node: &Self::Node) -> AstId {
+            node.id
+        }
     }
 
     impl Deref for Expression {
@@ -410,20 +466,22 @@ mod expression {
 #[derive(Clone, Debug)]
 pub struct Trait {
     pub id: AstId,
-    /// Annotations attached to this trait.
-    #[expect(dead_code, reason = "annotations not used yet")]
-    pub annotations: Vec<AnnotationId>,
     /// Original name of the trait.
     pub name: StringId,
     /// Methods defined within the trait.
     pub methods: BTreeMap<StringId, FunctionSignature>,
 }
 
+impl AstNodeId for TraitId {
+    type Node = Trait;
+
+    fn get_id(node: &Self::Node) -> AstId {
+        node.id
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TraitImplementation {
-    /// Annotations attached to this trait implementation.
-    #[expect(dead_code, reason = "annotations not used yet")]
-    pub annotations: Vec<AnnotationId>,
     pub trait_name: StringId,
     pub target_ty: AstTypeId,
     pub methods: BTreeMap<StringId, FunctionId>,

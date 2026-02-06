@@ -17,24 +17,33 @@ impl<'ctx, 'cst> Pass<'ctx, 'cst> for AstGen<'ctx> {
         let mut ast_gen = Self::new(ctx);
 
         for item in &cst.items {
-            let annotations = item
-                .annotations
-                .iter()
-                .map(|annotation| ast_gen.lower_annotation(annotation))
-                .collect();
-
-            match &item.kind {
+            let id = match &item.kind {
                 cst::ItemKind::FunctionDeclaration(function_declaration) => {
-                    ast_gen.lower_item_function(function_declaration, annotations);
+                    let id = ast_gen.lower_item_function(function_declaration);
+                    Some(ast_gen.ast.get_id(id))
                 }
                 cst::ItemKind::TraitDeclaration(trait_declaration) => {
-                    ast_gen.lower_trait_declaration(trait_declaration, annotations);
+                    let id = ast_gen.lower_trait_declaration(trait_declaration);
+                    Some(ast_gen.ast.get_id(id))
                 }
                 cst::ItemKind::TraitImplementation(trait_implementation) => {
-                    ast_gen.lower_trait_implementation(trait_implementation, annotations);
+                    ast_gen.lower_trait_implementation(trait_implementation);
+                    None
                 }
                 cst::ItemKind::ExternalFunction(external_function) => {
-                    ast_gen.lower_external_function(external_function, annotations);
+                    let id = ast_gen.lower_external_function(external_function);
+                    Some(ast_gen.ast.get_id(id))
+                }
+            };
+
+            if !item.annotations.is_empty() {
+                let Some(id) = id else {
+                    panic!("item does not support annotations.");
+                };
+
+                for annotation in &item.annotations {
+                    let annotation = ast_gen.lower_annotation(annotation);
+                    ast_gen.ast.annotate(id, annotation);
                 }
             }
         }
@@ -51,8 +60,8 @@ impl<'ctx> AstGen<'ctx> {
         }
     }
 
-    fn lower_annotation(&mut self, annotation: &cst::Annotation) -> AnnotationId {
-        let annotation = Annotation {
+    fn lower_annotation(&mut self, annotation: &cst::Annotation) -> Annotation {
+        Annotation {
             key: self.ctx.strings.intern(&annotation.key.0),
             value: match &annotation.value {
                 cst::AnnotationValue::None => None,
@@ -60,40 +69,26 @@ impl<'ctx> AstGen<'ctx> {
                     Some(self.ctx.strings.intern(&value.0))
                 }
             },
-        };
-        self.ast.annotations.insert(annotation)
+        }
     }
 
-    fn lower_function(
-        &mut self,
-        function: &cst::FunctionDeclaration,
-        annotations: Vec<AnnotationId>,
-    ) -> FunctionId {
+    fn lower_function(&mut self, function: &cst::FunctionDeclaration) -> FunctionId {
         let signature = self.lower_function_signature(&function.signature);
         let implementation = FunctionImplementation::Body(self.lower_block(&function.body));
-        self.ast
-            .add_function_declaration(annotations, signature, implementation)
+        self.ast.add_function_declaration(signature, implementation)
     }
 
-    fn lower_item_function(
-        &mut self,
-        function: &cst::FunctionDeclaration,
-        annotations: Vec<AnnotationId>,
-    ) -> FunctionId {
-        let id = self.lower_function(function, annotations);
+    fn lower_item_function(&mut self, function: &cst::FunctionDeclaration) -> FunctionId {
+        let id = self.lower_function(function);
         self.ast.item_functions.push(id);
         id
     }
 
-    fn lower_external_function(
-        &mut self,
-        external_function: &cst::ExternalFunction,
-        annotations: Vec<AnnotationId>,
-    ) -> FunctionId {
+    fn lower_external_function(&mut self, external_function: &cst::ExternalFunction) -> FunctionId {
         let signature = self.lower_function_signature(&external_function.signature);
-        let id =
-            self.ast
-                .add_function_declaration(annotations, signature, FunctionImplementation::None);
+        let id = self
+            .ast
+            .add_function_declaration(signature, FunctionImplementation::None);
         self.ast.item_functions.push(id);
         id
     }
@@ -322,11 +317,7 @@ impl<'ctx> AstGen<'ctx> {
     }
 
     /// Lower a [`cst::TraitDeclaration`] into a [`Trait`], producing a unique [`TraitId`].
-    fn lower_trait_declaration(
-        &mut self,
-        trait_declaration: &cst::TraitDeclaration,
-        annotations: Vec<AnnotationId>,
-    ) -> TraitId {
+    fn lower_trait_declaration(&mut self, trait_declaration: &cst::TraitDeclaration) -> TraitId {
         let methods = trait_declaration
             .methods
             .iter()
@@ -337,34 +328,22 @@ impl<'ctx> AstGen<'ctx> {
                 )
             })
             .collect();
-        self.ast.add_trait(
-            annotations,
-            self.ctx.strings.intern(&trait_declaration.name.0),
-            methods,
-        )
+        self.ast
+            .add_trait(self.ctx.strings.intern(&trait_declaration.name.0), methods)
     }
 
-    fn lower_trait_implementation(
-        &mut self,
-        trait_implementation: &cst::TraitImplementation,
-        annotations: Vec<AnnotationId>,
-    ) {
+    fn lower_trait_implementation(&mut self, trait_implementation: &cst::TraitImplementation) {
         let methods = trait_implementation
             .methods
             .iter()
             .map(|method| {
-                let method = self.lower_function(
-                    method,
-                    // Currently, annotations cannot be attached to non-item functions.
-                    Vec::new(),
-                );
+                let method = self.lower_function(method);
 
                 (self.ast[method].signature.name, method)
             })
             .collect();
         let target_ty = self.lower_type(&trait_implementation.ty);
         self.ast.trait_implementations.push(TraitImplementation {
-            annotations,
             trait_name: self.ctx.strings.intern(&trait_implementation.name.0),
             target_ty,
             methods,
@@ -439,7 +418,7 @@ mod test {
     )]
     fn trait_declaration(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
         let mut pass = AstGen::new(&mut ctx);
-        let trait_id = pass.lower_trait_declaration(&parse(source), Vec::new());
+        let trait_id = pass.lower_trait_declaration(&parse(source));
         assert_debug_snapshot!(name, pass.ast[trait_id], source);
     }
 
@@ -455,7 +434,7 @@ mod test {
     )]
     fn trait_implementation(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
         let mut pass = AstGen::new(&mut ctx);
-        pass.lower_trait_implementation(&parse(source), Vec::new());
+        pass.lower_trait_implementation(&parse(source));
         assert_debug_snapshot!(name, pass.ast.trait_implementations[0], source);
     }
 
@@ -465,7 +444,7 @@ mod test {
     fn lower_annotation(#[case] name: &str, mut ctx: Ctx, #[case] source: &str) {
         let mut pass = AstGen::new(&mut ctx);
         let annotation = pass.lower_annotation(&parse(source));
-        assert_debug_snapshot!(name, pass.ast.annotations[annotation], source);
+        assert_debug_snapshot!(name, annotation, source);
     }
 
     #[rstest]
@@ -481,7 +460,7 @@ mod test {
     )]
     fn external_function(#[case] name: &str, mut ctx: Ctx, #[case] source: &'static str) {
         let mut pass = AstGen::new(&mut ctx);
-        let id = pass.lower_external_function(&parse(source), vec![]);
+        let id = pass.lower_external_function(&parse(source));
         assert_debug_snapshot!(name, pass.ast[id], source);
     }
 }

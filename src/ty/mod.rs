@@ -341,7 +341,6 @@ mod test {
             });
             let block_id = ast.add_block(vec![statement_id], None);
             let function_id = ast.add_function_declaration(
-                Vec::new(),
                 ast::FunctionSignature {
                     name: ctx.strings.intern("main"),
                     parameters: Vec::new(),

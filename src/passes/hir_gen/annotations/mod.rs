@@ -5,16 +5,16 @@ use crate::prelude::*;
 fn run<A: Annotation>(ctx: &mut Ctx, ast: &ast::Ast, hir: &mut hir::Hir) {
     for (id, node) in A::Node::get_all(ast).iter_pairs() {
         // Filter out all nodes where the ID doesn't match.
-        if node
-            .annotations()
-            .iter()
-            .map(|annotation| &ast[*annotation])
-            .all(|annotation| A::NAME != ctx.strings.get(annotation.key))
-        {
-            continue;
-        }
-
-        A::map(ctx, ast, hir, id, todo!());
+        // if node
+        //     .annotations()
+        //     .iter()
+        //     .map(|annotation| &ast[*annotation])
+        //     .all(|annotation| A::NAME != ctx.strings.get(annotation.key))
+        // {
+        //     continue;
+        // }
+        //
+        // A::map(ctx, ast, hir, id, todo!());
     }
 }
 
@@ -59,9 +59,6 @@ pub trait AttributeNode: Sized {
 
     /// Fetch a list of all nodes from the AST.
     fn get_all(ast: &ast::Ast) -> &IndexedVec<Self::AstId, Self>;
-
-    /// Fetch a list of all annotations.
-    fn annotations(&self) -> &[ast::AnnotationId];
 }
 
 impl AttributeNode for ast::FunctionDeclaration {
@@ -70,9 +67,5 @@ impl AttributeNode for ast::FunctionDeclaration {
 
     fn get_all(ast: &ast::Ast) -> &IndexedVec<Self::AstId, Self> {
         &ast.function_declarations
-    }
-
-    fn annotations(&self) -> &[ast::AnnotationId] {
-        &self.annotations
     }
 }
