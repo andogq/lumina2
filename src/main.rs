@@ -528,6 +528,19 @@ mod test {
         }
 
         #[test]
+        fn unary_intrinsic() {
+            assert_eq!(
+                run(r#"@intrinsic
+                    extern fn u8_not(n: u8) -> u8;
+
+                    fn main() -> u8 {
+                        u8_not(183)
+                    }"#),
+                72
+            );
+        }
+
+        #[test]
         fn add_overflow() {
             assert_eq!(
                 run(r#"@intrinsic

@@ -213,4 +213,5 @@ macro_rules! intrinsics {
 intrinsics! {
     u8_add_wrapping(lhs: u8, rhs: u8) -> u8 { BinaryOperation(Plus) };
     u8_add_overflow(lhs: u8, rhs: u8) -> (u8, bool) { BinaryOperation(PlusWithOverflow) };
+    u8_not(n: u8) -> u8 { UnaryOperation(Not) };
 }
