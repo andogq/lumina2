@@ -2,7 +2,31 @@ mod intrinsic;
 
 use crate::prelude::*;
 
-fn run<A: Annotation>(ctx: &mut Ctx, ast: &ast::Ast, hir: &mut hir::Hir) {
+/// An annotation attached to an item.
+#[derive(Clone, Debug)]
+#[expect(dead_code, reason = "annotations not used yet")]
+pub struct Annotation {
+    /// Key of the annotation.
+    pub key: StringId,
+    /// Value of the annotation, which may or may not be present.
+    pub value: Option<StringId>,
+}
+
+impl Annotation {
+    pub fn new(key: StringId, value: Option<StringId>) -> Self {
+        Self { key, value }
+    }
+
+    pub fn key(key: StringId) -> Self {
+        Self::new(key, None)
+    }
+
+    pub fn key_value(key: StringId, value: StringId) -> Self {
+        Self::new(key, Some(value))
+    }
+}
+
+fn run<A: AnnotationHandler>(ctx: &mut Ctx, ast: &ast::Ast, hir: &mut hir::Hir) {
     for (id, node) in A::Node::get_all(ast).iter_pairs() {
         // Filter out all nodes where the ID doesn't match.
         // if node
@@ -18,7 +42,7 @@ fn run<A: Annotation>(ctx: &mut Ctx, ast: &ast::Ast, hir: &mut hir::Hir) {
     }
 }
 
-pub trait Annotation {
+pub trait AnnotationHandler {
     /// Name which this annotation applies to.
     ///
     /// ```txt

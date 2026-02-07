@@ -4,7 +4,7 @@ use super::*;
 
 #[derive(Clone, Debug)]
 pub struct IntrinsicAnnotation;
-impl Annotation for IntrinsicAnnotation {
+impl AnnotationHandler for IntrinsicAnnotation {
     const NAME: &'static str = "intrinsic";
 
     type Node = ast::FunctionDeclaration;

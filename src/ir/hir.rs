@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{passes::hir_gen::annotations::Annotation, prelude::*};
 
 pub use self::{block::*, expression::*, functions::*, statement::*};
 
@@ -19,6 +19,7 @@ pub struct Hir {
     pub expressions: IndexedVec<ExpressionId, Expression>,
     pub traits: IndexedVec<TraitId, Trait>,
     pub trait_implementations: HashMap<TraitImplementationKey, TraitImplementation>,
+    pub annotations: BTreeMap<HirId, Vec<Annotation>>,
 }
 
 impl Hir {
@@ -102,6 +103,20 @@ impl Hir {
         self.nodes.insert(trait_id.into());
         trait_id
     }
+
+    /// Get the [`HirId`] of some node.
+    pub fn get_id<I>(&self, id: I) -> HirId
+    where
+        I: HirNodeId,
+        Self: Index<I, Output = I::Node>,
+    {
+        I::get_id(&self[id])
+    }
+
+    /// Annotate a node.
+    pub fn annotate(&mut self, node: HirId, annotation: Annotation) {
+        self.annotations.entry(node).or_default().push(annotation);
+    }
 }
 
 indexing! {
@@ -138,6 +153,12 @@ enum_conversion! {
     Statement: StatementId,
     Expression: ExpressionId,
     Trait: TraitId,
+}
+
+pub trait HirNodeId {
+    type Node;
+
+    fn get_id(node: &Self::Node) -> HirId;
 }
 
 mod functions {
@@ -182,6 +203,14 @@ mod functions {
         pub signature: FunctionSignature,
         pub entry: BlockId,
     }
+
+    impl HirNodeId for FunctionId {
+        type Node = Function;
+
+        fn get_id(node: &Self::Node) -> HirId {
+            node.id
+        }
+    }
 }
 
 mod block {
@@ -193,6 +222,14 @@ mod block {
         pub statements: Vec<StatementId>,
         pub expression: ExpressionId,
     }
+
+    impl HirNodeId for BlockId {
+        type Node = Block;
+
+        fn get_id(node: &Self::Node) -> HirId {
+            node.id
+        }
+    }
 }
 
 mod statement {
@@ -202,6 +239,14 @@ mod statement {
     pub struct Statement {
         pub id: HirId,
         pub kind: StatementKind,
+    }
+
+    impl HirNodeId for StatementId {
+        type Node = Statement;
+
+        fn get_id(node: &Self::Node) -> HirId {
+            node.id
+        }
     }
 
     #[derive(Clone, Debug)]
@@ -270,6 +315,14 @@ mod expression {
     pub struct Expression {
         pub id: HirId,
         pub kind: ExpressionKind,
+    }
+
+    impl HirNodeId for ExpressionId {
+        type Node = Expression;
+
+        fn get_id(node: &Self::Node) -> HirId {
+            node.id
+        }
     }
 
     impl Deref for Expression {
@@ -395,6 +448,14 @@ pub struct Trait {
     pub method_scope: ScopeId,
     pub method_bindings: HashMap<IdentifierBindingId, TraitMethodId>,
     pub methods: IndexedVec<TraitMethodId, FunctionSignature<MaybeSelfType>>,
+}
+
+impl HirNodeId for TraitId {
+    type Node = Trait;
+
+    fn get_id(node: &Self::Node) -> HirId {
+        node.id
+    }
 }
 
 // Key to identifier a specific implementation of a trait for a given type.

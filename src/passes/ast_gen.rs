@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{passes::hir_gen::annotations::Annotation, prelude::*};
 
 use ast::*;
 
@@ -238,7 +238,7 @@ impl<'ctx> AstGen<'ctx> {
                 }
             }),
             cst::Expression::Parenthesis(cst::Parenthesis { expression, .. }) => {
-                return self.lower_expression(expression);
+                self.lower_expression(expression)
             }
             cst::Expression::Call(cst::Call {
                 callee, arguments, ..

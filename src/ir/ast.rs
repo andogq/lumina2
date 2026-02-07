@@ -1,6 +1,4 @@
-use std::collections::BTreeMap;
-
-use crate::prelude::*;
+use crate::{passes::hir_gen::annotations::Annotation, prelude::*};
 
 pub use self::{block::*, expression::*, function::*, statement::*};
 
@@ -40,7 +38,7 @@ impl Ast {
     }
 
     /// Determine the next [`AstId`] by looking at the length of [`Self::nodes`].
-    fn next_id(&mut self) -> AstId {
+    fn next_id(&self) -> AstId {
         AstId::from_id(self.nodes.len())
     }
 
@@ -111,7 +109,7 @@ impl Ast {
     }
 
     /// Get the [`AstId`] of a node.
-    pub fn get_id<I>(&mut self, id: I) -> AstId
+    pub fn get_id<I>(&self, id: I) -> AstId
     where
         I: AstNodeId,
         Self: Index<I, Output = I::Node>,
@@ -169,30 +167,6 @@ pub enum AstType {
     Named(StringId),
     /// A tuple type (`(i8, bool, u8)`).
     Tuple(Vec<AstTypeId>),
-}
-
-/// An annotation attached to an item.
-#[derive(Clone, Debug)]
-#[expect(dead_code, reason = "annotations not used yet")]
-pub struct Annotation {
-    /// Key of the annotation.
-    pub key: StringId,
-    /// Value of the annotation, which may or may not be present.
-    pub value: Option<StringId>,
-}
-
-impl Annotation {
-    pub fn new(key: StringId, value: Option<StringId>) -> Self {
-        Self { key, value }
-    }
-
-    pub fn key(key: StringId) -> Self {
-        Self::new(key, None)
-    }
-
-    pub fn key_value(key: StringId, value: StringId) -> Self {
-        Self::new(key, Some(value))
-    }
 }
 
 mod function {

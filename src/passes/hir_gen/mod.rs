@@ -1,4 +1,4 @@
-mod annotations;
+pub mod annotations;
 
 use crate::prelude::*;
 
@@ -28,27 +28,47 @@ impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
     fn run(ctx: &'ctx mut Ctx, ast: &'ast Self::Input, _extra: ()) -> PassResult<Self::Output> {
         let mut hir_gen = Self::new(ctx, ast);
 
+        // Mapping of AstId to HirId.
+        let mut source = BTreeMap::new();
+
         // Errors generated throughout this pass.
         let mut errors = Vec::new();
 
         // Register each trait declaration.
         for trait_declaration in ast.traits.iter() {
-            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
+            let hir_id = run_and_report!(hir_gen.ctx, errors, || hir_gen
                 .lower_trait_declaration(trait_declaration));
+
+            if let Ok(hir_id) = hir_id {
+                source.insert(trait_declaration.id, hir_gen.hir.get_id(hir_id));
+            }
         }
 
         // Lower each top-level function, saving a map from the old to new ID.
         let item_ctx = FunctionCtx::item();
         for &function_id in &ast.item_functions {
             let function = &ast[function_id];
-            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
+            let hir_id = run_and_report!(hir_gen.ctx, errors, || hir_gen
                 .lower_function(&item_ctx, function));
+
+            if let Ok(hir_id) = hir_id {
+                source.insert(function.id, hir_gen.hir.get_id(hir_id));
+            }
         }
 
         // Lower each trait implementation.
         for trait_implementation in ast.trait_implementations.iter() {
             let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
                 .lower_trait_implementation(trait_implementation));
+        }
+
+        // Copy over all annotations.
+        for (ast_id, annotations) in &hir_gen.ast.annotations {
+            let hir_id = source[ast_id];
+
+            for annotation in annotations {
+                hir_gen.hir.annotate(hir_id, annotation.clone());
+            }
         }
 
         Ok(PassSuccess::new(hir_gen.hir, errors))

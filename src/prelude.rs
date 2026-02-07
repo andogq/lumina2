@@ -27,7 +27,7 @@ pub use crate::{
 
 // Common items from standard library.
 pub use ::std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
