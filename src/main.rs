@@ -528,6 +528,28 @@ mod test {
         }
 
         #[test]
+        #[should_panic(expected = "intrinsic signature mismatch")]
+        fn invalid_intrinsic_signature_type() {
+            run(r#"@intrinsic
+                extern fn u8_add_wrapping(lhs: i8, rhs: i8) -> i8;
+
+                fn main() -> u8 {
+                    u8_add_wrapping(7, 10)
+                }"#);
+        }
+
+        #[test]
+        #[should_panic(expected = "intrinsic signature mismatch")]
+        fn invalid_intrinsic_signature_parameter_count() {
+            run(r#"@intrinsic
+                extern fn u8_add_wrapping(lhs: u8) -> u8;
+
+                fn main() -> u8 {
+                    u8_add_wrapping(7)
+                }"#);
+        }
+
+        #[test]
         fn unary_intrinsic() {
             assert_eq!(
                 run(r#"@intrinsic

@@ -404,16 +404,20 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         lhs_ty_id,
                     ),
-                    (Type::U8, BinaryOperation::PlusWithOverflow, Type::U8) => {
+                    (
+                        lhs_ty @ (Type::U8 | Type::I8),
+                        BinaryOperation::PlusWithOverflow,
+                        rhs_ty @ (Type::U8 | Type::I8),
+                    ) if lhs_ty == rhs_ty => {
                         let intrinsic = Intrinsic::find("llvm.uadd.with.overflow").unwrap();
                         let intrinsic_function = intrinsic
-                            .get_declaration(&self.module, &[self.ink.i8_type().into()])
+                            .get_declaration(&self.module, &[self.basic_ty(lhs_ty_id)])
                             .unwrap();
                         let call_result = builder
                             .build_call(
                                 intrinsic_function,
                                 &[lhs.into(), rhs.into()],
-                                "u8_add_overflow",
+                                "add_overflow",
                             )
                             .unwrap();
 
