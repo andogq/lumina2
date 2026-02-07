@@ -33,13 +33,13 @@ pub fn intrinsic_handler(ctx: &mut Ctx, hir: &mut hir::Hir, hir_node: HirId) {
                 .parameters
                 .iter()
                 .zip(hir_signature.parameters.iter().map(|(_, ty)| *ty))
-                .all(|(intrinsic, signature)| intrinsic.into_type(&mut ctx.types) == signature)
+                .all(|(intrinsic, signature)| intrinsic.as_type(&mut ctx.types) == signature)
             // Return type must match.
             && intrinsic
                 .signature
                 .return_ty
                 .as_ref()
-                .map(|ty| ty.into_type(&mut ctx.types))
+                .map(|ty| ty.as_type(&mut ctx.types))
                 .unwrap_or(ctx.types.unit())
             == hir_signature.return_ty;
     if !signature_valid {
@@ -113,7 +113,7 @@ enum PrimitiveType {
 }
 
 impl PrimitiveType {
-    fn into_type(&self, types: &mut Types) -> TypeId {
+    fn as_type(&self, types: &mut Types) -> TypeId {
         match self {
             PrimitiveType::U8 => types.u8(),
             PrimitiveType::I8 => types.i8(),
@@ -121,7 +121,7 @@ impl PrimitiveType {
             PrimitiveType::Tuple(primitive_types) => {
                 let inner = primitive_types
                     .iter()
-                    .map(|ty| ty.into_type(types))
+                    .map(|ty| ty.as_type(types))
                     .collect::<Vec<_>>();
                 types.tuple(inner)
             }
@@ -214,4 +214,8 @@ intrinsics! {
     u8_add_wrapping(lhs: u8, rhs: u8) -> u8 { BinaryOperation(Plus) };
     u8_add_overflow(lhs: u8, rhs: u8) -> (u8, bool) { BinaryOperation(PlusWithOverflow) };
     u8_not(n: u8) -> u8 { UnaryOperation(Not) };
+
+    i8_add_wrapping(lhs: i8, rhs: i8) -> i8 { BinaryOperation(Plus) };
+    i8_add_overflow(lhs: i8, rhs: i8) -> (i8, bool) { BinaryOperation(PlusWithOverflow) };
+    i8_not(n: i8) -> i8 { UnaryOperation(Not) };
 }
