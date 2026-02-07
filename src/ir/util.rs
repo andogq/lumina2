@@ -74,6 +74,8 @@ pub enum BinaryOperation {
     Multiply,
     Divide,
 
+    PlusWithOverflow,
+
     LogicalAnd,
     LogicalOr,
 

@@ -526,5 +526,24 @@ mod test {
                 17
             );
         }
+
+        #[test]
+        fn add_overflow() {
+            assert_eq!(
+                run(r#"@intrinsic
+                    extern fn u8_add_overflow(lhs: u8, rhs: u8) -> (u8, bool);
+
+                    fn main() -> u8 {
+                        let result = u8_add_overflow(255, 1);
+
+                        if result.1 {
+                            123
+                        } else {
+                            4
+                        }
+                    }"#),
+                123
+            );
+        }
     }
 }

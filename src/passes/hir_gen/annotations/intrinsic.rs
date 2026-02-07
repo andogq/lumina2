@@ -84,7 +84,6 @@ pub fn intrinsic_handler(ctx: &mut Ctx, hir: &mut hir::Hir, hir_node: HirId) {
                 rhs,
             })
         }
-        IntrinsicImplementation::LlvmIntrinsic(llvm_intrinsic) => todo!(),
     };
 
     // Update the body of the HIR node.
@@ -134,11 +133,7 @@ impl PrimitiveType {
 pub enum IntrinsicImplementation {
     UnaryOperation(UnaryOperation),
     BinaryOperation(BinaryOperation),
-    LlvmIntrinsic(LlvmIntrinsic),
 }
-
-#[derive(Clone, Debug)]
-pub enum LlvmIntrinsic {}
 
 macro_rules! intrinsics {
     (@return_type) => {
@@ -174,6 +169,7 @@ macro_rules! intrinsics {
     (
         @intrinsics
         [$($complete:tt)*]
+        // spell-checker: disable-next-line
         $name:ident ($($parameter_name:ident: $parameter_type:tt),* $(,)?) $(-> $return_type:tt)? { $implementation:expr };
         $($rest:tt)*
     ) => {
@@ -201,7 +197,6 @@ macro_rules! intrinsics {
                 IntrinsicImplementation::*,
                 BinaryOperation::*,
                 UnaryOperation::*,
-                LlvmIntrinsic::*,
             };
 
             &[
@@ -217,4 +212,5 @@ macro_rules! intrinsics {
 
 intrinsics! {
     u8_add_wrapping(lhs: u8, rhs: u8) -> u8 { BinaryOperation(Plus) };
+    u8_add_overflow(lhs: u8, rhs: u8) -> (u8, bool) { BinaryOperation(PlusWithOverflow) };
 }

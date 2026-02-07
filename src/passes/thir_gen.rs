@@ -239,6 +239,23 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
                         // Result is the same as the input.
                         self.constraints.equal(expression, lhs);
                     }
+                    BinaryOperation::PlusWithOverflow => {
+                        // Operands must equal each other.
+                        self.constraints.equal(lhs, rhs);
+                        // Operands should be integers.
+                        self.constraints.integer(lhs);
+                        self.constraints.integer(rhs);
+                        // Result is a tuple.
+                        self.constraints.aggregate(expression, 2);
+                        // First tuple field is the same as the input.
+                        self.constraints
+                            .equal(self.type_vars.intern(TypeVar::Field(expression, 0)), lhs);
+                        // Second tuple field is a boolean indicating overflow.
+                        self.constraints.equal(
+                            self.type_vars.intern(TypeVar::Field(expression, 1)),
+                            self.type_vars.intern(self.ctx.types.boolean()),
+                        );
+                    }
                     BinaryOperation::Equal | BinaryOperation::NotEqual => {
                         // Operands must be identical
                         self.constraints.equal(lhs, rhs);
