@@ -91,23 +91,25 @@ impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
     fn add_function_constraints(&mut self, function_id: FunctionId) {
         let function = &self.hir[function_id];
 
-        // Add constraints for the function parameters.
-        for (parameter_binding, parameter_ty) in &function.signature.parameters {
+        if let Some(entry) = function.entry {
+            // Add constraints for the function parameters.
+            for (parameter_binding, parameter_ty) in &function.signature.parameters {
+                self.constraints.equal(
+                    self.type_vars.intern(*parameter_binding),
+                    self.type_vars.intern(*parameter_ty),
+                );
+            }
+
+            // Add constraint for the function return type (the body of the function must result in the
+            // return type).
             self.constraints.equal(
-                self.type_vars.intern(*parameter_binding),
-                self.type_vars.intern(*parameter_ty),
+                self.type_vars.intern(self.hir[entry].expression),
+                self.type_vars.intern(function.signature.return_ty),
             );
+
+            let ctx = ConstraintCtx::new(function_id);
+            self.add_block_constraints(&ctx, entry);
         }
-
-        // Add constraint for the function return type (the body of the function must result in the
-        // return type).
-        self.constraints.equal(
-            self.type_vars.intern(self.hir[function.entry].expression),
-            self.type_vars.intern(function.signature.return_ty),
-        );
-
-        let ctx = ConstraintCtx::new(function_id);
-        self.add_block_constraints(&ctx, function.entry);
     }
 
     /// Add constraints required to check a trait implementation. Will ensure that all implemented
@@ -491,7 +493,7 @@ mod test {
                     .collect(),
                 return_ty: ctx.types.get(return_ty),
             },
-            BlockId::from_id(0),
+            Some(BlockId::from_id(0)),
         );
         let function = &hir[function_id];
 
@@ -544,7 +546,7 @@ mod test {
                 parameters: Vec::new(),
                 return_ty: ctx.types.u8(),
             },
-            block,
+            Some(block),
         );
 
         let mut pass = ThirGen::new(&mut ctx, &hir);

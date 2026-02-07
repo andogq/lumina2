@@ -37,7 +37,7 @@ impl Hir {
         &mut self,
         binding: IdentifierBindingId,
         signature: FunctionSignature,
-        entry: BlockId,
+        entry: Option<BlockId>,
     ) -> FunctionId {
         let id = self.next_id();
         let function_id = self.functions.insert(Function {
@@ -121,6 +121,7 @@ impl Hir {
 
 indexing! {
     Hir {
+        nodes[HirId] -> HirNodePtr,
         functions[FunctionId] -> Function,
         blocks[BlockId] -> Block,
         statements[StatementId] -> Statement,
@@ -201,7 +202,7 @@ mod functions {
         pub id: HirId,
         pub binding: IdentifierBindingId,
         pub signature: FunctionSignature,
-        pub entry: BlockId,
+        pub entry: Option<BlockId>,
     }
 
     impl HirNodeId for FunctionId {

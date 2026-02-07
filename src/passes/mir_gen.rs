@@ -88,12 +88,13 @@ impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
         }
 
         // Lower the entry block.
+        let entry = function.entry.expect("cannot lower function without entry");
         let ctx = FunctionCtx::new(function_id);
-        let block = self.lower_block(&ctx, function.entry);
+        let block = self.lower_block(&ctx, entry);
 
         // If the block resolves to a value of the same type as the return value, then it's an
         // implicit return.
-        let body = &self.thir[function.entry];
+        let body = &self.thir[entry];
         if let Some(result) = block.operand {
             assert_eq!(
                 self.thir.type_of(body.expression),

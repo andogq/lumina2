@@ -34,6 +34,9 @@ pub use ::std::{
     ops::{Deref, Index, IndexMut},
 };
 
+// Dependencies.
+pub use ::lazy_static::lazy_static;
+
 // Test utilities.
 #[cfg(test)]
 pub use crate::{

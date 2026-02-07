@@ -501,7 +501,7 @@ mod test {
         }
 
         #[test]
-        #[should_panic(expected = "cannot generate HIR for function without implementation")]
+        #[should_panic(expected = "cannot lower function without entry")]
         fn extern_function_no_implementation() {
             run(r#"extern fn something() -> bool;
 
@@ -518,10 +518,10 @@ mod test {
         fn simple_intrinsic() {
             assert_eq!(
                 run(r#"@intrinsic
-                    extern fn add_u8_wrapping(lhs: u8, rhs: u8) -> u8;
+                    extern fn u8_add_wrapping(lhs: u8, rhs: u8) -> u8;
 
                     fn main() -> u8 {
-                        add_u8_wrapping(7, 10)
+                        u8_add_wrapping(7, 10)
                     }"#),
                 17
             );

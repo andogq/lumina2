@@ -2,39 +2,29 @@ use crate::prelude::*;
 
 use super::*;
 
-#[derive(Clone, Debug)]
-pub struct IntrinsicAnnotation;
-impl AnnotationHandler for IntrinsicAnnotation {
-    const NAME: &'static str = "intrinsic";
+pub fn intrinsic_handler(ctx: &mut Ctx, hir: &mut hir::Hir, hir_node: HirId) {
+    let HirNodePtr::Function(hir_node) = hir[hir_node] else {
+        panic!("only functions support `@intrinsic`");
+    };
 
-    type Node = ast::FunctionDeclaration;
+    let node = &hir[hir_node];
+    assert!(
+        node.entry.is_none(),
+        "functions with `intrinsic` annotation cannot have an implementation"
+    );
 
-    fn map(
-        ctx: &mut Ctx,
-        ast: &ast::Ast,
-        hir: &mut hir::Hir,
-        ast_node: <Self::Node as AttributeNode>::AstId,
-        hir_node: <Self::Node as AttributeNode>::HirId,
-    ) {
-        let node = &ast[ast_node];
+    // Find matching intrinsic.
+    let target_intrinsic = ctx.strings.get(ctx.scopes.to_string(node.binding));
+    let Some(intrinsic) = INTRINSICS
+        .iter()
+        .find(|intrinsic| intrinsic.name == target_intrinsic)
+    else {
+        panic!("could not find intrinsic: {target_intrinsic}");
+    };
 
-        assert!(
-            matches!(node.implementation, ast::FunctionImplementation::None),
-            "functions with `intrinsic` annotation cannot have an implementation"
-        );
-
-        // Find matching intrinsic.
-        let target_intrinsic = ctx.strings.get(node.signature.name);
-        let Some(intrinsic) = INTRINSICS
-            .iter()
-            .find(|intrinsic| intrinsic.name == target_intrinsic)
-        else {
-            panic!("could not find intrinsic: {target_intrinsic}");
-        };
-
-        // Validate signature.
-        let hir_signature = &hir[hir_node].signature;
-        let signature_valid =
+    // Validate signature.
+    let hir_signature = &hir[hir_node].signature;
+    let signature_valid =
             // Parameter counts must match.
             hir_signature.parameters.len() == intrinsic.signature.parameters.len()
             // Each parameter must match.
@@ -52,55 +42,54 @@ impl AnnotationHandler for IntrinsicAnnotation {
                 .map(|ty| ty.into_type(&mut ctx.types))
                 .unwrap_or(ctx.types.unit())
             == hir_signature.return_ty;
-        if !signature_valid {
-            panic!("intrinsic signature mismatch");
-        }
-
-        // Generate an implementation for the body.
-        let expression = match &intrinsic.implementation {
-            IntrinsicImplementation::UnaryOperation(unary_operation) => {
-                assert_eq!(
-                    intrinsic.signature.parameters.len(),
-                    1,
-                    "unary intrinsic must only accept one parameter"
-                );
-
-                // Create an expression referencing the parameter.
-                let value = hir.add_expression(hir::Variable {
-                    binding: hir_signature.parameters[0].0,
-                });
-
-                // Apply unary operation to parameter.
-                hir.add_expression(hir::Unary {
-                    operation: *unary_operation,
-                    value,
-                })
-            }
-            IntrinsicImplementation::BinaryOperation(binary_operation) => {
-                assert_eq!(
-                    intrinsic.signature.parameters.len(),
-                    2,
-                    "binary intrinsic must only accept two parameters"
-                );
-
-                // Create expressions for each parameter.
-                let [lhs, rhs] = [hir_signature.parameters[0].0, hir_signature.parameters[1].0]
-                    .map(|binding| hir.add_expression(hir::Variable { binding }));
-
-                // Apply binary operation to parameters.
-                hir.add_expression(hir::Binary {
-                    lhs,
-                    operation: *binary_operation,
-                    rhs,
-                })
-            }
-            IntrinsicImplementation::LlvmIntrinsic(llvm_intrinsic) => todo!(),
-        };
-
-        // Update the body of the HIR node.
-        let entry = hir.add_block(vec![], expression);
-        hir[hir_node].entry = entry;
+    if !signature_valid {
+        panic!("intrinsic signature mismatch");
     }
+
+    // Generate an implementation for the body.
+    let expression = match &intrinsic.implementation {
+        IntrinsicImplementation::UnaryOperation(unary_operation) => {
+            assert_eq!(
+                intrinsic.signature.parameters.len(),
+                1,
+                "unary intrinsic must only accept one parameter"
+            );
+
+            // Create an expression referencing the parameter.
+            let value = hir.add_expression(hir::Variable {
+                binding: hir_signature.parameters[0].0,
+            });
+
+            // Apply unary operation to parameter.
+            hir.add_expression(hir::Unary {
+                operation: *unary_operation,
+                value,
+            })
+        }
+        IntrinsicImplementation::BinaryOperation(binary_operation) => {
+            assert_eq!(
+                intrinsic.signature.parameters.len(),
+                2,
+                "binary intrinsic must only accept two parameters"
+            );
+
+            // Create expressions for each parameter.
+            let [lhs, rhs] = [hir_signature.parameters[0].0, hir_signature.parameters[1].0]
+                .map(|binding| hir.add_expression(hir::Variable { binding }));
+
+            // Apply binary operation to parameters.
+            hir.add_expression(hir::Binary {
+                lhs,
+                operation: *binary_operation,
+                rhs,
+            })
+        }
+        IntrinsicImplementation::LlvmIntrinsic(llvm_intrinsic) => todo!(),
+    };
+
+    // Update the body of the HIR node.
+    let entry = hir.add_block(vec![], expression);
+    hir[hir_node].entry = Some(entry);
 }
 
 #[derive(Clone, Debug)]

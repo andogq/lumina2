@@ -71,6 +71,9 @@ impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
             }
         }
 
+        // Run all annotations.
+        annotations::run_annotation_handlers(hir_gen.ctx, &mut hir_gen.hir);
+
         Ok(PassSuccess::new(hir_gen.hir, errors))
     }
 }
@@ -211,11 +214,9 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         // Lower the body of the function.
         let entry = match &function.implementation {
             ast::FunctionImplementation::Body(body) => {
-                self.lower_block(ctx, &self.ast[*body], function_scope)?
+                Some(self.lower_block(ctx, &self.ast[*body], function_scope)?)
             }
-            ast::FunctionImplementation::None => {
-                panic!("cannot generate HIR for function without implementation")
-            }
+            ast::FunctionImplementation::None => None,
         };
 
         Ok(self.hir.add_function(binding, signature, entry))
