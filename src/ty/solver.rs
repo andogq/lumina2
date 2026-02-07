@@ -201,14 +201,14 @@ impl<'types, 'type_vars, 'trait_implementations>
             .zip(parameters)
             .filter_map(|(parameter_var, parameter)| {
                 let parameter = self.type_vars.intern(parameter);
-                let var = self.root.union_sets(*parameter_var, parameter);
+                let var = self.merge(*parameter_var, parameter);
                 self.get_type(var)
             })
             .collect::<Vec<_>>();
 
         let solved_return_ty = {
             let return_ty = self.type_vars.intern(return_ty);
-            let var = self.root.union_sets(return_ty_var, return_ty);
+            let var = self.merge(return_ty_var, return_ty);
             self.get_type(var)
         };
 
