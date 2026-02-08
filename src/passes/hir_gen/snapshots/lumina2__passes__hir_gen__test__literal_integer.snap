@@ -1,0 +1,14 @@
+---
+source: src/passes/hir_gen/mod.rs
+expression: Literal(Integer(123))
+---
+Expression {
+    id: HirId(
+        0,
+    ),
+    kind: Literal(
+        Integer(
+            123,
+        ),
+    ),
+}

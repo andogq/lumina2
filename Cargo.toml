@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 inkwell = { version = "0.8.0", features = ["llvm18-1"] }
+lazy_static = "1.5.0"
 mutants = "0.0.4"
 thiserror = "2.0.17"
 

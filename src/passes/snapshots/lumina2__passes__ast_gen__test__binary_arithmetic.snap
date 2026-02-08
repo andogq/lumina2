@@ -2,14 +2,19 @@
 source: src/passes/ast_gen.rs
 expression: 1 + 2
 ---
-Binary(
-    Binary {
-        lhs: ExpressionId(
-            0,
-        ),
-        operation: Plus,
-        rhs: ExpressionId(
-            1,
-        ),
-    },
-)
+Expression {
+    id: AstId(
+        2,
+    ),
+    kind: Binary(
+        Binary {
+            lhs: ExpressionId(
+                0,
+            ),
+            operation: Plus,
+            rhs: ExpressionId(
+                1,
+            ),
+        },
+    ),
+}

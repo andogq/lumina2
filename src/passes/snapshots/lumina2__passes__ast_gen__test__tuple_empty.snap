@@ -2,8 +2,13 @@
 source: src/passes/ast_gen.rs
 expression: ()
 ---
-Tuple(
-    Tuple {
-        values: [],
-    },
-)
+Expression {
+    id: AstId(
+        0,
+    ),
+    kind: Tuple(
+        Tuple {
+            values: [],
+        },
+    ),
+}

@@ -1,0 +1,22 @@
+---
+source: src/passes/hir_gen/mod.rs
+expression: "FunctionSignature { name: StringId(0), parameters: [FunctionParameter { name: StringId(1), ty: AstTypeId(0) }], return_ty: None } (Some(U8))"
+---
+FunctionSignature {
+    parameters: [
+        (
+            BindingId {
+                id: InnerBindingId(
+                    3,
+                ),
+                kind: PhantomData<fn() -> lumina2::util::scopes::Identifier>,
+            },
+            TypeId(
+                3,
+            ),
+        ),
+    ],
+    return_ty: TypeId(
+        1,
+    ),
+}

@@ -3,7 +3,9 @@ source: src/passes/ast_gen.rs
 expression: "extern fn some_function(parameter: u8);"
 ---
 FunctionDeclaration {
-    annotations: [],
+    id: AstId(
+        0,
+    ),
     signature: FunctionSignature {
         name: StringId(
             0,

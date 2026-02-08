@@ -2,13 +2,18 @@
 source: src/passes/ast_gen.rs
 expression: a.1
 ---
-Field(
-    Field {
-        lhs: ExpressionId(
-            0,
-        ),
-        field: Unnamed(
-            1,
-        ),
-    },
-)
+Expression {
+    id: AstId(
+        1,
+    ),
+    kind: Field(
+        Field {
+            lhs: ExpressionId(
+                0,
+            ),
+            field: Unnamed(
+                1,
+            ),
+        },
+    ),
+}

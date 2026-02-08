@@ -2,10 +2,15 @@
 source: src/passes/ast_gen.rs
 expression: some_ident
 ---
-Variable(
-    Variable {
-        variable: StringId(
-            0,
-        ),
-    },
-)
+Expression {
+    id: AstId(
+        0,
+    ),
+    kind: Variable(
+        Variable {
+            variable: StringId(
+                0,
+            ),
+        },
+    ),
+}

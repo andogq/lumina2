@@ -1,0 +1,14 @@
+---
+source: src/passes/hir_gen/mod.rs
+expression: Literal(Boolean(true))
+---
+Expression {
+    id: HirId(
+        0,
+    ),
+    kind: Literal(
+        Boolean(
+            true,
+        ),
+    ),
+}

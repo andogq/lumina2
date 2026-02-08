@@ -1,0 +1,17 @@
+---
+source: src/passes/hir_gen/mod.rs
+expression: "Unary(Unary { operation: Negative, value: ExpressionId(0) })"
+---
+Expression {
+    id: HirId(
+        1,
+    ),
+    kind: Unary(
+        Unary {
+            operation: Negative,
+            value: ExpressionId(
+                0,
+            ),
+        },
+    ),
+}

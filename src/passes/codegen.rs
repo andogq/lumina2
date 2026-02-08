@@ -1,9 +1,10 @@
-// spell-checker:ignore IntPredicate, into_int_value, get_param_iter, build_int, const_int
+// spell-checker:ignore IntPredicate, into_int_value, get_param_iter, build_int, const_int, uadd
 use inkwell::{
     AddressSpace, IntPredicate,
     basic_block::BasicBlock as IBasicBlock,
     builder::Builder,
     context::Context,
+    intrinsics::Intrinsic,
     module::Module,
     types::{BasicType, BasicTypeEnum, FunctionType},
     values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue},
@@ -403,6 +404,30 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                             .as_basic_value_enum(),
                         lhs_ty_id,
                     ),
+                    (
+                        lhs_ty @ (Type::U8 | Type::I8),
+                        BinaryOperation::PlusWithOverflow,
+                        rhs_ty @ (Type::U8 | Type::I8),
+                    ) if lhs_ty == rhs_ty => {
+                        let intrinsic = Intrinsic::find("llvm.uadd.with.overflow").unwrap();
+                        let intrinsic_function = intrinsic
+                            .get_declaration(&self.module, &[self.basic_ty(lhs_ty_id)])
+                            .unwrap();
+                        let call_result = builder
+                            .build_call(
+                                intrinsic_function,
+                                &[lhs.into(), rhs.into()],
+                                "add_overflow",
+                            )
+                            .unwrap();
+
+                        let return_value = call_result.try_as_basic_value().unwrap_basic();
+
+                        (
+                            return_value,
+                            self.ctx.types.tuple([lhs_ty_id, self.ctx.types.boolean()]),
+                        )
+                    }
                     (
                         lhs_ty @ (Type::U8 | Type::I8),
                         BinaryOperation::Minus,

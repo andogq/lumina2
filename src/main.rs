@@ -501,7 +501,7 @@ mod test {
         }
 
         #[test]
-        #[should_panic(expected = "cannot generate HIR for function without implementation")]
+        #[should_panic(expected = "cannot lower function without entry")]
         fn extern_function_no_implementation() {
             run(r#"extern fn something() -> bool;
 
@@ -512,6 +512,62 @@ mod test {
                     7
                 }
             }"#);
+        }
+
+        #[test]
+        fn simple_intrinsic() {
+            assert_eq!(
+                run(r#"@intrinsic
+                    extern fn u8_add_wrapping(lhs: u8, rhs: u8) -> u8;
+
+                    fn main() -> u8 {
+                        u8_add_wrapping(7, 10)
+                    }"#),
+                17
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "intrinsic signature mismatch")]
+        fn invalid_intrinsic_signature() {
+            run(r#"@intrinsic
+                extern fn u8_add_wrapping(lhs: i8, rhs: i8) -> i8;
+
+                fn main() -> u8 {
+                    u8_add_wrapping(7, 10)
+                }"#);
+        }
+
+        #[test]
+        fn unary_intrinsic() {
+            assert_eq!(
+                run(r#"@intrinsic
+                    extern fn u8_not(n: u8) -> u8;
+
+                    fn main() -> u8 {
+                        u8_not(183)
+                    }"#),
+                72
+            );
+        }
+
+        #[test]
+        fn add_overflow() {
+            assert_eq!(
+                run(r#"@intrinsic
+                    extern fn u8_add_overflow(lhs: u8, rhs: u8) -> (u8, bool);
+
+                    fn main() -> u8 {
+                        let result = u8_add_overflow(255, 1);
+
+                        if result.1 {
+                            123
+                        } else {
+                            4
+                        }
+                    }"#),
+                123
+            );
         }
     }
 }

@@ -1,3 +1,5 @@
+pub mod annotations;
+
 use crate::prelude::*;
 
 use hir::*;
@@ -26,21 +28,32 @@ impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
     fn run(ctx: &'ctx mut Ctx, ast: &'ast Self::Input, _extra: ()) -> PassResult<Self::Output> {
         let mut hir_gen = Self::new(ctx, ast);
 
+        // Mapping of AstId to HirId.
+        let mut source = BTreeMap::new();
+
         // Errors generated throughout this pass.
         let mut errors = Vec::new();
 
         // Register each trait declaration.
         for trait_declaration in ast.traits.iter() {
-            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
+            let hir_id = run_and_report!(hir_gen.ctx, errors, || hir_gen
                 .lower_trait_declaration(trait_declaration));
+
+            if let Ok(hir_id) = hir_id {
+                source.insert(trait_declaration.id, hir_gen.hir.get_id(hir_id));
+            }
         }
 
         // Lower each top-level function, saving a map from the old to new ID.
         let item_ctx = FunctionCtx::item();
         for &function_id in &ast.item_functions {
             let function = &ast[function_id];
-            let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
+            let hir_id = run_and_report!(hir_gen.ctx, errors, || hir_gen
                 .lower_function(&item_ctx, function));
+
+            if let Ok(hir_id) = hir_id {
+                source.insert(function.id, hir_gen.hir.get_id(hir_id));
+            }
         }
 
         // Lower each trait implementation.
@@ -48,6 +61,18 @@ impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
             let _ = run_and_report!(hir_gen.ctx, errors, || hir_gen
                 .lower_trait_implementation(trait_implementation));
         }
+
+        // Copy over all annotations.
+        for (ast_id, annotations) in &hir_gen.ast.annotations {
+            let hir_id = source[ast_id];
+
+            for annotation in annotations {
+                hir_gen.hir.annotate(hir_id, annotation.clone());
+            }
+        }
+
+        // Run all annotations.
+        annotations::run_annotation_handlers(hir_gen.ctx, &mut hir_gen.hir);
 
         Ok(PassSuccess::new(hir_gen.hir, errors))
     }
@@ -59,7 +84,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         Self {
             ctx,
             ast,
-            hir: Hir::default(),
+            hir: Hir::new(),
         }
     }
 
@@ -85,12 +110,9 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             method_bindings.insert(binding, method_id);
         }
 
-        Ok(self.hir.traits.insert(Trait {
-            name,
-            method_scope,
-            method_bindings,
-            methods,
-        }))
+        Ok(self
+            .hir
+            .add_trait(name, method_scope, method_bindings, methods))
     }
 
     fn lower_trait_implementation(
@@ -192,18 +214,12 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         // Lower the body of the function.
         let entry = match &function.implementation {
             ast::FunctionImplementation::Body(body) => {
-                self.lower_block(ctx, &self.ast[*body], function_scope)?
+                Some(self.lower_block(ctx, &self.ast[*body], function_scope)?)
             }
-            ast::FunctionImplementation::None => {
-                panic!("cannot generate HIR for function without implementation")
-            }
+            ast::FunctionImplementation::None => None,
         };
 
-        Ok(self.hir.functions.insert(Function {
-            binding,
-            signature,
-            entry,
-        }))
+        Ok(self.hir.add_function(binding, signature, entry))
     }
 
     /// Lower a function signature.
@@ -250,9 +266,9 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         for &statement_id in &block.statements {
             let statement = &self.ast[statement_id];
 
-            match statement {
+            match &statement.kind {
                 // Statements are lowered into a declaration, followed by an assignment.
-                ast::Statement::Let(ast::LetStatement { variable, value }) => {
+                ast::StatementKind::Let(ast::LetStatement { variable, value }) => {
                     // Create a new binding for the statement.
                     let binding = self.ctx.scopes.declare(scope, *variable);
 
@@ -260,53 +276,31 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     let value = self.lower_expression(ctx, &self.ast[*value], scope)?;
 
                     // Add the declaration.
-                    statements.push(self.hir.statements.insert(Statement::Declare(
-                        DeclareStatement {
-                            binding,
-                            ty: DeclarationTy::Inferred(value),
-                        },
-                    )));
+                    statements.push(self.hir.add_statement(DeclareStatement {
+                        binding,
+                        ty: DeclarationTy::Inferred(value),
+                    }));
 
                     // Add the assignment.
                     statements.push({
-                        let variable = self
-                            .hir
-                            .expressions
-                            .insert(Expression::Variable(Variable { binding }));
-                        let assign_expression = self
-                            .hir
-                            .expressions
-                            .insert(Expression::Assign(Assign { variable, value }));
-                        self.hir
-                            .statements
-                            .insert(Statement::Expression(ExpressionStatement {
-                                expression: assign_expression,
-                            }))
+                        let variable = self.hir.add_expression(Variable { binding });
+                        let assign_expression = self.hir.add_expression(Assign { variable, value });
+                        self.hir.add_statement(ExpressionStatement {
+                            expression: assign_expression,
+                        })
                     });
                 }
-                ast::Statement::Return(ast::ReturnStatement { expression }) => {
+                ast::StatementKind::Return(ast::ReturnStatement { expression }) => {
                     let expression = self.lower_expression(ctx, &self.ast[*expression], scope)?;
-                    statements.push(
-                        self.hir
-                            .statements
-                            .insert(Statement::Return(ReturnStatement { expression })),
-                    );
+                    statements.push(self.hir.add_statement(ReturnStatement { expression }));
                 }
-                ast::Statement::Break(ast::BreakStatement { expression }) => {
+                ast::StatementKind::Break(ast::BreakStatement { expression }) => {
                     let expression = self.lower_expression(ctx, &self.ast[*expression], scope)?;
-                    statements.push(
-                        self.hir
-                            .statements
-                            .insert(Statement::Break(BreakStatement { expression })),
-                    )
+                    statements.push(self.hir.add_statement(BreakStatement { expression }))
                 }
-                ast::Statement::Expression(ast::ExpressionStatement { expression }) => {
+                ast::StatementKind::Expression(ast::ExpressionStatement { expression }) => {
                     let expression = self.lower_expression(ctx, &self.ast[*expression], scope)?;
-                    statements.push(
-                        self.hir
-                            .statements
-                            .insert(Statement::Expression(ExpressionStatement { expression })),
-                    );
+                    statements.push(self.hir.add_statement(ExpressionStatement { expression }));
                 }
             }
         }
@@ -317,22 +311,19 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
             block
                 .statements
                 .last()
-                .map(|statement| &self.ast[*statement]),
+                .map(|statement| &self.ast[*statement].kind),
         ) {
             // Use the provided expression to end the block.
             (Some(expression), _) => self.lower_expression(ctx, &self.ast[expression], scope)?,
             // Otherwise, if the final statement is `return` then add an unreachable marker.
-            (None, Some(ast::Statement::Return(_))) => {
-                self.hir.expressions.insert(Expression::Unreachable)
+            (None, Some(ast::StatementKind::Return(_))) => {
+                self.hir.add_expression(ExpressionKind::Unreachable)
             }
             // Otherwise, assume unit.
-            (None, _) => self.hir.expressions.insert(Aggregate::UNIT.into()),
+            (None, _) => self.hir.add_expression(Aggregate::UNIT),
         };
 
-        Ok(self.hir.blocks.insert(Block {
-            statements,
-            expression,
-        }))
+        Ok(self.hir.add_block(statements, expression))
     }
 
     /// Lower an expression within the provided scope.
@@ -342,28 +333,36 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
         expression: &ast::Expression,
         scope: ScopeId,
     ) -> CResult<ExpressionId> {
-        let expression = match expression {
-            ast::Expression::Assign(ast::Assign { variable, value }) => Assign {
-                variable: self.lower_expression(ctx, &self.ast[*variable], scope)?,
-                value: self.lower_expression(ctx, &self.ast[*value], scope)?,
+        Ok(match &expression.kind {
+            ast::ExpressionKind::Assign(ast::Assign { variable, value }) => {
+                let variable = self.lower_expression(ctx, &self.ast[*variable], scope)?;
+                let value = self.lower_expression(ctx, &self.ast[*value], scope)?;
+
+                self.hir.add_expression(Assign { variable, value })
             }
-            .into(),
-            ast::Expression::Binary(ast::Binary {
+            ast::ExpressionKind::Binary(ast::Binary {
                 lhs,
                 operation,
                 rhs,
-            }) => Binary {
-                lhs: self.lower_expression(ctx, &self.ast[*lhs], scope)?,
-                operation: *operation,
-                rhs: self.lower_expression(ctx, &self.ast[*rhs], scope)?,
+            }) => {
+                let lhs = self.lower_expression(ctx, &self.ast[*lhs], scope)?;
+                let rhs = self.lower_expression(ctx, &self.ast[*rhs], scope)?;
+
+                self.hir.add_expression(Binary {
+                    lhs,
+                    operation: *operation,
+                    rhs,
+                })
             }
-            .into(),
-            ast::Expression::Unary(ast::Unary { operation, value }) => Unary {
-                operation: *operation,
-                value: self.lower_expression(ctx, &self.ast[*value], scope)?,
+            ast::ExpressionKind::Unary(ast::Unary { operation, value }) => {
+                let value = self.lower_expression(ctx, &self.ast[*value], scope)?;
+
+                self.hir.add_expression(Unary {
+                    operation: *operation,
+                    value,
+                })
             }
-            .into(),
-            ast::Expression::If(ast::If {
+            ast::ExpressionKind::If(ast::If {
                 conditions,
                 otherwise,
             }) => {
@@ -372,7 +371,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                 // Optional default expression to apply to end of switch statements.
                 let mut default = otherwise
                     .map(|otherwise| {
-                        Ok::<_, CError>(Expression::Block(self.lower_block(
+                        Ok::<_, CError>(ExpressionKind::Block(self.lower_block(
                             ctx,
                             &self.ast[otherwise],
                             scope,
@@ -393,56 +392,62 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                             // Otherwise continue building the switch statement.
                             .or_else(|| Some(switch.take()?.into()))
                             .map(|expression| {
-                                let expression = self.hir.expressions.insert(expression);
-                                self.hir.blocks.insert(Block {
-                                    statements: Vec::new(),
-                                    expression,
-                                })
+                                let expression = self.hir.add_expression(expression);
+                                self.hir.add_block(vec![], expression)
                             }),
                     });
                 }
 
-                switch.ok_or(HirGenError::IfMustHaveBlock)?.into()
+                self.hir
+                    .add_expression(switch.ok_or(HirGenError::IfMustHaveBlock)?)
             }
-            ast::Expression::Loop(ast::Loop { body }) => Loop {
-                body: self.lower_block(ctx, &self.ast[*body], scope)?,
+            ast::ExpressionKind::Loop(ast::Loop { body }) => {
+                let body = self.lower_block(ctx, &self.ast[*body], scope)?;
+
+                self.hir.add_expression(Loop { body })
             }
-            .into(),
-            ast::Expression::Literal(literal) => match literal {
+            ast::ExpressionKind::Literal(literal) => self.hir.add_expression(match literal {
                 ast::Literal::Integer(value) => Literal::Integer(*value),
                 ast::Literal::Boolean(value) => Literal::Boolean(*value),
-            }
-            .into(),
-            ast::Expression::Call(ast::Call { callee, arguments }) => Call {
-                callee: self.lower_expression(ctx, &self.ast[*callee], scope)?,
-                arguments: arguments
+            }),
+            ast::ExpressionKind::Call(ast::Call { callee, arguments }) => {
+                let callee = self.lower_expression(ctx, &self.ast[*callee], scope)?;
+                let arguments = arguments
                     .iter()
                     .map(|argument| self.lower_expression(ctx, &self.ast[*argument], scope))
-                    .collect::<Result<_, _>>()?,
+                    .collect::<Result<_, _>>()?;
+
+                self.hir.add_expression(Call { callee, arguments })
             }
-            .into(),
-            ast::Expression::Block(block) => {
-                self.lower_block(ctx, &self.ast[*block], scope)?.into()
+            ast::ExpressionKind::Block(block) => {
+                let block = self.lower_block(ctx, &self.ast[*block], scope)?;
+
+                self.hir.add_expression(block)
             }
-            ast::Expression::Variable(ast::Variable { variable }) => Variable {
-                binding: self.ctx.scopes.resolve(scope, *variable),
+            ast::ExpressionKind::Variable(ast::Variable { variable }) => {
+                self.hir.add_expression(Variable {
+                    binding: self.ctx.scopes.resolve(scope, *variable),
+                })
             }
-            .into(),
-            ast::Expression::Tuple(ast::Tuple { values }) => Aggregate {
-                values: values
+            ast::ExpressionKind::Tuple(ast::Tuple { values }) => {
+                let values = values
                     .iter()
                     .map(|value| self.lower_expression(ctx, &self.ast[*value], scope))
-                    .collect::<Result<_, _>>()?,
+                    .collect::<Result<_, _>>()?;
+
+                self.hir.add_expression(Aggregate { values })
             }
-            .into(),
-            ast::Expression::Field(ast::Field { lhs, field }) => Field {
-                lhs: self.lower_expression(ctx, &self.ast[*lhs], scope)?,
-                field: match field {
-                    ast::FieldKey::Unnamed(field) => *field,
-                },
+            ast::ExpressionKind::Field(ast::Field { lhs, field }) => {
+                let lhs = self.lower_expression(ctx, &self.ast[*lhs], scope)?;
+
+                self.hir.add_expression(Field {
+                    lhs,
+                    field: match field {
+                        ast::FieldKey::Unnamed(field) => *field,
+                    },
+                })
             }
-            .into(),
-            ast::Expression::QualifiedPath(ast::QualifiedPath { ty, name, item }) => {
+            ast::ExpressionKind::QualifiedPath(ast::QualifiedPath { ty, name, item }) => {
                 let trait_name = self.ctx.scopes.resolve_global(*name);
                 let (trait_id, target_trait) = self
                     .hir
@@ -455,25 +460,20 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
                     .method_bindings
                     .get(&item_binding)
                     .expect("valid method on trait");
+                let ty = self.lower_ast_type(*ty);
 
-                Path {
-                    ty: {
-                        let ty = self.lower_ast_type(*ty);
-                        match ctx.current_self() {
-                            Some(current_self) => ty.with_self(current_self),
-                            None => ty
-                                .without_self()
-                                .expect("`Self` cannot be used in this context"),
-                        }
+                self.hir.add_expression(Path {
+                    ty: match ctx.current_self() {
+                        Some(current_self) => ty.with_self(current_self),
+                        None => ty
+                            .without_self()
+                            .expect("`Self` cannot be used in this context"),
                     },
                     target_trait: trait_id,
                     item,
-                }
-                .into()
+                })
             }
-        };
-
-        Ok(self.hir.expressions.insert(expression))
+        })
     }
 
     /// Lower an [`ast::AstType`] into a unique [`TypeId`].
@@ -604,34 +604,17 @@ mod test {
     #[once]
     fn sample_ast() -> ast::Ast {
         let mut ast = ast::Ast::new();
-        ast.expressions = indexed_vec![
-            ast::Expression::Variable(ast::Variable {
-                variable: StringId::from_id(0),
-            }),
-            ast::Expression::Variable(ast::Variable {
-                variable: StringId::from_id(1),
-            }),
-            ast::Expression::Variable(ast::Variable {
-                variable: StringId::from_id(2),
-            }),
-        ];
-        ast.statements = indexed_vec![ast::Statement::Expression(ast::ExpressionStatement {
+        for i in 0..3 {
+            ast.add_expression(ast::Variable {
+                variable: StringId::from_id(i),
+            });
+        }
+        ast.add_statement(ast::ExpressionStatement {
             expression: ast::ExpressionId::from_id(0),
-        })];
-        ast.blocks = indexed_vec![
-            ast::Block {
-                statements: Vec::new(),
-                expression: None
-            },
-            ast::Block {
-                statements: Vec::new(),
-                expression: None
-            },
-            ast::Block {
-                statements: Vec::new(),
-                expression: None
-            }
-        ];
+        });
+        for _ in 0..3 {
+            ast.add_block(Vec::new(), None);
+        }
         ast
     }
 
@@ -649,18 +632,22 @@ mod test {
 
     #[rstest]
     #[case("block_empty", ast::Block {
+        id: ast::AstId::from_id(0),
         statements: vec![],
         expression: None,
     })]
     #[case("block_statement", ast::Block {
+        id: ast::AstId::from_id(0),
         statements: vec![ast::StatementId::from_id(0)],
         expression: None,
     })]
     #[case("block_expression", ast::Block {
+        id: ast::AstId::from_id(0),
         statements: vec![],
         expression: Some(ast::ExpressionId::from_id(0)),
     })]
     #[case("block_everything", ast::Block {
+        id: ast::AstId::from_id(0),
         statements: vec![ast::StatementId::from_id(0)],
         expression: Some(ast::ExpressionId::from_id(0)),
     })]
@@ -681,11 +668,11 @@ mod test {
     #[rstest]
     #[case(
         "assign_simple",
-        ast::Assign { variable: ast::ExpressionId::from_id(0), value: ast::ExpressionId::from_id(1) }.into()
+        ast::Assign { variable: ast::ExpressionId::from_id(0), value: ast::ExpressionId::from_id(1) }
     )]
     #[case(
         "assign_reassign",
-        ast::Assign { variable: ast::ExpressionId::from_id(0), value: ast::ExpressionId::from_id(1) }.into()
+        ast::Assign { variable: ast::ExpressionId::from_id(0), value: ast::ExpressionId::from_id(1) }
     )]
     #[case(
         "binary_simple",
@@ -693,22 +680,22 @@ mod test {
             lhs: ast::ExpressionId::from_id(0),
             operation: BinaryOperation::Plus,
             rhs: ast::ExpressionId::from_id(1)
-        }.into()
+        }
     )]
     #[case(
         "unary_simple",
-        ast::Unary { value: ast::ExpressionId::from_id(0), operation: UnaryOperation::Negative }.into()
+        ast::Unary { value: ast::ExpressionId::from_id(0), operation: UnaryOperation::Negative }
     )]
     #[case(
         "if_simple",
-        ast::If { conditions: vec![(ast::ExpressionId::from_id(0), ast::BlockId::from_id(0))], otherwise: None }.into()
+        ast::If { conditions: vec![(ast::ExpressionId::from_id(0), ast::BlockId::from_id(0))], otherwise: None }
     )]
     #[case(
         "if_else",
         ast::If {
             conditions: vec![(ast::ExpressionId::from_id(0), ast::BlockId::from_id(0))],
             otherwise: Some(ast::BlockId::from_id(1))
-        }.into()
+        }
     )]
     #[case(
         "if_else_if",
@@ -718,36 +705,46 @@ mod test {
                 (ast::ExpressionId::from_id(1), ast::BlockId::from_id(1))
             ],
             otherwise: None
-        }.into()
+        }
     )]
-    #[case("literal_integer", ast::Literal::Integer(123).into())]
-    #[case("literal_boolean", ast::Literal::Boolean(true).into())]
+    #[case("literal_integer", ast::Literal::Integer(123))]
+    #[case("literal_boolean", ast::Literal::Boolean(true))]
     #[case(
         "call_no_parameters",
-        ast::Call { callee: ast::ExpressionId::from_id(0), arguments: vec![] }.into()
+        ast::Call { callee: ast::ExpressionId::from_id(0), arguments: vec![] }
     )]
     #[case(
         "call_with_parameters",
         ast::Call {
             callee: ast::ExpressionId::from_id(0),
             arguments: vec![ast::ExpressionId::from_id(1), ast::ExpressionId::from_id(2)]
-        }.into()
+        }
     )]
-    #[case("variable_simple", ast::Variable { variable: StringId::from_id(0) }.into())]
-    #[case("tuple_empty", ast::Tuple { values: vec![] }.into())]
-    #[case("tuple_many", ast::Tuple { values: vec![ast::ExpressionId::from_id(1), ast::ExpressionId::from_id(2)] }.into())]
+    #[case("variable_simple", ast::Variable { variable: StringId::from_id(0) })]
+    #[case("tuple_empty", ast::Tuple { values: vec![] })]
+    #[case("tuple_many", ast::Tuple { values: vec![ast::ExpressionId::from_id(1), ast::ExpressionId::from_id(2)] })]
     fn lower_expression(
         mut ctx: Ctx,
         sample_ast: &ast::Ast,
         #[case] name: &str,
-        #[case] expression: ast::Expression,
+        #[case] expression: impl Into<ast::ExpressionKind>,
     ) {
+        let expression = expression.into();
+        let dbg_str = format!("{expression:?}");
+
         let scope = ctx.scopes.nest_scope_global();
         let mut pass = HirGen::new(&mut ctx, sample_ast);
         let expression_id = pass
-            .lower_expression(&FunctionCtx::item(), &expression, scope)
+            .lower_expression(
+                &FunctionCtx::item(),
+                &ast::Expression {
+                    id: ast::AstId::from_id(0),
+                    kind: expression,
+                },
+                scope,
+            )
             .unwrap();
-        assert_debug_snapshot!(name, &pass.hir[expression_id], &format!("{expression:?}"));
+        assert_debug_snapshot!(name, &pass.hir[expression_id], &dbg_str);
     }
 
     #[rstest]
