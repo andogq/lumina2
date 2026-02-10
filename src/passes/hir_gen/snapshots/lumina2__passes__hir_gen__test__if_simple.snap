@@ -1,0 +1,27 @@
+---
+source: src/passes/hir_gen/mod.rs
+expression: "If(If { conditions: [(ExpressionId(0), BlockId(0))], otherwise: None })"
+---
+Expression {
+    id: HirId(
+        3,
+    ),
+    kind: Switch(
+        Switch {
+            discriminator: ExpressionId(
+                0,
+            ),
+            branches: [
+                (
+                    Boolean(
+                        true,
+                    ),
+                    BlockId(
+                        0,
+                    ),
+                ),
+            ],
+            default: None,
+        },
+    ),
+}

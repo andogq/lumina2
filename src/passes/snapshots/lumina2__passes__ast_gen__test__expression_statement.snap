@@ -3,6 +3,9 @@ source: src/passes/ast_gen.rs
 expression: "{ 1 }"
 ---
 Block {
+    id: AstId(
+        1,
+    ),
     statements: [],
     expression: Some(
         ExpressionId(

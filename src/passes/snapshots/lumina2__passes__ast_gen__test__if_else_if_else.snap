@@ -2,30 +2,35 @@
 source: src/passes/ast_gen.rs
 expression: "if condition { then } else if thing { then_2 } else { otherwise }"
 ---
-If(
-    If {
-        conditions: [
-            (
-                ExpressionId(
-                    0,
+Expression {
+    id: AstId(
+        8,
+    ),
+    kind: If(
+        If {
+            conditions: [
+                (
+                    ExpressionId(
+                        0,
+                    ),
+                    BlockId(
+                        0,
+                    ),
                 ),
+                (
+                    ExpressionId(
+                        2,
+                    ),
+                    BlockId(
+                        1,
+                    ),
+                ),
+            ],
+            otherwise: Some(
                 BlockId(
-                    0,
-                ),
-            ),
-            (
-                ExpressionId(
                     2,
                 ),
-                BlockId(
-                    1,
-                ),
             ),
-        ],
-        otherwise: Some(
-            BlockId(
-                2,
-            ),
-        ),
-    },
-)
+        },
+    ),
+}

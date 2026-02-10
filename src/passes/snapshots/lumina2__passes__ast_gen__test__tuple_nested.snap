@@ -2,18 +2,23 @@
 source: src/passes/ast_gen.rs
 expression: "(1, (2, true), 4)"
 ---
-Tuple(
-    Tuple {
-        values: [
-            ExpressionId(
-                0,
-            ),
-            ExpressionId(
-                3,
-            ),
-            ExpressionId(
-                4,
-            ),
-        ],
-    },
-)
+Expression {
+    id: AstId(
+        5,
+    ),
+    kind: Tuple(
+        Tuple {
+            values: [
+                ExpressionId(
+                    0,
+                ),
+                ExpressionId(
+                    3,
+                ),
+                ExpressionId(
+                    4,
+                ),
+            ],
+        },
+    ),
+}

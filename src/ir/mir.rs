@@ -27,6 +27,17 @@ pub struct Mir {
     pub places: IndexedVec<PlaceId, Place>,
 }
 
+indexing! {
+    Mir {
+        functions[FunctionId] -> Function,
+        basic_blocks[BasicBlockId] -> BasicBlock,
+        statements[StatementId] -> Statement,
+        terminators[TerminatorId] -> Terminator,
+        operands[OperandId] -> Operand,
+        places[PlaceId] -> Place,
+    }
+}
+
 impl Mir {
     pub fn new() -> Self {
         Self::default()
@@ -84,79 +95,6 @@ impl Mir {
         }
 
         id
-    }
-}
-
-impl Index<FunctionId> for Mir {
-    type Output = Function;
-
-    fn index(&self, index: FunctionId) -> &Self::Output {
-        &self.functions[index]
-    }
-}
-impl IndexMut<FunctionId> for Mir {
-    fn index_mut(&mut self, index: FunctionId) -> &mut Self::Output {
-        &mut self.functions[index]
-    }
-}
-impl Index<BasicBlockId> for Mir {
-    type Output = BasicBlock;
-
-    fn index(&self, index: BasicBlockId) -> &Self::Output {
-        &self.basic_blocks[index]
-    }
-}
-impl IndexMut<BasicBlockId> for Mir {
-    fn index_mut(&mut self, index: BasicBlockId) -> &mut Self::Output {
-        &mut self.basic_blocks[index]
-    }
-}
-impl Index<StatementId> for Mir {
-    type Output = Statement;
-
-    fn index(&self, index: StatementId) -> &Self::Output {
-        &self.statements[index]
-    }
-}
-impl IndexMut<StatementId> for Mir {
-    fn index_mut(&mut self, index: StatementId) -> &mut Self::Output {
-        &mut self.statements[index]
-    }
-}
-impl Index<TerminatorId> for Mir {
-    type Output = Terminator;
-
-    fn index(&self, index: TerminatorId) -> &Self::Output {
-        &self.terminators[index]
-    }
-}
-impl IndexMut<TerminatorId> for Mir {
-    fn index_mut(&mut self, index: TerminatorId) -> &mut Self::Output {
-        &mut self.terminators[index]
-    }
-}
-impl Index<PlaceId> for Mir {
-    type Output = Place;
-
-    fn index(&self, index: PlaceId) -> &Self::Output {
-        &self.places[index]
-    }
-}
-impl IndexMut<PlaceId> for Mir {
-    fn index_mut(&mut self, index: PlaceId) -> &mut Self::Output {
-        &mut self.places[index]
-    }
-}
-impl Index<OperandId> for Mir {
-    type Output = Operand;
-
-    fn index(&self, index: OperandId) -> &Self::Output {
-        &self.operands[index]
-    }
-}
-impl IndexMut<OperandId> for Mir {
-    fn index_mut(&mut self, index: OperandId) -> &mut Self::Output {
-        &mut self.operands[index]
     }
 }
 

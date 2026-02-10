@@ -2,13 +2,18 @@
 source: src/passes/ast_gen.rs
 expression: a = 1 + 2
 ---
-Assign(
-    Assign {
-        variable: ExpressionId(
-            0,
-        ),
-        value: ExpressionId(
-            3,
-        ),
-    },
-)
+Expression {
+    id: AstId(
+        4,
+    ),
+    kind: Assign(
+        Assign {
+            variable: ExpressionId(
+                0,
+            ),
+            value: ExpressionId(
+                3,
+            ),
+        },
+    ),
+}

@@ -2,8 +2,13 @@
 source: src/passes/ast_gen.rs
 expression: "true"
 ---
-Literal(
-    Boolean(
-        true,
+Expression {
+    id: AstId(
+        0,
     ),
-)
+    kind: Literal(
+        Boolean(
+            true,
+        ),
+    ),
+}

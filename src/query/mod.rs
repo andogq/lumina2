@@ -173,39 +173,33 @@ mod traits {
 
         #[fixture]
         fn hir() -> Hir {
-            let mut hir = Hir::default();
+            let mut hir = Hir::new();
 
             // Empty trait.
-            hir.traits.insert(Trait {
-                name: TraitBindingId::from_id(0),
-                method_scope: ScopeId::from_id(0),
-                method_bindings: HashMap::new(),
-                methods: IndexedVec::new(),
-            });
+            hir.add_trait(
+                TraitBindingId::from_id(0),
+                ScopeId::from_id(0),
+                HashMap::new(),
+                IndexedVec::new(),
+            );
 
             // Single method trait.
-            hir.traits.insert(Trait {
-                name: TraitBindingId::from_id(1),
-                method_scope: ScopeId::from_id(1),
-                method_bindings: HashMap::from_iter([(
-                    IdentifierBindingId::from_id(0),
-                    TraitMethodId::from_id(0),
-                )]),
-                methods: indexed_vec![FunctionSignature {
+            hir.add_trait(
+                TraitBindingId::from_id(1),
+                ScopeId::from_id(1),
+                HashMap::from_iter([(IdentifierBindingId::from_id(0), TraitMethodId::from_id(0))]),
+                indexed_vec![FunctionSignature {
                     parameters: vec![],
                     return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
                 }],
-            });
+            );
 
             // Single method trait with parameters.
-            hir.traits.insert(Trait {
-                name: TraitBindingId::from_id(2),
-                method_scope: ScopeId::from_id(2),
-                method_bindings: HashMap::from_iter([(
-                    IdentifierBindingId::from_id(0),
-                    TraitMethodId::from_id(0),
-                )]),
-                methods: indexed_vec![FunctionSignature {
+            hir.add_trait(
+                TraitBindingId::from_id(2),
+                ScopeId::from_id(2),
+                HashMap::from_iter([(IdentifierBindingId::from_id(0), TraitMethodId::from_id(0))]),
+                indexed_vec![FunctionSignature {
                     parameters: vec![
                         (IdentifierBindingId::from_id(1), MaybeSelfType::SelfType),
                         (
@@ -215,17 +209,17 @@ mod traits {
                     ],
                     return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
                 }],
-            });
+            );
 
             // Multi method trait.
-            hir.traits.insert(Trait {
-                name: TraitBindingId::from_id(3),
-                method_scope: ScopeId::from_id(3),
-                method_bindings: HashMap::from_iter([
+            hir.add_trait(
+                TraitBindingId::from_id(3),
+                ScopeId::from_id(3),
+                HashMap::from_iter([
                     (IdentifierBindingId::from_id(0), TraitMethodId::from_id(0)),
                     (IdentifierBindingId::from_id(1), TraitMethodId::from_id(1)),
                 ]),
-                methods: indexed_vec![
+                indexed_vec![
                     FunctionSignature {
                         parameters: vec![],
                         return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
@@ -235,7 +229,7 @@ mod traits {
                         return_ty: MaybeSelfType::Type(TypeId::from_id(0)),
                     }
                 ],
-            });
+            );
 
             hir
         }

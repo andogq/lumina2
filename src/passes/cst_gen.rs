@@ -42,6 +42,10 @@ impl Parse for cst::Program {
                     let external_function = cst::ExternalFunction::parse(lexer);
                     cst::ItemKind::ExternalFunction(external_function)
                 }
+                Tok::At => {
+                    annotations.push(cst::Annotation::parse(lexer));
+                    continue;
+                }
                 tok => {
                     eprintln!("Unknown tok: {tok}");
                     lexer.next();

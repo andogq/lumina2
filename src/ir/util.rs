@@ -29,12 +29,52 @@ macro_rules! enum_conversion {
     };
 }
 
+/// Helper to implement [`Index`] and [`IndexMut`] on structs which contain indexable fields.
+///
+/// ```
+/// struct Collection {
+///     field: IndexedVec<FieldIndex, FieldValue>,
+///     other_field: IndexedVex<OtherIndex, OtherValue>,
+/// }
+///
+/// indexing! {
+///     Collection {
+///         field[FieldIndex] -> FieldValue,
+///         other_field[OtherIndex] -> OtherValue,
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! indexing {
+    ($collection:ty {
+        $($field:ident[$index:ty] -> $output:ty),* $(,)?
+    }) => {
+        $(
+            impl Index<$index> for $collection {
+                type Output = $output;
+
+                fn index(&self, index: $index) -> &Self::Output {
+                    &self.$field[index]
+                }
+            }
+
+            impl IndexMut<$index> for $collection {
+                fn index_mut(&mut self, index: $index) -> &mut Self::Output {
+                    &mut self.$field[index]
+                }
+            }
+        )*
+    };
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum BinaryOperation {
     Plus,
     Minus,
     Multiply,
     Divide,
+
+    PlusWithOverflow,
 
     LogicalAnd,
     LogicalOr,

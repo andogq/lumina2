@@ -1,7 +1,8 @@
-use crate::prelude::*;
+use crate::{passes::hir_gen::annotations::Annotation, prelude::*};
 
 pub use self::{block::*, expression::*, functions::*, statement::*};
 
+create_id!(HirId);
 create_id!(BlockId);
 create_id!(ExpressionId);
 create_id!(FunctionId);
@@ -11,51 +12,121 @@ create_id!(TraitMethodId);
 
 #[derive(Clone, Debug, Default)]
 pub struct Hir {
+    nodes: IndexedVec<HirId, HirNodePtr>,
     pub functions: IndexedVec<FunctionId, Function>,
     pub blocks: IndexedVec<BlockId, Block>,
     pub statements: IndexedVec<StatementId, Statement>,
     pub expressions: IndexedVec<ExpressionId, Expression>,
     pub traits: IndexedVec<TraitId, Trait>,
     pub trait_implementations: HashMap<TraitImplementationKey, TraitImplementation>,
+    pub annotations: BTreeMap<HirId, Vec<Annotation>>,
 }
 
-impl Index<FunctionId> for Hir {
-    type Output = Function;
+impl Hir {
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    fn index(&self, index: FunctionId) -> &Self::Output {
-        &self.functions[index]
+    /// Determine the next [`HirId`] by looking at the length of [`Self::nodes`].
+    fn next_id(&self) -> HirId {
+        HirId::from_id(self.nodes.len())
+    }
+
+    /// Add a [`Function`] to the HIR.
+    pub fn add_function(
+        &mut self,
+        binding: IdentifierBindingId,
+        signature: FunctionSignature,
+        entry: Option<BlockId>,
+    ) -> FunctionId {
+        let id = self.next_id();
+        let function_id = self.functions.insert(Function {
+            id,
+            binding,
+            signature,
+            entry,
+        });
+        self.nodes.insert(function_id.into());
+        function_id
+    }
+
+    /// Add a [`Block`] to the HIR.
+    pub fn add_block(&mut self, statements: Vec<StatementId>, expression: ExpressionId) -> BlockId {
+        let id = self.next_id();
+        let block_id = self.blocks.insert(Block {
+            id,
+            statements,
+            expression,
+        });
+        self.nodes.insert(block_id.into());
+        block_id
+    }
+
+    /// Add a [`Statement`] to the HIR.
+    pub fn add_statement(&mut self, statement: impl Into<StatementKind>) -> StatementId {
+        let id = self.next_id();
+        let statement_id = self.statements.insert(Statement {
+            id,
+            kind: statement.into(),
+        });
+        self.nodes.insert(statement_id.into());
+        statement_id
+    }
+
+    /// Add an [`Expression`] to the HIR.
+    pub fn add_expression(&mut self, expression: impl Into<ExpressionKind>) -> ExpressionId {
+        let id = self.next_id();
+        let expression_id = self.expressions.insert(Expression {
+            id,
+            kind: expression.into(),
+        });
+        self.nodes.insert(expression_id.into());
+        expression_id
+    }
+
+    /// Add a [`Trait`] to the HIR.
+    pub fn add_trait(
+        &mut self,
+        name: TraitBindingId,
+        method_scope: ScopeId,
+        method_bindings: HashMap<IdentifierBindingId, TraitMethodId>,
+        methods: IndexedVec<TraitMethodId, FunctionSignature<MaybeSelfType>>,
+    ) -> TraitId {
+        let id = self.next_id();
+        let trait_id = self.traits.insert(Trait {
+            id,
+            name,
+            method_scope,
+            method_bindings,
+            methods,
+        });
+        self.nodes.insert(trait_id.into());
+        trait_id
+    }
+
+    /// Get the [`HirId`] of some node.
+    pub fn get_id<I>(&self, id: I) -> HirId
+    where
+        I: HirNodeId,
+        Self: Index<I, Output = I::Node>,
+    {
+        I::get_id(&self[id])
+    }
+
+    /// Annotate a node.
+    pub fn annotate(&mut self, node: HirId, annotation: Annotation) {
+        self.annotations.entry(node).or_default().push(annotation);
     }
 }
 
-impl Index<BlockId> for Hir {
-    type Output = Block;
-
-    fn index(&self, index: BlockId) -> &Self::Output {
-        &self.blocks[index]
-    }
-}
-
-impl Index<StatementId> for Hir {
-    type Output = Statement;
-
-    fn index(&self, index: StatementId) -> &Self::Output {
-        &self.statements[index]
-    }
-}
-
-impl Index<ExpressionId> for Hir {
-    type Output = Expression;
-
-    fn index(&self, index: ExpressionId) -> &Self::Output {
-        &self.expressions[index]
-    }
-}
-
-impl Index<TraitId> for Hir {
-    type Output = Trait;
-
-    fn index(&self, index: TraitId) -> &Self::Output {
-        &self.traits[index]
+indexing! {
+    Hir {
+        nodes[HirId] -> HirNodePtr,
+        functions[FunctionId] -> Function,
+        blocks[BlockId] -> Block,
+        statements[StatementId] -> Statement,
+        expressions[ExpressionId] -> Expression,
+        traits[TraitId] -> Trait,
     }
 }
 
@@ -65,6 +136,30 @@ impl Index<&TraitImplementationKey> for Hir {
     fn index(&self, index: &TraitImplementationKey) -> &Self::Output {
         &self.trait_implementations[index]
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum HirNodePtr {
+    Function(FunctionId),
+    Block(BlockId),
+    Statement(StatementId),
+    Expression(ExpressionId),
+    Trait(TraitId),
+}
+
+enum_conversion! {
+    [HirNodePtr]
+    Function: FunctionId,
+    Block: BlockId,
+    Statement: StatementId,
+    Expression: ExpressionId,
+    Trait: TraitId,
+}
+
+pub trait HirNodeId {
+    type Node;
+
+    fn get_id(node: &Self::Node) -> HirId;
 }
 
 mod functions {
@@ -104,9 +199,18 @@ mod functions {
 
     #[derive(Clone, Debug)]
     pub struct Function {
+        pub id: HirId,
         pub binding: IdentifierBindingId,
         pub signature: FunctionSignature,
-        pub entry: BlockId,
+        pub entry: Option<BlockId>,
+    }
+
+    impl HirNodeId for FunctionId {
+        type Node = Function;
+
+        fn get_id(node: &Self::Node) -> HirId {
+            node.id
+        }
     }
 }
 
@@ -115,8 +219,17 @@ mod block {
 
     #[derive(Clone, Debug)]
     pub struct Block {
+        pub id: HirId,
         pub statements: Vec<StatementId>,
         pub expression: ExpressionId,
+    }
+
+    impl HirNodeId for BlockId {
+        type Node = Block;
+
+        fn get_id(node: &Self::Node) -> HirId {
+            node.id
+        }
     }
 }
 
@@ -124,11 +237,41 @@ mod statement {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub enum Statement {
+    pub struct Statement {
+        pub id: HirId,
+        pub kind: StatementKind,
+    }
+
+    impl HirNodeId for StatementId {
+        type Node = Statement;
+
+        fn get_id(node: &Self::Node) -> HirId {
+            node.id
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    pub enum StatementKind {
         Declare(DeclareStatement),
         Return(ReturnStatement),
         Break(BreakStatement),
         Expression(ExpressionStatement),
+    }
+
+    impl Deref for Statement {
+        type Target = StatementKind;
+
+        fn deref(&self) -> &Self::Target {
+            &self.kind
+        }
+    }
+
+    enum_conversion! {
+        [StatementKind]
+        Declare: DeclareStatement,
+        Return: ReturnStatement,
+        Break: BreakStatement,
+        Expression: ExpressionStatement,
     }
 
     #[derive(Clone, Debug)]
@@ -170,7 +313,29 @@ mod expression {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub enum Expression {
+    pub struct Expression {
+        pub id: HirId,
+        pub kind: ExpressionKind,
+    }
+
+    impl HirNodeId for ExpressionId {
+        type Node = Expression;
+
+        fn get_id(node: &Self::Node) -> HirId {
+            node.id
+        }
+    }
+
+    impl Deref for Expression {
+        type Target = ExpressionKind;
+
+        fn deref(&self) -> &Self::Target {
+            &self.kind
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    pub enum ExpressionKind {
         Assign(Assign),
         Binary(Binary),
         Unary(Unary),
@@ -261,7 +426,7 @@ mod expression {
     }
 
     enum_conversion! {
-        [Expression]
+        [ExpressionKind]
         Assign: Assign,
         Binary: Binary,
         Unary: Unary,
@@ -279,10 +444,19 @@ mod expression {
 
 #[derive(Clone, Debug)]
 pub struct Trait {
+    pub id: HirId,
     pub name: TraitBindingId,
     pub method_scope: ScopeId,
     pub method_bindings: HashMap<IdentifierBindingId, TraitMethodId>,
     pub methods: IndexedVec<TraitMethodId, FunctionSignature<MaybeSelfType>>,
+}
+
+impl HirNodeId for TraitId {
+    type Node = Trait;
+
+    fn get_id(node: &Self::Node) -> HirId {
+        node.id
+    }
 }
 
 // Key to identifier a specific implementation of a trait for a given type.

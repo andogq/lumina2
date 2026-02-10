@@ -24,9 +24,9 @@ where
             std::mem::swap(&mut lhs, &mut rhs);
         }
 
-        let root = lhs.0;
-        self.0.insert(rhs.0, (root, 1));
-        root
+        let root = lhs;
+        self.0.insert(rhs.0, (root.0, root.1 + 1));
+        root.0
     }
 
     pub fn find_set(&self, id: T) -> T {
@@ -42,9 +42,9 @@ where
             return (id, 0);
         };
 
-        let (node, node_depth) = self.get(*parent);
+        let (root, parent_depth) = self.get(*parent);
 
-        (node, depth + node_depth)
+        (root, parent_depth + depth)
     }
 }
 
@@ -64,14 +64,14 @@ mod test {
 
     #[rstest]
     fn single_parent(mut map: DisjointUnionSet<usize>) {
-        map.union_sets(0, 1);
+        assert_eq!(map.union_sets(0, 1), 0);
         assert_eq!(map.find_set(0), map.find_set(1), "should be in same set");
     }
 
     #[rstest]
     fn already_in_same_set(mut map: DisjointUnionSet<usize>) {
-        map.union_sets(0, 1);
-        map.union_sets(1, 0);
+        assert_eq!(map.union_sets(0, 1), 0);
+        assert_eq!(map.union_sets(1, 0), 0);
         assert_eq!(
             map.find_set(0),
             map.find_set(1),
@@ -81,15 +81,20 @@ mod test {
 
     #[rstest]
     fn self_union(mut map: DisjointUnionSet<usize>) {
-        map.union_sets(0, 0);
+        assert_eq!(map.union_sets(0, 0), 0);
         assert_eq!(map.find_set(0), map.find_set(0));
     }
 
     #[rstest]
     fn deep_parent(mut map: DisjointUnionSet<usize>) {
-        map.union_sets(0, 1);
-        map.union_sets(1, 2);
-        map.union_sets(2, 3);
+        assert_eq!(map.union_sets(0, 1), 0);
+        assert_eq!(map.union_sets(1, 2), 0);
+        assert_eq!(map.union_sets(2, 3), 0);
+
+        assert_eq!(map.get(0), (0, 0));
+        assert_eq!(map.get(1), (0, 1));
+        assert_eq!(map.get(2), (0, 2));
+        assert_eq!(map.get(3), (0, 3));
 
         assert_eq!(
             map.find_set(0),
@@ -110,8 +115,8 @@ mod test {
 
     #[rstest]
     fn disjoint_sets(mut map: DisjointUnionSet<usize>) {
-        map.union_sets(0, 1);
-        map.union_sets(2, 3);
+        assert_eq!(map.union_sets(0, 1), 0);
+        assert_eq!(map.union_sets(2, 3), 2);
 
         assert_ne!(
             map.find_set(0),

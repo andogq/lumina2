@@ -12,7 +12,7 @@ pub use crate::{
 };
 
 // Macros
-pub use crate::{create_id, enum_conversion, run_and_report};
+pub use crate::{create_id, enum_conversion, indexing, run_and_report};
 
 // IDs and associated traits.
 pub use crate::{
@@ -27,12 +27,15 @@ pub use crate::{
 
 // Common items from standard library.
 pub use ::std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
     ops::{Deref, Index, IndexMut},
 };
+
+// Dependencies.
+pub use ::lazy_static::lazy_static;
 
 // Test utilities.
 #[cfg(test)]
