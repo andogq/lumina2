@@ -15,17 +15,14 @@ use hir::*;
 create_id!(TypeId);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Type {
+pub enum Type<T = TypeId> {
     Never,
     I8,
     U8,
     Boolean,
-    Ref(TypeId),
-    Function {
-        parameters: Vec<TypeId>,
-        return_ty: TypeId,
-    },
-    Tuple(Vec<TypeId>),
+    Ref(T),
+    Function { parameters: Vec<T>, return_ty: T },
+    Tuple(Vec<T>),
 }
 
 impl Type {
