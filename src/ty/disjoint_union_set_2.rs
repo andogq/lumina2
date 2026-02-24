@@ -15,6 +15,24 @@ enum Record<I, T> {
     Redirect(I),
 }
 
+impl<I, T> Record<I, T> {
+    /// Consume this record, and extract the [`Record::Root`] variant.
+    pub fn into_root(self) -> Option<T> {
+        match self {
+            Self::Root(root) => Some(root),
+            _ => None,
+        }
+    }
+
+    /// From a record reference, and extract the [`Record::Root`] variant.
+    pub fn as_root(&self) -> Option<&T> {
+        match self {
+            Self::Root(root) => Some(root),
+            _ => None,
+        }
+    }
+}
+
 impl<I, T> DisjointUnionSet<I, T>
 where
     I: Id,
@@ -48,10 +66,22 @@ where
     /// Fetch the data associated with an ID.
     pub fn get(&mut self, id: I) -> &T {
         let id = self.find_root(id);
-        let Record::Root(data) = &self.0[id] else {
-            unreachable!("`find` ensures that ID points to a root");
-        };
-        data
+        self.0[id]
+            .as_root()
+            .expect("`find_root` ensures that ID points to a root")
+    }
+
+    /// Fetch the data associate with multiple nodes.
+    pub fn get_multiple<const N: usize>(&mut self, ids: [I; N]) -> [&T; N] {
+        ids
+            // Perform path compression on all IDs first.
+            .map(|id| self.find_root(id))
+            // Manually fetch each node to bypass borrow checker.
+            .map(|id| {
+                self.0[id]
+                    .as_root()
+                    .expect("`find_root` ensures that ID points to a root")
+            })
     }
 
     /// Redirect `target` to point to `to`.
@@ -66,12 +96,11 @@ where
             return None;
         }
 
-        let Record::Root(data) = std::mem::replace(&mut self.0[target], Record::Redirect(to))
-        else {
-            unreachable!("`find` ensures that ID points to a root");
-        };
-
-        Some(data)
+        Some(
+            std::mem::replace(&mut self.0[target], Record::Redirect(to))
+                .into_root()
+                .expect("`find_root` ensures that ID points to a root"),
+        )
     }
 }
 
@@ -113,8 +142,7 @@ mod test {
             "node should point to `1` after redirect"
         );
 
-        let lhs = *map.get(id[0]);
-        let rhs = *map.get(id[1]);
+        let [lhs, rhs] = map.get_multiple([id[0], id[1]]);
         assert_eq!(lhs, rhs, "should contain the same value");
     }
 
