@@ -1,5 +1,6 @@
 mod constraints;
 mod disjoint_union_set;
+mod disjoint_union_set_2;
 mod solver;
 
 use crate::prelude::*;
