@@ -182,10 +182,10 @@ impl<'types, 'type_vars, 'trait_implementations>
             let Solution::Type(ty) = solution else {
                 return None;
             };
-            let Type::Function {
+            let Type::Composite(CompositeType::Function {
                 parameters,
                 return_ty,
-            } = &self.types[ty]
+            }) = &self.types[ty]
             else {
                 return None;
             };
@@ -358,7 +358,7 @@ impl<'types, 'type_vars, 'trait_implementations>
             let vars = match &solution {
                 Solution::Tuple(vars) => Some(vars.clone()),
                 Solution::Type(ty) => match &self.types[*ty] {
-                    Type::Tuple(vars) => {
+                    Type::Composite(CompositeType::Tuple(vars)) => {
                         Some(vars.iter().map(|var| self.type_vars.intern(*var)).collect())
                     }
                     _ => None,
@@ -392,7 +392,7 @@ impl<'types, 'type_vars, 'trait_implementations>
             // One side has solution, other side is a reference.
             (Solution::Type(ty), Solution::Reference(ref_var))
             | (Solution::Reference(ref_var), Solution::Type(ty)) => {
-                if let Type::Ref(ref_ty) = &self.types[*ty] {
+                if let Type::Composite(CompositeType::Ref(ref_ty)) = &self.types[*ty] {
                     let ref_ty = *ref_ty;
 
                     match self.get_non_concrete_type(*ref_var) {
@@ -406,7 +406,9 @@ impl<'types, 'type_vars, 'trait_implementations>
                             MergeResult::Substitute(Solution::Type(*ty))
                         }
                         Some(NonConcreteType::Tuple(values)) => {
-                            if let Type::Tuple(value_tys) = &self.types[ref_ty] {
+                            if let Type::Composite(CompositeType::Tuple(value_tys)) =
+                                &self.types[ref_ty]
+                            {
                                 // Referenced type is a tuple, so values can be zipped.
                                 MergeResult::TupleMergeAndSubstitute(
                                     value_tys
@@ -466,7 +468,7 @@ impl<'types, 'type_vars, 'trait_implementations>
             (Solution::Tuple(tuple), Solution::Type(ty))
             | (Solution::Type(ty), Solution::Tuple(tuple)) => {
                 // Ensure the type is a tuple.
-                if let Type::Tuple(values) = &self.types[*ty] {
+                if let Type::Composite(CompositeType::Tuple(values)) = &self.types[*ty] {
                     MergeResult::TupleMergeAndSubstitute(
                         tuple
                             .iter()

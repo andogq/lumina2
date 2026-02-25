@@ -7,7 +7,7 @@ pub use crate::{
     error::{CError, CErrorId, CErrorList, CResult, ErrorMeta},
     lex::{Lexer, Tok, tok},
     passes::{Pass, PassResult, PassSuccess},
-    ty::{Type, Types},
+    ty::{CompositeType, Type, Types},
     util::{indexed_vec::IndexedVec, scopes::Scopes, string_pool::StringPool},
 };
 

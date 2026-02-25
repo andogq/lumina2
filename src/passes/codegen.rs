@@ -230,10 +230,10 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     _ => {
                         let (function_ptr, function_ty) =
                             self.resolve_operand(&builder, function_id, *function);
-                        let Type::Function {
+                        let Type::Composite(CompositeType::Function {
                             parameters,
                             return_ty,
-                        } = &self.ctx.types[function_ty]
+                        }) = &self.ctx.types[function_ty]
                         else {
                             panic!();
                         };
@@ -337,7 +337,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
 
         for projection in &place.projection {
             (ptr, ty) = match (projection, &self.ctx.types[ty]) {
-                (Projection::Deref, Type::Ref(inner_ty)) => (
+                (Projection::Deref, Type::Composite(CompositeType::Ref(inner_ty))) => (
                     builder
                         .build_load(self.basic_ty(ty), ptr, "deref")
                         .unwrap()
@@ -345,7 +345,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
                     *inner_ty,
                 ),
                 (Projection::Deref, ty) => panic!("cannot dereference {ty:?}"),
-                (Projection::Field(field), Type::Tuple(fields)) => {
+                (Projection::Field(field), Type::Composite(CompositeType::Tuple(fields))) => {
                     let offset = self.ctx.types.offset_of(ty, *field).unwrap();
                     let offset = self.ink.i64_type().const_int(offset as u64, false);
 
@@ -717,7 +717,7 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
             .collect::<Vec<_>>();
 
         match &self.ctx.types[return_ty] {
-            Type::Tuple(tuple_items) if tuple_items.is_empty() => {
+            Type::Composite(CompositeType::Tuple(tuple_items)) if tuple_items.is_empty() => {
                 self.ink.void_type().fn_type(&parameters, false)
             }
             _ => self.basic_ty(return_ty).fn_type(&parameters, false),
@@ -730,10 +730,14 @@ impl<'ctx, 'mir, 'ink> Codegen<'ctx, 'mir, 'ink> {
             Type::I8 => self.ink.i8_type().into(),
             Type::U8 => self.ink.i8_type().into(),
             Type::Boolean => self.ink.bool_type().into(),
-            Type::Ref(_) => self.ink.ptr_type(AddressSpace::default()).into(),
             Type::Never => unreachable!(),
-            Type::Function { .. } => self.ink.ptr_type(AddressSpace::default()).into(),
-            Type::Tuple(_) => self
+            Type::Composite(CompositeType::Ref(_)) => {
+                self.ink.ptr_type(AddressSpace::default()).into()
+            }
+            Type::Composite(CompositeType::Function { .. }) => {
+                self.ink.ptr_type(AddressSpace::default()).into()
+            }
+            Type::Composite(CompositeType::Tuple(_)) => self
                 .ink
                 .i8_type()
                 .array_type(self.ctx.types.size_of(ty) as u32)

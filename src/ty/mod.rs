@@ -8,6 +8,7 @@ use crate::prelude::*;
 pub use self::{
     constraints::{Constraint, Constraints},
     disjoint_union_set::DisjointUnionSet,
+    disjoint_union_set_2::DisjointUnionSet as DisjointUnionSet2,
     solver::Solver,
 };
 
@@ -21,14 +22,43 @@ pub enum Type<T = TypeId> {
     I8,
     U8,
     Boolean,
+    Composite(CompositeType<T>),
+}
+
+impl<T> From<CompositeType<T>> for Type<T> {
+    fn from(composite: CompositeType<T>) -> Self {
+        Self::Composite(composite)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum CompositeType<T = TypeId> {
     Ref(T),
     Function { parameters: Vec<T>, return_ty: T },
     Tuple(Vec<T>),
 }
 
 impl Type {
-    /// Helper to construct `()`, which is a [`Type::Tuple`] with no fields.
-    pub const UNIT: Type = Type::Tuple(Vec::new());
+    /// Helper to construct `()`, which is a [`CompositeType::Tuple`] with no fields.
+    pub const UNIT: Type = Type::Composite(CompositeType::Tuple(Vec::new()));
+}
+
+impl<T> Type<T> {
+    /// Check whether this is a primitive type, which does not contain any other types.
+    pub const fn is_primitive(&self) -> bool {
+        matches!(self, Self::Never | Self::I8 | Self::U8 | Self::Boolean)
+    }
+
+    /// If this type is a primitive, cast it to some other [`Type`] representation.
+    pub fn cast_primitive<U>(self) -> Option<Type<U>> {
+        match self {
+            Self::Never => Some(Type::Never),
+            Self::I8 => Some(Type::I8),
+            Self::U8 => Some(Type::U8),
+            Self::Boolean => Some(Type::Boolean),
+            _ => None,
+        }
+    }
 }
 
 /// Interned collection of types.
@@ -91,20 +121,23 @@ impl Types {
         parameters: impl IntoIterator<Item = TypeId>,
         return_ty: TypeId,
     ) -> TypeId {
-        self.get(Type::Function {
-            parameters: Vec::from_iter(parameters),
-            return_ty,
-        })
+        self.get(
+            CompositeType::Function {
+                parameters: Vec::from_iter(parameters),
+                return_ty,
+            }
+            .into(),
+        )
     }
 
     /// Fetch the type for a [`Type::Tuple`] with the items.
     pub fn tuple(&mut self, items: impl IntoIterator<Item = TypeId>) -> TypeId {
-        self.get(Type::Tuple(Vec::from_iter(items)))
+        self.get(CompositeType::Tuple(Vec::from_iter(items)).into())
     }
 
     /// Fetch the type for a [`Type::Ref`] of a given type.
     pub fn ref_of(&mut self, ty: TypeId) -> TypeId {
-        self.get(Type::Ref(ty))
+        self.get(CompositeType::Ref(ty).into())
     }
 
     /// Calculate the size of a type.
@@ -115,17 +148,19 @@ impl Types {
             Type::U8 => 1,
             Type::Boolean => 1,
             // WARN: Should be linked to target.
-            Type::Ref(_) => std::mem::size_of::<usize>(),
+            Type::Composite(CompositeType::Ref(_)) => std::mem::size_of::<usize>(),
             // WARN: Should be linked to target.
-            Type::Function { .. } => std::mem::size_of::<usize>(),
-            Type::Tuple(type_ids) => type_ids.clone().iter().map(|ty| self.size_of(*ty)).sum(),
+            Type::Composite(CompositeType::Function { .. }) => std::mem::size_of::<usize>(),
+            Type::Composite(CompositeType::Tuple(type_ids)) => {
+                type_ids.clone().iter().map(|ty| self.size_of(*ty)).sum()
+            }
         }
     }
 
     /// Calculate the offset of a field in a type.
     pub fn offset_of(&self, ty: TypeId, field: usize) -> Option<usize> {
         match &self[ty] {
-            Type::Tuple(type_ids) => {
+            Type::Composite(CompositeType::Tuple(type_ids)) => {
                 if field >= type_ids.len() {
                     return None;
                 }
