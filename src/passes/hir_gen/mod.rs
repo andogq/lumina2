@@ -17,7 +17,7 @@ pub struct HirGen<'ctx, 'ast> {
     /// AST that will be processed.
     ast: &'ast ast::Ast,
     /// HIR that is being generated.
-    hir: Hir,
+    pub hir: Hir,
 }
 
 impl<'ctx, 'ast> Pass<'ctx, 'ast> for HirGen<'ctx, 'ast> {
@@ -327,7 +327,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
     }
 
     /// Lower an expression within the provided scope.
-    fn lower_expression(
+    pub fn lower_expression(
         &mut self,
         ctx: &FunctionCtx,
         expression: &ast::Expression,
@@ -511,7 +511,7 @@ impl<'ctx, 'ast> HirGen<'ctx, 'ast> {
 
 /// Context required when processing a function.
 #[derive(Clone, Debug)]
-enum FunctionCtx {
+pub enum FunctionCtx {
     /// An item function (top-level function).
     Item,
     /// A method within an `impl` block.

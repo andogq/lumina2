@@ -1,11 +1,11 @@
 use crate::{ir::hir::TraitImplementationKey, prelude::*};
 
 use mir::{UnaryOperation, *};
-use thir::Thir;
+use thir::Thir2;
 
 pub struct MirGen<'ctx, 'hir, 'thir> {
     ctx: &'ctx mut Ctx,
-    thir: &'thir Thir<'hir>,
+    thir: &'thir Thir2<'hir>,
 
     mir: Mir,
 
@@ -16,7 +16,7 @@ pub struct MirGen<'ctx, 'hir, 'thir> {
 }
 
 impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'ctx, 'hir, 'thir> {
-    type Input = Thir<'hir>;
+    type Input = Thir2<'hir>;
     type Output = Mir;
     type Extra = ();
 
@@ -45,7 +45,7 @@ impl<'ctx, 'hir, 'thir> Pass<'ctx, 'thir> for MirGen<'ctx, 'hir, 'thir> {
 
 impl<'ctx, 'hir, 'thir> MirGen<'ctx, 'hir, 'thir> {
     /// Create a new instance.
-    pub fn new(ctx: &'ctx mut Ctx, thir: &'thir Thir<'hir>) -> Self {
+    pub fn new(ctx: &'ctx mut Ctx, thir: &'thir Thir2<'hir>) -> Self {
         Self {
             ctx,
             thir,

@@ -31,6 +31,14 @@ impl<I, T> Record<I, T> {
             _ => None,
         }
     }
+
+    /// From a record mutable reference, and extract the [`Record::Root`] variant.
+    pub fn as_root_mut(&mut self) -> Option<&mut T> {
+        match self {
+            Self::Root(root) => Some(root),
+            _ => None,
+        }
+    }
 }
 
 impl<I, T> DisjointUnionSet<I, T>
@@ -45,6 +53,17 @@ where
     /// Insert a value into the set, producing the ID which corresponds to the new root.
     pub fn insert(&mut self, data: T) -> I {
         self.0.insert(Record::Root(data))
+    }
+
+    /// Replace the data at some ID, returning the previous data.
+    pub fn replace(&mut self, id: I, data: T) -> T {
+        let id = self.find_root(id);
+        std::mem::replace(
+            self.0[id]
+                .as_root_mut()
+                .expect("`find_root` ensures that ID points to a root"),
+            data,
+        )
     }
 
     /// Find the root starting at a given ID.
@@ -101,6 +120,16 @@ where
                 .into_root()
                 .expect("`find_root` ensures that ID points to a root"),
         )
+    }
+
+    /// Helper utility to [`Self::redirect`] from one node to another, then [`Self::replace`] the
+    /// resulting node's data.
+    ///
+    /// If `target` and `to` are identical, then the replacement will still take place.
+    pub fn redirect_and_replace(&mut self, target: I, to: I, data: T) -> (Option<T>, T) {
+        let target_data = self.redirect(target, to);
+        let to_data = self.replace(to, data);
+        (target_data, to_data)
     }
 }
 
