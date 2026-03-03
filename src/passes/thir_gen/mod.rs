@@ -1,8 +1,11 @@
-use crate::{ir::thir::Thir2, prelude::*, ty::DisjointUnionSet2};
+use crate::{ir::thir::Thir, prelude::*, ty::DisjointUnionSet};
 
 use hir::*;
 
 create_id!(SolverTypeId);
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum ThirGenError {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum SolverType {
@@ -10,25 +13,19 @@ enum SolverType {
     Concrete(TypeId),
     Inferred(CompositeType<SolverTypeId>),
     AnyInteger,
+    #[expect(dead_code, reason = "unsigned integer may be used in the future")]
     UnsignedInteger,
+    #[expect(dead_code, reason = "signed integer may be used in the future")]
     SignedInteger,
+    #[expect(dead_code, reason = "error may be used in the future")]
     Error,
 }
 
-pub struct ThirGen<'ctx, 'hir> {
-    ctx: &'ctx mut Ctx,
-    hir: &'hir Hir,
-}
+pub struct ThirGen;
 
-impl<'ctx, 'hir> ThirGen<'ctx, 'hir> {
-    pub fn new(ctx: &'ctx mut Ctx, hir: &'hir Hir) -> Self {
-        Self { ctx, hir }
-    }
-}
-
-impl<'ctx, 'hir> Pass<'ctx, 'hir> for ThirGen<'ctx, 'hir> {
+impl<'ctx, 'hir> Pass<'ctx, 'hir> for ThirGen {
     type Input = Hir;
-    type Output = Thir2<'hir>;
+    type Output = Thir<'hir>;
     type Extra = ();
 
     fn run(
@@ -132,30 +129,32 @@ impl<'ctx, 'hir> Pass<'ctx, 'hir> for ThirGen<'ctx, 'hir> {
             );
         }
 
-        PassResult::Ok(PassSuccess::Ok(Thir2 {
+        let expression_tys = {
+            let mut expressions = IndexedVec::new();
+            for id in hir.expressions.iter_keys() {
+                assert_eq!(expressions.insert(expression_tys[&id]), id);
+            }
+            expressions
+        };
+
+        PassResult::Ok(PassSuccess::Ok(Thir::new(
             hir,
             identifier_tys,
-            expression_tys: {
-                let mut expressions = IndexedVec::new();
-                for id in hir.expressions.iter_keys() {
-                    assert_eq!(expressions.insert(expression_tys[&id]), id);
-                }
-                expressions
-            },
-        }))
+            expression_tys,
+        )))
     }
 }
 
 #[derive(Clone, Debug)]
 struct UnificationTable {
-    set: DisjointUnionSet2<SolverTypeId, SolverType>,
+    set: DisjointUnionSet<SolverTypeId, SolverType>,
 }
 
 impl UnificationTable {
     /// Create a new unification.
     pub fn new() -> Self {
         Self {
-            set: DisjointUnionSet2::new(),
+            set: DisjointUnionSet::new(),
         }
     }
 
@@ -172,16 +171,6 @@ impl UnificationTable {
     /// Create a new [`SolverType::AnyInteger`] type variable.
     fn new_any_integer(&mut self) -> SolverTypeId {
         self.set.insert(SolverType::AnyInteger)
-    }
-
-    /// Create a new [`SolverType::UnsignedInteger`] type variable.
-    fn new_unsigned_integer(&mut self) -> SolverTypeId {
-        self.set.insert(SolverType::UnsignedInteger)
-    }
-
-    /// Create a new [`SolverType::SignedInteger`] type variable.
-    fn new_signed_integer(&mut self) -> SolverTypeId {
-        self.set.insert(SolverType::SignedInteger)
     }
 
     /// Create a new [`SolverType::Inferred`] type variable.

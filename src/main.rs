@@ -83,7 +83,7 @@ fn run(source: &str) -> u8 {
             |> passes::cst_gen::CstGen
             |> passes::ast_gen::AstGen
             |> passes::hir_gen::HirGen
-            |> passes::thir_gen_2::ThirGen
+            |> passes::thir_gen::ThirGen
             |> passes::mir_gen::MirGen
             |> passes::codegen::Codegen => (&ink)
         }

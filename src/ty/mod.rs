@@ -1,18 +1,8 @@
-mod constraints;
 mod disjoint_union_set;
-mod disjoint_union_set_2;
-mod solver;
 
 use crate::prelude::*;
 
-pub use self::{
-    constraints::{Constraint, Constraints},
-    disjoint_union_set::DisjointUnionSet,
-    disjoint_union_set_2::DisjointUnionSet as DisjointUnionSet2,
-    solver::Solver,
-};
-
-use hir::*;
+pub use self::disjoint_union_set::DisjointUnionSet;
 
 create_id!(TypeId);
 
@@ -41,24 +31,6 @@ pub enum CompositeType<T = TypeId> {
 impl Type {
     /// Helper to construct `()`, which is a [`CompositeType::Tuple`] with no fields.
     pub const UNIT: Type = Type::Composite(CompositeType::Tuple(Vec::new()));
-}
-
-impl<T> Type<T> {
-    /// Check whether this is a primitive type, which does not contain any other types.
-    pub const fn is_primitive(&self) -> bool {
-        matches!(self, Self::Never | Self::I8 | Self::U8 | Self::Boolean)
-    }
-
-    /// If this type is a primitive, cast it to some other [`Type`] representation.
-    pub fn cast_primitive<U>(self) -> Option<Type<U>> {
-        match self {
-            Self::Never => Some(Type::Never),
-            Self::I8 => Some(Type::I8),
-            Self::U8 => Some(Type::U8),
-            Self::Boolean => Some(Type::Boolean),
-            _ => None,
-        }
-    }
 }
 
 /// Interned collection of types.
@@ -197,148 +169,6 @@ impl Default for Types {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct TypeVars {
-    vars: IndexedVec<TypeVarId, TypeVar>,
-}
-
-impl TypeVars {
-    /// Create a new instance.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Fetch the ID of the provided type variable.
-    pub fn intern(&mut self, var: impl Into<TypeVar>) -> TypeVarId {
-        let var = var.into();
-        if let Some((id, _)) = self
-            .vars
-            .iter_pairs()
-            .find(|(_, test_var)| **test_var == var)
-        {
-            return id;
-        }
-
-        self.vars.insert(var)
-    }
-
-    pub fn get(&self, var: impl Into<TypeVar>) -> TypeVarId {
-        let var = var.into();
-        self.vars
-            .iter_pairs()
-            .find(|(_, test_var)| **test_var == var)
-            .unwrap()
-            .0
-    }
-}
-
-impl Index<TypeVarId> for TypeVars {
-    type Output = TypeVar;
-
-    fn index(&self, index: TypeVarId) -> &Self::Output {
-        &self.vars[index]
-    }
-}
-
-create_id!(TypeVarId);
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum TypeVar {
-    /// Variable is an expression.
-    Expression(ExpressionId),
-    /// Variable is a binding.
-    Binding(IdentifierBindingId),
-    /// Variable is a type.
-    Type(TypeId),
-    /// Variable is a field on another variable.
-    Field(TypeVarId, usize),
-}
-
-enum_conversion! {
-    [TypeVar]
-    Expression: ExpressionId,
-    Binding: IdentifierBindingId,
-    Type: TypeId,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Solution {
-    Type(TypeId),
-    Reference(TypeVarId),
-    Literal(Literal),
-    Tuple(Vec<TypeVarId>),
-}
-
-enum_conversion! {
-    [Solution]
-    Type: TypeId,
-    Literal: Literal,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Literal {
-    Integer(IntegerKind),
-}
-
-enum_conversion! {
-    [Literal]
-    Integer: IntegerKind,
-}
-
-impl Literal {
-    pub fn to_type(&self, types: &Types) -> TypeId {
-        match self {
-            Self::Integer(integer_literal) => integer_literal.to_type(types),
-        }
-    }
-
-    pub fn can_coerce(&self, types: &Types, ty: TypeId) -> bool {
-        match self {
-            Self::Integer(integer_literal) => integer_literal.can_coerce(types, ty),
-        }
-    }
-
-    pub fn narrow(&self, other: &Literal) -> Option<Literal> {
-        match (self, other) {
-            (Self::Integer(lhs), Self::Integer(rhs)) => Some(Self::Integer(lhs.narrow(rhs)?)),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum IntegerKind {
-    Any,
-    Signed,
-    Unsigned,
-}
-
-impl IntegerKind {
-    pub fn to_type(&self, types: &Types) -> TypeId {
-        match self {
-            IntegerKind::Signed | IntegerKind::Any => types.i8(),
-            IntegerKind::Unsigned => types.u8(),
-        }
-    }
-
-    pub fn can_coerce(&self, types: &Types, ty: TypeId) -> bool {
-        matches!(
-            (self, &types[ty]),
-            (Self::Any, Type::U8 | Type::I8)
-                | (Self::Signed, Type::I8)
-                | (Self::Unsigned, Type::U8 | Type::I8)
-                | (_, Type::Never) // Allow never to propagate.
-        )
-    }
-
-    pub fn narrow(&self, other: &IntegerKind) -> Option<IntegerKind> {
-        match (self, other) {
-            (lhs, rhs) if lhs == rhs => Some(lhs.clone()),
-            (Self::Any, answer) | (answer, Self::Any) => Some(answer.clone()),
-            _ => None,
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -422,53 +252,6 @@ mod test {
     #[case("{ let a = 1; a }", Type::I8)]
     fn assert_expression_ty(#[case] expression: &str, #[case] ty: Type) {
         assert_eq!(get_ty(expression), ty);
-    }
-
-    mod literal {
-        use super::*;
-
-        #[test]
-        fn coerce_literal_pass_through() {
-            let types = Types::new();
-            let literal = Literal::Integer(IntegerKind::Any);
-            assert!(literal.can_coerce(&types, types.i8()));
-            assert!(!literal.can_coerce(&types, types.boolean()));
-        }
-
-        #[rstest]
-        #[case::any_unsigned(IntegerKind::Any, Type::U8, true)]
-        #[case::any_signed(IntegerKind::Any, Type::I8, true)]
-        #[case::any_non_integer(IntegerKind::Any, Type::Boolean, false)]
-        #[case::signed_unsigned(IntegerKind::Signed, Type::U8, false)]
-        #[case::signed_signed(IntegerKind::Signed, Type::I8, true)]
-        #[case::signed_non_integer(IntegerKind::Signed, Type::Boolean, false)]
-        #[case::unsigned_unsigned(IntegerKind::Unsigned, Type::U8, true)]
-        #[case::unsigned_signed(IntegerKind::Unsigned, Type::I8, true)]
-        #[case::unsigned_non_integer(IntegerKind::Unsigned, Type::Boolean, false)]
-        fn coerce_integer(#[case] integer: IntegerKind, #[case] ty: Type, #[case] valid: bool) {
-            let mut types = Types::new();
-            let ty = types.get(ty);
-            assert_eq!(integer.can_coerce(&types, ty), valid);
-        }
-
-        #[rstest]
-        #[case::all_any(IntegerKind::Any, IntegerKind::Any, Some(IntegerKind::Any))]
-        #[case::all_signed(IntegerKind::Signed, IntegerKind::Signed, Some(IntegerKind::Signed))]
-        #[case::all_unsigned(
-            IntegerKind::Unsigned,
-            IntegerKind::Unsigned,
-            Some(IntegerKind::Unsigned)
-        )]
-        #[case::signed_unsigned(IntegerKind::Signed, IntegerKind::Unsigned, None)]
-        #[case::any_signed(IntegerKind::Any, IntegerKind::Signed, Some(IntegerKind::Signed))]
-        #[case::any_unsigned(IntegerKind::Any, IntegerKind::Unsigned, Some(IntegerKind::Unsigned))]
-        fn narrow_integer(
-            #[case] lhs: IntegerKind,
-            #[case] rhs: IntegerKind,
-            #[case] expect: Option<IntegerKind>,
-        ) {
-            assert_eq!(lhs.narrow(&rhs), expect);
-        }
     }
 
     mod types {
