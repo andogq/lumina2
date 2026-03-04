@@ -1,8 +1,4 @@
-mod disjoint_union_set;
-
 use crate::prelude::*;
-
-pub use self::disjoint_union_set::DisjointUnionSet;
 
 create_id!(TypeId);
 

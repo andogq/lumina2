@@ -26,15 +26,6 @@ impl<B: BindingKind> BindingId<B> {
         Self::new(InnerBindingId::from_id(id))
     }
 }
-impl<B: BindingKind> Id for BindingId<B> {
-    fn from_id(id: usize) -> Self {
-        Self::new(InnerBindingId::from_id(id))
-    }
-
-    fn into_id(self) -> usize {
-        self.id.into_id()
-    }
-}
 impl<B: BindingKind> Clone for BindingId<B> {
     fn clone(&self) -> Self {
         *self
@@ -54,6 +45,7 @@ impl<B: BindingKind> Hash for BindingId<B> {
     }
 }
 impl<B: BindingKind> PartialOrd for BindingId<B> {
+    #[mutants::skip(reason = "PartialOrd required for use in `BTreeMap`")]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }

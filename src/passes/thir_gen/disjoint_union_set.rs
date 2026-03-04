@@ -6,42 +6,10 @@ use crate::prelude::*;
 #[derive(Clone, Debug)]
 pub struct DisjointUnionSet<I, T>(IndexedVec<I, Record<I, T>>);
 
-/// Record stored within [`DisjointUnionSet`].
-#[derive(Clone, Debug)]
-enum Record<I, T> {
-    /// This node contains data.
-    Root(T),
-    /// This node points to another node.
-    Redirect(I),
-}
-
-impl<I, T> Record<I, T> {
-    /// Consume this record, and extract the [`Record::Root`] variant.
-    pub fn into_root(self) -> Option<T> {
-        match self {
-            Self::Root(root) => Some(root),
-            _ => None,
-        }
-    }
-
-    /// From a record reference, and extract the [`Record::Root`] variant.
-    pub fn as_root(&self) -> Option<&T> {
-        match self {
-            Self::Root(root) => Some(root),
-            _ => None,
-        }
-    }
-}
-
 impl<I, T> DisjointUnionSet<I, T>
 where
     I: Id,
 {
-    /// Create an empty set.
-    pub fn new() -> Self {
-        Self(IndexedVec::new())
-    }
-
     /// Insert a value into the set, producing the ID which corresponds to the new root.
     pub fn insert(&mut self, data: T) -> I {
         self.0.insert(Record::Root(data))
@@ -104,6 +72,39 @@ where
     }
 }
 
+impl<I, T> Default for DisjointUnionSet<I, T> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+/// Record stored within [`DisjointUnionSet`].
+#[derive(Clone, Debug)]
+enum Record<I, T> {
+    /// This node contains data.
+    Root(T),
+    /// This node points to another node.
+    Redirect(I),
+}
+
+impl<I, T> Record<I, T> {
+    /// Consume this record, and extract the [`Record::Root`] variant.
+    pub fn into_root(self) -> Option<T> {
+        match self {
+            Self::Root(root) => Some(root),
+            _ => None,
+        }
+    }
+
+    /// From a record reference, and extract the [`Record::Root`] variant.
+    pub fn as_root(&self) -> Option<&T> {
+        match self {
+            Self::Root(root) => Some(root),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -114,7 +115,7 @@ mod test {
 
     #[fixture]
     fn map() -> Set {
-        Set::new()
+        Set::default()
     }
 
     #[fixture]
