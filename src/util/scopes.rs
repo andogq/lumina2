@@ -44,6 +44,17 @@ impl<B: BindingKind> Hash for BindingId<B> {
         self.id.hash(state);
     }
 }
+impl<B: BindingKind> PartialOrd for BindingId<B> {
+    #[mutants::skip(reason = "PartialOrd required for use in `BTreeMap`")]
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl<B: BindingKind> Ord for BindingId<B> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id.cmp(&other.id)
+    }
+}
 
 /// A [`BindingId`] representing an [`Identifier`].
 pub type IdentifierBindingId = BindingId<Identifier>;

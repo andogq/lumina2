@@ -441,7 +441,7 @@ mod test {
         }
 
         #[test]
-        #[should_panic(expected = "Type")]
+        #[should_panic(expected = "function signature must match trait definition")]
         fn trait_impl_mismatch() {
             run(r#"trait MyTrait {
                 fn some_method() -> Self;
@@ -451,6 +451,21 @@ mod test {
                 fn some_method(parameter: bool) -> Self {
                     10
                 }
+            }
+
+            fn main() -> u8 {
+                <u8 as MyTrait>::some_method()
+            }"#);
+        }
+
+        #[test]
+        #[should_panic(expected = "trait implementation missing method")]
+        fn trait_impl_missing_fn() {
+            run(r#"trait MyTrait {
+                fn some_method() -> Self;
+            }
+
+            impl MyTrait for u8 {
             }
 
             fn main() -> u8 {

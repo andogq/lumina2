@@ -7,7 +7,7 @@ pub use crate::{
     error::{CError, CErrorId, CErrorList, CResult, ErrorMeta},
     lex::{Lexer, Tok, tok},
     passes::{Pass, PassResult, PassSuccess},
-    ty::{Type, Types},
+    ty::{CompositeType, Type, Types},
     util::{indexed_vec::IndexedVec, scopes::Scopes, string_pool::StringPool},
 };
 
@@ -17,7 +17,7 @@ pub use crate::{create_id, enum_conversion, indexing, run_and_report};
 // IDs and associated traits.
 pub use crate::{
     // TODO: This needs to be moved
-    ty::{TypeId, TypeVar},
+    ty::TypeId,
     util::{
         indexed_vec::Id,
         scopes::{IdentifierBindingId, ScopeId, TraitBindingId},
@@ -40,8 +40,6 @@ pub use ::lazy_static::lazy_static;
 // Test utilities.
 #[cfg(test)]
 pub use crate::{
-    // Allow inspection of error kinds within tests.
-    error::CErrorKind,
     // Allow manual creation of `IndexedVec`.
     indexed_vec,
 };
