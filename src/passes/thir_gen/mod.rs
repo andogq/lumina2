@@ -285,20 +285,8 @@ impl<'hir, 'ty> InferenceCtx<'hir, 'ty> {
     ///
     /// This is used to propagate a type inwards.
     fn check(&mut self, expression_id: ExpressionId, expected: SolutionId) {
-        let expression = &self.hir[expression_id];
-
-        match &expression.kind {
-            ExpressionKind::Call(call) => {
-                // Infer the call using the expected return type.
-                self.infer_call(call, expected);
-                let expression_ty = self.get_solution(expression_id);
-                self.table.unify(self.types, expression_ty, expected);
-            }
-            _ => {
-                let inferred = self.infer(expression_id);
-                self.table.unify(self.types, inferred, expected);
-            }
-        }
+        let inferred = self.infer(expression_id);
+        self.table.unify(self.types, inferred, expected);
     }
 
     /// Infer the type of an expression.
